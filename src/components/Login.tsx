@@ -24,10 +24,14 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         body: JSON.stringify({ email, password }),
       });
 
-      const data = await response.json();
+      let data: any = {};
+      const contentType = response.headers.get("content-type");
+      if (contentType && contentType.includes("application/json")) {
+        data = await response.json();
+      }
 
       if (!response.ok) {
-        throw new Error(data.message || "Falha na autenticação.");
+        throw new Error(data.message || data.error || `Erro do servidor (status ${response.status})`);
       }
 
       onLoginSuccess(data.user, data.token);
