@@ -1,0 +1,540 @@
+import React, { useState, useEffect } from "react";
+import {
+  Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
+  Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode
+} from "lucide-react";
+import { User, Atendimento, DashboardStats } from "./types";
+
+// Component imports
+import Login from "./components/Login";
+import Entrada from "./components/Entrada";
+import AtendimentosAndamento from "./components/AtendimentosAndamento";
+import Saida from "./components/Saida";
+import PagamentoScreen from "./components/PagamentoScreen";
+import AdminPanel from "./components/AdminPanel";
+import Agendamentos from "./components/Agendamentos";
+import Clientes from "./components/Clientes";
+import PrinterConfig from "./components/PrinterConfig";
+import ReceiptModal from "./components/ReceiptModal";
+import ProductScanner from "./components/ProductScanner";
+
+type ActiveTab =
+  | "dashboard"
+  | "entrada"
+  | "atendimento"
+  | "saida"
+  | "agendar"
+  | "orcamento"
+  | "clientes"
+  | "revisao"
+  | "admin"
+  | "printer";
+
+export default function App() {
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [token, setToken] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
+  const [stats, setStats] = useState<DashboardStats>({
+    naAssistenciaCount: 0,
+    entregaCount: 0,
+    financials: { cash: 0, card: 0, pending: 0, expenses: 0, totalCollected: 0 }
+  });
+
+  // Selected Order for Saida / Payment flows
+  const [selectedAtendimento, setSelectedAtendimento] = useState<Atendimento | null>(null);
+  const [tempNotesFin, setTempNotesFin] = useState("");
+
+  // Receipt Modal simulator states
+  const [receiptOpen, setReceiptOpen] = useState(false);
+  const [receiptTitle, setReceiptTitle] = useState("");
+  const [receiptContent, setReceiptContent] = useState("");
+
+  // Product QR & Barcode scanner states
+  const [globalScannerOpen, setGlobalScannerOpen] = useState(false);
+
+  // Load user session on start
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user_session");
+    const savedToken = localStorage.getItem("user_token");
+    if (savedUser && savedToken) {
+      setCurrentUser(JSON.parse(savedUser));
+      setToken(savedToken);
+    }
+  }, []);
+
+  // Fetch stats from backend
+  const fetchStats = async () => {
+    try {
+      const res = await fetch("/api/stats");
+      if (res.ok) {
+        const data = await res.json();
+        setStats(data);
+      }
+    } catch (err) {
+      console.error("Erro ao carregar dados do painel", err);
+    }
+  };
+
+  useEffect(() => {
+    if (currentUser) {
+      fetchStats();
+    }
+  }, [currentUser, activeTab]);
+
+  const handleLoginSuccess = (user: User, userToken: string) => {
+    setCurrentUser(user);
+    setToken(userToken);
+    localStorage.setItem("user_session", JSON.stringify(user));
+    localStorage.setItem("user_token", userToken);
+    setActiveTab("dashboard");
+  };
+
+  const handleLogout = () => {
+    setCurrentUser(null);
+    setToken(null);
+    localStorage.removeItem("user_session");
+    localStorage.removeItem("user_token");
+    setActiveTab("dashboard");
+  };
+
+  // Build and display daily summary ESC/POS ticket
+  const handlePrintDailySummary = async () => {
+    try {
+      const todayStr = new Date().toISOString().split("T")[0];
+      const res = await fetch(`/api/reports?type=daily&date=${todayStr}`);
+      if (res.ok) {
+        const data = await res.json();
+        const { summary, closedOrders } = data;
+
+        const summaryText = `FECHAMENTO DO DIA (TÉRMICO)
+DATA: ${new Date().toLocaleDateString("pt-BR")}
+HORA: ${new Date().toLocaleTimeString("pt-BR")}
+------------------------
+ORDENS ENTREGUES HOJE:
+${closedOrders.length === 0 ? "Nenhuma OS encerrada hoje." : closedOrders.map((o: any) => `- ${o.controlNumber}: R$ ${o.totalAmount.toFixed(2)}`).join("\n")}
+------------------------
+RESUMO DO CAIXA:
+(+) EM ESPÉCIE: R$ ${summary.cash.toFixed(2)}
+(+) EM CARTÃO:  R$ ${summary.card.toFixed(2)}
+------------------------
+TOTAL ARRECADADO: R$ ${summary.revenue.toFixed(2)}
+(-) DESPESAS:     R$ ${summary.expense.toFixed(2)}
+------------------------
+SALDO DE HOJE:    R$ ${summary.balance.toFixed(2)}
+------------------------
+ASSINATURA RESPONSÁVEL:
+
+________________________`;
+
+        setReceiptTitle("Resumo Financeiro Diário");
+        setReceiptContent(summaryText);
+        setReceiptOpen(true);
+      }
+    } catch (err) {
+      console.error("Erro ao imprimir fechamento", err);
+    }
+  };
+
+  // Callback helper for receipt modals triggered from other panels
+  const triggerReceiptPreview = (title: string, content: string) => {
+    setReceiptTitle(title);
+    setReceiptContent(content);
+    setReceiptOpen(true);
+  };
+
+  if (!currentUser) {
+    return <Login onLoginSuccess={handleLoginSuccess} />;
+  }
+
+  const isAdmin = currentUser.role === "admin";
+
+  return (
+    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+      {/* HEADER SECTION */}
+      <header className="bg-[#1E88E5] text-white shadow-md select-none">
+        <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center font-bold text-lg text-white border border-white/20">
+              M
+            </div>
+            <div>
+              <h1 className="text-base font-extrabold tracking-tight">Minha Assistência</h1>
+              <p className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">Módulos Conectados</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="text-right hidden sm:block">
+              <p className="text-xs font-bold leading-none">{currentUser.name}</p>
+              <span className="text-[9px] bg-white/15 px-1.5 py-0.5 rounded-full text-blue-50 font-bold uppercase tracking-wider inline-block mt-1">
+                {isAdmin ? "Administrador" : "Funcionário"}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setGlobalScannerOpen(true)}
+                className="p-2 hover:bg-white/10 active:bg-white/15 rounded-xl text-white transition flex items-center justify-center gap-1.5"
+                title="Leitor de QR & Código de Barras"
+              >
+                <QrCode className="w-5 h-5 text-amber-300" />
+                <span className="text-xs font-extrabold hidden md:inline text-amber-300">LEITOR DE PEÇAS</span>
+              </button>
+              <button
+                onClick={handlePrintDailySummary}
+                className="p-2 hover:bg-white/10 active:bg-white/15 rounded-xl text-white transition flex items-center justify-center"
+                title="Imprimir Resumo do Dia"
+              >
+                <Printer className="w-5 h-5" />
+              </button>
+              <button
+                onClick={handleLogout}
+                className="p-2 hover:bg-red-600/30 active:bg-red-600/40 rounded-xl text-red-100 transition flex items-center justify-center"
+                title="Sair do Sistema"
+              >
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      {/* WORKSPACE AREA */}
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4">
+        {activeTab === "dashboard" && (
+          <div className="space-y-6">
+            {/* Realtime Stats Grid */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Na Assistência</p>
+                  <p className="text-xl font-black text-slate-800">{stats.naAssistenciaCount}</p>
+                </div>
+              </div>
+
+              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+                  <CheckCircle className="w-5 h-5" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Prontos / Entregas</p>
+                  <p className="text-xl font-black text-slate-800">{stats.entregaCount}</p>
+                </div>
+              </div>
+
+              {/* Financial counters ONLY visible to admin */}
+              {isAdmin ? (
+                <>
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                      <FileText className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento</p>
+                      <p className="text-lg font-black text-emerald-600 font-mono">R$ {stats.financials.totalCollected.toFixed(2)}</p>
+                    </div>
+                  </div>
+
+                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
+                      <PlusCircle className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Despesas Totais</p>
+                      <p className="text-lg font-black text-red-600 font-mono">R$ {stats.financials.expenses.toFixed(2)}</p>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="col-span-2 bg-blue-50/50 border border-blue-100/50 p-4 rounded-2xl flex items-center gap-3">
+                  <ShieldCheck className="w-5 h-5 text-[#1E88E5]" />
+                  <p className="text-xs text-blue-900 font-medium">
+                    Olá, <strong>{currentUser.name}</strong>! O seu nível de funcionário permite entrada de novos atendimentos, acompanhamento técnico e agendamentos. Valores consolidados ocultos.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* BIG ACTION GRID */}
+            <div>
+              <h2 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-3">Atalhos de Acesso Rápido</h2>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                {/* ENTRADA (verde) */}
+                <button
+                  onClick={() => setActiveTab("entrada")}
+                  className="p-5 bg-white border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <PlusCircle className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-emerald-800">ENTRADA</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Registrar novo celular</p>
+                  </div>
+                </button>
+
+                {/* ATENDIMENTO (azul) */}
+                <button
+                  onClick={() => setActiveTab("atendimento")}
+                  className="p-5 bg-white border border-slate-100 hover:border-blue-200 hover:bg-blue-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-blue-100 text-[#1E88E5] rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <Hammer className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-blue-800">ATENDIMENTO</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Aparelhos na bancada</p>
+                  </div>
+                </button>
+
+                {/* SAÍDA (vermelho) */}
+                <button
+                  onClick={() => setActiveTab("atendimento")} // Click flows to active list where selecting an item triggers Saida
+                  className="p-5 bg-white border border-slate-100 hover:border-red-200 hover:bg-red-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <ArrowRight className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-red-800">SAÍDA</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Finalizar & Entregar</p>
+                  </div>
+                </button>
+
+                {/* AGENDAR (roxo) */}
+                <button
+                  onClick={() => setActiveTab("agendar")}
+                  className="p-5 bg-white border border-slate-100 hover:border-purple-200 hover:bg-purple-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <Calendar className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-purple-800">AGENDAR</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Agendar serviços</p>
+                  </div>
+                </button>
+
+                {/* ORÇAMENTO (azul escuro) */}
+                <button
+                  onClick={() => setActiveTab("entrada")} // Budgets are initialized as low status entry orders
+                  className="p-5 bg-white border border-slate-100 hover:border-slate-300 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-slate-100 text-slate-800 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-slate-800">ORÇAMENTO</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Gerar Orçamento Rápido</p>
+                  </div>
+                </button>
+
+                {/* CLIENTES (vermelho) */}
+                <button
+                  onClick={() => setActiveTab("clientes")}
+                  className="p-5 bg-white border border-slate-100 hover:border-rose-200 hover:bg-rose-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-rose-100 text-rose-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <UserCheck className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-rose-800">CLIENTES</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Cadastrar Clientes</p>
+                  </div>
+                </button>
+
+                {/* REVISÃO PROGRAMADA (laranja) */}
+                <button
+                  onClick={() => setActiveTab("agendar")}
+                  className="p-5 bg-white border border-slate-100 hover:border-orange-200 hover:bg-orange-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <Barcode className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-orange-800">REVISÃO</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Revisões Programadas</p>
+                  </div>
+                </button>
+
+                {/* ADMIN OR IMPRESSORA SELECTOR */}
+                {isAdmin ? (
+                  <button
+                    onClick={() => setActiveTab("admin")}
+                    className="p-5 bg-white border border-slate-100 hover:border-[#1E88E5] hover:bg-blue-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                  >
+                    <div className="w-12 h-12 bg-blue-100 text-[#1E88E5] rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                      <ShieldAlert className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-sm text-blue-900">ADMIN</span>
+                      <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Painel do Dono</p>
+                    </div>
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => setActiveTab("printer")}
+                    className="p-5 bg-white border border-slate-100 hover:border-blue-200 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                  >
+                    <div className="w-12 h-12 bg-slate-100 text-slate-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                      <Printer className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="font-extrabold text-sm text-slate-700">IMPRESSORA</span>
+                      <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Termica Bluetooth</p>
+                    </div>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* Quick Helper Cards */}
+            <div className="p-4 bg-[#1E88E5]/5 border border-blue-100/50 rounded-2xl flex items-start gap-3">
+              <HelpCircle className="w-5 h-5 text-[#1E88E5] shrink-0 mt-0.5" />
+              <div className="text-xs">
+                <p className="font-bold text-slate-800">Precisa de ajuda ou deseja parear sua impressora?</p>
+                <p className="text-slate-600 mt-1">
+                  Acesse as configurações de impressora clicando no ícone do cabeçalho ou no botão correspondente para testar bobinas térmicas de 58mm via Web Bluetooth.
+                </p>
+                <button
+                  onClick={() => setActiveTab("printer")}
+                  className="text-[#1E88E5] font-bold mt-2 hover:underline inline-block"
+                >
+                  Ir para configuração de impressora &rarr;
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ENTRADA FORM TABS */}
+        {activeTab === "entrada" && (
+          <Entrada
+            onBack={() => setActiveTab("dashboard")}
+            onSaveSuccess={(receipt) => {
+              if (receipt) {
+                triggerReceiptPreview("Recibo de Entrada OS", receipt);
+              } else {
+                alert("Ordem de serviço registrada com sucesso!");
+              }
+              setActiveTab("dashboard");
+            }}
+          />
+        )}
+
+        {/* ATENDIMENTOS EM ANDAMENTO */}
+        {activeTab === "atendimento" && (
+          <AtendimentosAndamento
+            onBack={() => setActiveTab("dashboard")}
+            onSelectAtendimento={(a) => {
+              setSelectedAtendimento(a);
+              setActiveTab("saida");
+            }}
+          />
+        )}
+
+        {/* SAIDA DETAILS */}
+        {activeTab === "saida" && selectedAtendimento && (
+          <Saida
+            atendimento={selectedAtendimento}
+            onBack={() => setActiveTab("atendimento")}
+            onGoToPayment={(at, notes) => {
+              setSelectedAtendimento(at);
+              setTempNotesFin(notes);
+              setActiveTab("pagamento");
+            }}
+            onPrintIntakeReceipt={(at) => {
+              const recStr = `2A VIA RECIBO ENTRADA
+CONTROLE: ${at.controlNumber}
+APARELHO: ${at.item} ${at.brand} ${at.model}
+ENTRADA: ${new Date(at.entryDate).toLocaleDateString("pt-BR")}
+SERVICOS ESTIMADOS:
+${at.services.map(s => `- ${s.name}: R$ ${s.price}`).join("\n")}
+TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`;
+              triggerReceiptPreview("Reimpressão OS Entrada", recStr);
+            }}
+          />
+        )}
+
+        {/* PAGAMENTO */}
+        {activeTab === "pagamento" && selectedAtendimento && (
+          <PagamentoScreen
+            atendimento={selectedAtendimento}
+            notesFin={tempNotesFin}
+            onBack={() => setActiveTab("saida")}
+            onPaymentSuccess={(receipt) => {
+              if (receipt) {
+                triggerReceiptPreview("Recibo de Saída / Garantia", receipt);
+              } else {
+                alert("Pagamento processado e OS finalizada!");
+              }
+              setSelectedAtendimento(null);
+              setTempNotesFin("");
+              setActiveTab("dashboard");
+            }}
+          />
+        )}
+
+        {/* AGENDAR */}
+        {activeTab === "agendar" && (
+          <Agendamentos onBack={() => setActiveTab("dashboard")} />
+        )}
+
+        {/* CLIENTES CATALOG */}
+        {activeTab === "clientes" && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-3 bg-white p-4 rounded-xl border border-slate-100 shadow-sm">
+              <button onClick={() => setActiveTab("dashboard")} className="p-1.5 hover:bg-slate-50 rounded-lg text-slate-500">
+                &larr; Voltar
+              </button>
+              <h2 className="text-base font-bold text-slate-800">Diretório de Clientes</h2>
+            </div>
+            <Clientes />
+          </div>
+        )}
+
+        {/* CONFIGURAR IMPRESSORA */}
+        {activeTab === "printer" && (
+          <PrinterConfig onBack={() => setActiveTab("dashboard")} />
+        )}
+
+        {/* ADMIN MANAGEMENT */}
+        {activeTab === "admin" && isAdmin && (
+          <AdminPanel
+            onBack={() => setActiveTab("dashboard")}
+            onPrintReceipt={(content) => triggerReceiptPreview("Cupom de Relatório", content)}
+          />
+        )}
+      </main>
+
+      {/* FOOTER METADATA */}
+      <footer className="bg-white border-t border-slate-100 py-4 text-center text-[10px] text-slate-400 font-sans mt-10">
+        <p>Minha Assistência v1.2.0 • Sistema Completo para Celulares e Eletrônicos</p>
+        <p className="mt-1 text-slate-300">Terminal de Vendas Conectado • Cloud Sync Ativo</p>
+      </footer>
+
+      {/* COMPACT FLOATING RECEIPTS DIALOG */}
+      <ReceiptModal
+        isOpen={receiptOpen}
+        onClose={() => setReceiptOpen(false)}
+        title={receiptTitle}
+        content={receiptContent}
+      />
+
+      {/* GLOBAL PRODUCT SCANNER OVERLAY */}
+      {globalScannerOpen && (
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-fade-in">
+          <div className="w-full max-w-4xl">
+            <ProductScanner
+              onClose={() => setGlobalScannerOpen(false)}
+              mode="view"
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

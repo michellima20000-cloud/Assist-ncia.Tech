@@ -1,0 +1,253 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "System user representing admin or employee",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "employee"] },
+        "password": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role"]
+    },
+    "Cliente": {
+      "title": "Cliente",
+      "description": "Customer registered in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "phone": { "type": "string" },
+        "cpf": { "type": "string" },
+        "address": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "phone"]
+    },
+    "Atendimento": {
+      "title": "Atendimento",
+      "description": "Service order (Ordem de Serviço)",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "controlNumber": { "type": "string" },
+        "status": { "type": "string", "enum": ["na_assistencia", "entrega", "finalizado"] },
+        "clienteId": { "type": "string" },
+        "item": { "type": "string" },
+        "brand": { "type": "string" },
+        "model": { "type": "string" },
+        "observations": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "services": { "type": "array" },
+        "products": { "type": "array" },
+        "entryDate": { "type": "string", "format": "date-time" },
+        "exitDate": { "type": "string", "format": "date-time" },
+        "totalAmount": { "type": "number" },
+        "notesFin": { "type": "string" },
+        "paymentId": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "controlNumber", "status", "clienteId", "item", "totalAmount"]
+    },
+    "Servico": {
+      "title": "Servico",
+      "description": "Predefined services offered by the shop",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "position": { "type": "number" },
+        "isPriceCustom": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "price"]
+    },
+    "Produto": {
+      "title": "Produto",
+      "description": "Product / Part inventory item",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "price": { "type": "number" },
+        "stock": { "type": "number" },
+        "minStockAlert": { "type": "number" },
+        "barcode": { "type": "string" },
+        "position": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "price", "stock"]
+    },
+    "Despesa": {
+      "title": "Despesa",
+      "description": "Expense logged in the system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string", "format": "date" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "description", "amount", "date"]
+    },
+    "Convenio": {
+      "title": "Convenio",
+      "description": "Partnership discount agreements",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "discountPercent": { "type": "number" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name", "discountPercent"]
+    },
+    "Agendamento": {
+      "title": "Agendamento",
+      "description": "Scheduled appointments",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "date": { "type": "string", "format": "date" },
+        "time": { "type": "string" },
+        "service": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "clienteId", "date", "time", "service"]
+    },
+    "Pagamento": {
+      "title": "Pagamento",
+      "description": "Logged payment transactions",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "atendimentoId": { "type": "string" },
+        "totalAmount": { "type": "number" },
+        "receivedAmount": { "type": "number" },
+        "change": { "type": "number" },
+        "method": { "type": "string" },
+        "date": { "type": "string", "format": "date-time" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "atendimentoId", "totalAmount", "receivedAmount", "change", "method"]
+    },
+    "Marca": {
+      "title": "Marca",
+      "description": "Device brand list",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Item": {
+      "title": "Item",
+      "description": "Device item categories",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "Config": {
+      "title": "Config",
+      "description": "System counter configuration and metadata",
+      "type": "object",
+      "properties": {
+        "nextControlNumber": { "type": "number" },
+        "printerConfigured": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "createdBy": { "type": "string" }
+      },
+      "required": ["nextControlNumber"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "System users"
+    },
+    "/clientes/{clienteId}": {
+      "schema": "Cliente",
+      "description": "Customers list"
+    },
+    "/atendimentos/{atendimentoId}": {
+      "schema": "Atendimento",
+      "description": "Service orders"
+    },
+    "/servicos/{servicoId}": {
+      "schema": "Servico",
+      "description": "List of typical services"
+    },
+    "/produtos/{produtoId}": {
+      "schema": "Produto",
+      "description": "Shop and replacement parts inventory"
+    },
+    "/despesas/{despesaId}": {
+      "schema": "Despesa",
+      "description": "Logged expenses"
+    },
+    "/convenios/{convenioId}": {
+      "schema": "Convenio",
+      "description": "Agreed discounts and contracts"
+    },
+    "/agendamentos/{agendamentoId}": {
+      "schema": "Agendamento",
+      "description": "Scheduled appointments calendar"
+    },
+    "/pagamentos/{pagamentoId}": {
+      "schema": "Pagamento",
+      "description": "Financial payment receipts"
+    },
+    "/marcas/{marcaId}": {
+      "schema": "Marca",
+      "description": "Device brands list"
+    },
+    "/itens/{itemId}": {
+      "schema": "Item",
+      "description": "Device item categories"
+    },
+    "/config/main": {
+      "schema": "Config",
+      "description": "Global shop variables"
+    }
+  }
+}
