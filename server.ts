@@ -20,9 +20,7 @@ import {
   Firestore
 } from "firebase/firestore";
 
-// Define __dirname for ES Modules
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+// Define path resolution using process.cwd() as needed
 
 const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), "database.json");
@@ -52,8 +50,9 @@ async function initFirebase() {
     const fbConfig = JSON.parse(configContent);
     
     const app = initializeApp(fbConfig);
-    db = getFirestore(app, fbConfig.firestoreDatabaseId);
-    console.log(`Firebase Client SDK initialized successfully with database ID: ${fbConfig.firestoreDatabaseId}`);
+    const dbId = fbConfig.firestoreDatabaseId;
+    db = (dbId && dbId !== "(default)") ? getFirestore(app, dbId) : getFirestore(app);
+    console.log(`Firebase Client SDK initialized successfully with database ID: ${dbId || "(default)"}`);
   } catch (error) {
     console.error("Failed to initialize Firebase:", error);
     process.exit(1);

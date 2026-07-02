@@ -1,10 +1,10 @@
 {
-  "projectId": "gympulse-personal",
-  "appId": "1:1068724964920:web:b82feed3f6d0313f07a0cd",
-  "apiKey": "AIzaSyCPg3vNSexfASWeRwQfWkQBF7Uq_kAp-uY",
-  "authDomain": "gympulse-personal.firebaseapp.com",
-  "firestoreDatabaseId": "ai-studio-assistnciatech-27fe2fb6-357f-4cc7-9b3b-3d21aa5a1af1",
-  "storageBucket": "gympulse-personal.firebasestorage.app",
-  "messagingSenderId": "1068724964920",
-  "measurementId": ""
+  "projectId": "assistenciatech-e9e80",
+  "appId": "1:531250129198:web:81b0b972e3ee88165d32bf",
+  "apiKey": "AIzaSyBV6chN35TCIFBCTbL_bCOR61snLsF-zqg",
+  "authDomain": "assistenciatech-e9e80.firebaseapp.com",
+  "firestoreDatabaseId": "(default)",
+  "storageBucket": "assistenciatech-e9e80.firebasestorage.app",
+  "messagingSenderId": "531250129198",
+  "measurementId": "G-KG796F0TEX"
 }
