@@ -48,7 +48,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       case "auth/popup-closed-by-user":
         return "O popup de login foi fechado antes da conclusão.";
       case "auth/unauthorized-domain":
-        return "Domínio Não Autorizado no Firebase!\n\nPara corrigir isso e permitir o login com o Google, você precisa autorizar os domínios desta aplicação no seu console do Firebase:\n\n1. Acesse o Console do Firebase.\n2. Vá em 'Autenticação' (Authentication) -> aba 'Configurações' (Settings) -> seção 'Domínios autorizados' (Authorized domains).\n3. Clique em 'Adicionar domínio' e cole os dois domínios abaixo:\n   • ais-dev-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app\n   • ais-pre-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app";
+        return "Domínio Não Autorizado no Firebase!\n\nPara corrigir isso e permitir o login com o Google, você precisa autorizar os domínios desta aplicação no seu console do Firebase:\n\n1. Acesse o Console do Firebase.\n2. Vá em 'Autenticação' (Authentication) -> aba 'Configurações' (Settings) -> seção 'Domínios autorizados' (Authorized domains).\n3. Clique em 'Adicionar domínio' e adicione os seguintes endereços:\n   • assist-ncia-tech.vercel.app\n   • ais-dev-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app\n   • ais-pre-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app";
       default:
         return "Ocorreu um erro ao autenticar. Tente novamente.";
     }
@@ -166,6 +166,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
 
                   <div className="space-y-2 mt-2">
                     {[
+                      "assist-ncia-tech.vercel.app",
                       "ais-dev-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app",
                       "ais-pre-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app",
                       window.location.hostname
@@ -314,6 +315,22 @@ export default function Login({ onLoginSuccess }: LoginProps) {
                 ? "Já tem uma conta? Entrar no sistema"
                 : "Ainda não tem conta? Cadastre-se"}
             </button>
+          </div>
+
+          {/* Info box explaining Administrator vs Employee module */}
+          <div className="mt-6 pt-5 border-t border-slate-100 text-center">
+            <h4 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2">💡 Nível de Permissões Integrado</h4>
+            <div className="text-[11px] text-slate-500 space-y-2 leading-relaxed text-left bg-slate-50 p-3.5 rounded-xl border border-slate-150/50">
+              <p>
+                <strong>💼 Administrador:</strong> Acesso total a gráficos de caixa, faturamento consolidado, controle de despesas e gerenciamento de funcionários.
+              </p>
+              <p>
+                <strong>🔧 Funcionário comum:</strong> Acesso para registrar Ordens de Serviço (Entrada/Saída/Garantias), andamento na bancada e agendamentos. Valores consolidados confidenciais permanecem protegidos e ocultos do caixa.
+              </p>
+              <p className="text-[10px] text-slate-400 italic mt-1 border-t border-slate-150/30 pt-1">
+                * Para testar, logue com sua conta e vá em <strong>ADMIN &rarr; Funcionários</strong> para criar contas de atendentes e técnicos, ou ajustar níveis de acesso de usuários já cadastrados.
+              </p>
+            </div>
           </div>
         </div>
       </div>
