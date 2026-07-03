@@ -247,6 +247,70 @@ async function startServer() {
 
   // --- API ROUTES ---
 
+  // Get public firebase configuration
+  app.get("/api/config/firebase", (req, res) => {
+    try {
+      const configContent = fs.readFileSync(configPath, "utf8");
+      res.json(JSON.parse(configContent));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Handle Firebase authenticated session (Google Sign-In or Email Password sign-in)
+  app.post("/api/auth/firebase-login", async (req, res) => {
+    try {
+      const { email, name, uid } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "E-mail é obrigatório." });
+      }
+
+      const emailLower = String(email).toLowerCase();
+      const colRef = collection(db, "users");
+      const q = query(colRef, where("email", "==", emailLower), limit(1));
+      const snapshot = await getDocs(q);
+
+      let userToReturn: any = null;
+
+      if (snapshot.empty) {
+        // Create user document if it doesn't exist
+        // Automatically make first user, michel.lima20000@gmail.com, or admin@minhaassistencia.com as admin
+        const allUsers = await getCollection<any>("users");
+        const isFirstUser = allUsers.length === 0;
+        const isAdminEmail = emailLower === "michel.lima20000@gmail.com" || emailLower === "admin@minhaassistencia.com";
+        const role = (isFirstUser || isAdminEmail) ? "admin" : "employee";
+
+        userToReturn = {
+          id: uid,
+          name: name || emailLower.split("@")[0],
+          email: emailLower,
+          role: role
+        };
+
+        // Write the document directly to the users collection with uid as document id
+        await setDoc(doc(db, "users", uid), convertToFirestore(userToReturn));
+        console.log(`New Firebase user registered: ${emailLower} with role ${role}`);
+      } else {
+        const docSnap = snapshot.docs[0];
+        const existingData = convertFromFirestore(docSnap.data());
+        userToReturn = {
+          id: docSnap.id,
+          name: existingData.name || name || emailLower.split("@")[0],
+          email: emailLower,
+          role: existingData.role || "employee"
+        };
+      }
+
+      res.json({
+        user: userToReturn,
+        token: "fb-session-token-" + uid
+      });
+    } catch (error: any) {
+      console.error("Firebase login error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Auth
   app.post("/api/auth/login", async (req, res) => {
     try {
