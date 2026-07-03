@@ -2,6 +2,7 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+import { handleClientRoute } from './lib/clientRouter.ts';
 
 // Intercept all fetch requests to route /api to the Cloud Run backend when running on external domains like Vercel
 const originalFetch = window.fetch;
@@ -12,8 +13,8 @@ try {
         const isExternalDomain = window.location.hostname !== 'localhost' && 
                                  !window.location.hostname.includes('us-east1.run.app');
         if (isExternalDomain) {
-          const backendUrl = 'https://ais-pre-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app';
-          input = `${backendUrl}${input}`;
+          // Talk directly to Firestore on the client side to avoid CORS, cold start, and fetch errors on Vercel
+          return handleClientRoute(input, init);
         }
       }
       return originalFetch(input, init);
@@ -30,8 +31,7 @@ try {
         const isExternalDomain = window.location.hostname !== 'localhost' && 
                                  !window.location.hostname.includes('us-east1.run.app');
         if (isExternalDomain) {
-          const backendUrl = 'https://ais-pre-3juews5vwpb63yyq5fou6i-408064427062.us-east1.run.app';
-          input = `${backendUrl}${input}`;
+          return handleClientRoute(input, init);
         }
       }
       return originalFetch(input, init);
