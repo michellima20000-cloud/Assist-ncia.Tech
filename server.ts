@@ -173,44 +173,106 @@ async function seedDatabase() {
     const configSnap = await getDoc(configRef);
     
     if (!configSnap.exists()) {
-      console.log("Firestore main config not found. Seeding from database.json...");
-      
-      let localDb: any = {};
-      if (fs.existsSync(DB_FILE)) {
-        const fileData = fs.readFileSync(DB_FILE, "utf8");
-        localDb = JSON.parse(fileData);
-      }
-      
-      // Save global config
-      const nextNum = localDb.config?.nextControlNumber ?? 3;
-      const printerConfigured = localDb.config?.printerConfigured ?? false;
+      console.log("Firestore main config not found. Creating default config...");
       await setDoc(configRef, convertToFirestore({
-        nextControlNumber: nextNum,
-        printerConfigured: printerConfigured,
+        nextControlNumber: 3,
+        printerConfigured: false,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         createdBy: "system"
       }));
+    }
+
+    // Comprehensive default data for automatic seeding if collections are empty
+    const defaultData: { [key: string]: any[] } = {
+      itens: [
+        { id: "item-1", name: "Celular" },
+        { id: "item-2", name: "Notebook" },
+        { id: "item-3", name: "Tablet" },
+        { id: "item-4", name: "Televisor" },
+        { id: "item-5", name: "Console de Videogame" },
+        { id: "item-6", name: "Smartwatch" },
+        { id: "item-7", name: "Monitor" },
+        { id: "item-8", name: "Caixa de Som Bluetooth" }
+      ],
+      marcas: [
+        { id: "marca-1", name: "Samsung" },
+        { id: "marca-2", name: "Apple" },
+        { id: "marca-3", name: "Motorola" },
+        { id: "marca-4", name: "Xiaomi" },
+        { id: "marca-5", name: "LG" },
+        { id: "marca-6", name: "Dell" },
+        { id: "marca-7", name: "Lenovo" },
+        { id: "marca-8", name: "Asus" },
+        { id: "marca-9", name: "Acer" },
+        { id: "marca-10", name: "JBL" }
+      ],
+      servicos: [
+        { id: "srv-1", name: "Troca de Tela / Display", price: 280.00 },
+        { id: "srv-2", name: "Troca de Bateria", price: 140.00 },
+        { id: "srv-3", name: "Desoxidação / Limpeza Química", price: 180.00 },
+        { id: "srv-4", name: "Reparo de Conector de Carga", price: 120.00 },
+        { id: "srv-5", name: "Formatação e Reinstalação de OS", price: 90.00 },
+        { id: "srv-6", name: "Reparo de Placa-Mãe / Solda BGA", price: 450.00 },
+        { id: "srv-7", name: "Limpeza Física + Pasta Térmica", price: 150.00 },
+        { id: "srv-8", name: "Recuperação de Carcaça/Dobradiça", price: 200.00 }
+      ],
+      produtos: [
+        { id: "prod-1", name: "Película de Vidro 3D", price: 30.00, cost: 8.00, stock: 85, category: "Películas", code: "PEL-3D" },
+        { id: "prod-2", name: "Carregador Turbo 20W USB-C", price: 75.00, cost: 22.00, stock: 40, category: "Carregadores", code: "CAR-20W" },
+        { id: "prod-3", name: "Cabo Reforçado USB-C 1.5m", price: 45.00, cost: 12.00, stock: 60, category: "Cabos", code: "CAB-USBC" },
+        { id: "prod-4", name: "Bateria Compatível iPhone 11", price: 190.00, cost: 70.00, stock: 15, category: "Baterias", code: "BAT-IPH11" },
+        { id: "prod-5", name: "SSD SATA III 480GB", price: 260.00, cost: 130.00, stock: 20, category: "Armazenamento", code: "SSD-480GB" },
+        { id: "prod-6", name: "Fone de Ouvido com Fio Stereo", price: 35.00, cost: 10.00, stock: 35, category: "Acessórios", code: "FON-STEREO" }
+      ],
+      convenios: [
+        { id: "conv-1", name: "Sem Convênio (Padrão)", discountPercent: 0 },
+        { id: "conv-2", name: "Parceria Empresa (10% de Desconto)", discountPercent: 10 },
+        { id: "conv-3", name: "Cliente VIP / Frequente (15% de Desconto)", discountPercent: 15 },
+        { id: "conv-4", name: "Desconto Amigo (20% de Desconto)", discountPercent: 20 }
+      ],
+      clientes: [
+        { id: "cli-1", name: "José de Souza", phone: "(11) 99999-8888", cpf: "111.222.333-44", email: "jose.souza@gmail.com", address: "Av. Paulista, 1000", city: "São Paulo", notes: "Cliente antigo." },
+        { id: "cli-2", name: "Maria Helena Silva", phone: "(21) 98888-7777", cpf: "222.333.444-55", email: "maria.silva@hotmail.com", address: "Rua Copacabana, 500", city: "Rio de Janeiro", notes: "Contato por WhatsApp." },
+        { id: "cli-3", name: "Carlos Eduardo Santos", phone: "(31) 97777-6666", cpf: "333.444.555-66", email: "cadu.santos@yahoo.com.br", address: "Av. Afonso Pena, 1200", city: "Belo Horizonte", notes: "Sempre pede desconto." }
+      ]
+    };
+
+    // Check if we also have seed data in database.json to merge or prioritize
+    let localDb: any = {};
+    if (fs.existsSync(DB_FILE)) {
+      try {
+        const fileData = fs.readFileSync(DB_FILE, "utf8");
+        localDb = JSON.parse(fileData);
+        console.log("Loaded custom database.json for additional seed data");
+      } catch (e) {
+        console.warn("Could not parse database.json:", e);
+      }
+    }
+
+    const collectionsToSeed = [
+      "clientes",
+      "marcas",
+      "itens",
+      "servicos",
+      "produtos",
+      "convenios"
+    ];
+
+    for (const col of collectionsToSeed) {
+      const colRef = collection(db, col);
+      const snap = await getDocs(query(colRef, limit(1)));
       
-      // Seed all main collections
-      const collections = [
-        "users",
-        "clientes",
-        "atendimentos",
-        "servicos",
-        "produtos",
-        "despesas",
-        "convenios",
-        "agendamentos",
-        "pagamentos",
-        "marcas",
-        "itens"
-      ];
-      
-      for (const col of collections) {
-        const items = localDb[col] || [];
-        console.log(`Seeding Firestore collection '${col}' with ${items.length} items...`);
-        for (const item of items) {
+      // If collection is completely empty, seed it
+      if (snap.empty) {
+        // Use custom localDb data if available, otherwise fallback to our beautiful defaults
+        const itemsToSeed = (localDb[col] && localDb[col].length > 0) 
+          ? localDb[col] 
+          : (defaultData[col] || []);
+        
+        console.log(`Collection '${col}' is empty. Seeding with ${itemsToSeed.length} default items...`);
+        
+        for (const item of itemsToSeed) {
           const docId = item.id;
           if (docId) {
             const itemRef = doc(db, col, docId);
@@ -222,11 +284,12 @@ async function seedDatabase() {
             }));
           }
         }
+      } else {
+        console.log(`Collection '${col}' already has data. Skipping seed.`);
       }
-      console.log("Database seeded successfully to Firestore.");
-    } else {
-      console.log("Firestore already populated. Skipping seeding.");
     }
+    
+    console.log("Database seeding verification completed successfully.");
   } catch (error) {
     console.error("Error seeding database:", error);
   }
