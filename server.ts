@@ -172,6 +172,11 @@ async function seedDatabase() {
     const configRef = doc(db, "config", "main");
     const configSnap = await getDoc(configRef);
     
+    if (configSnap.exists() && configSnap.data()?.hasBeenCleared) {
+      console.log("Database has been cleared/reset for real usage. Skipping seeding.");
+      return;
+    }
+
     if (!configSnap.exists()) {
       console.log("Firestore main config not found. Creating default config...");
       await setDoc(configRef, convertToFirestore({
@@ -1095,6 +1100,47 @@ async function startServer() {
       });
     } catch (error: any) {
       console.error("Reports error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Admin clear test data endpoint
+  app.post("/api/admin/clear-test-data", async (req, res) => {
+    try {
+      const collections = [
+        "clientes",
+        "atendimentos",
+        "servicos",
+        "produtos",
+        "despesas",
+        "convenios",
+        "marcas",
+        "itens",
+        "pagamentos"
+      ];
+      
+      for (const col of collections) {
+        const colRef = collection(db, col);
+        const snapshot = await getDocs(colRef);
+        for (const docSnap of snapshot.docs) {
+          await deleteDoc(doc(db, col, docSnap.id));
+        }
+      }
+      
+      // Reset config
+      const configRef = doc(db, "config", "main");
+      await setDoc(configRef, convertToFirestore({
+        nextControlNumber: 1,
+        printerConfigured: false,
+        hasBeenCleared: true,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        createdBy: "system"
+      }));
+      
+      res.json({ success: true, message: "Todos os dados de teste foram removidos! O sistema agora está limpo e o contador de OS foi resetado para 0001." });
+    } catch (error: any) {
+      console.error("Error clearing database:", error);
       res.status(500).json({ error: error.message });
     }
   });

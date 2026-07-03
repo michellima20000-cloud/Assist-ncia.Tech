@@ -56,42 +56,67 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
 
   // Handle html5-qrcode initialization and teardown
   useEffect(() => {
-    if (activeTab !== "camera") {
-      stopCamera();
-      return;
-    }
-
     let isMounted = true;
 
     // Check camera permission and start scanning
     const startCamera = async () => {
+      if (activeTab !== "camera") return;
+      
       try {
         setCameraPermission("pending");
         setCameraError(null);
+
+        // Stop any running camera instances first
+        await stopCamera();
+
+        if (!isMounted) return;
 
         // Instantiating html5-qrcode
         const html5QrCode = new Html5Qrcode(qrRegionId);
         html5QrCodeRef.current = html5QrCode;
 
-        await html5QrCode.start(
-          { facingMode: "environment" },
-          {
-            fps: 10,
-            qrbox: (width, height) => {
-              const size = Math.min(width, height) * 0.7;
-              return { width: size, height: size };
+        try {
+          // Attempt using back camera (environment) first
+          await html5QrCode.start(
+            { facingMode: "environment" },
+            {
+              fps: 10,
+              qrbox: (width, height) => {
+                const size = Math.min(width, height) * 0.7;
+                return { width: size, height: size };
+              },
+              aspectRatio: 1.0
             },
-            aspectRatio: 1.0
-          },
-          (decodedText) => {
-            if (isMounted) {
-              handleCodeDetected(decodedText);
-            }
-          },
-          (errorMessage) => {
-            // Logged lightly to avoid console spamming
-          }
-        );
+            (decodedText) => {
+              if (isMounted) {
+                handleCodeDetected(decodedText);
+              }
+            },
+            () => {}
+          );
+        } catch (envErr) {
+          console.warn("Could not start camera with environment facingMode, trying user/default camera:", envErr);
+          if (!isMounted) return;
+          
+          // Fallback to user facingMode (such as webcam on a PC or laptop)
+          await html5QrCode.start(
+            { facingMode: "user" },
+            {
+              fps: 10,
+              qrbox: (width, height) => {
+                const size = Math.min(width, height) * 0.7;
+                return { width: size, height: size };
+              },
+              aspectRatio: 1.0
+            },
+            (decodedText) => {
+              if (isMounted) {
+                handleCodeDetected(decodedText);
+              }
+            },
+            () => {}
+          );
+        }
 
         if (isMounted) {
           setCameraPermission("granted");
@@ -111,7 +136,7 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
     // Small delay to ensure container element is rendered
     const timer = setTimeout(() => {
       startCamera();
-    }, 100);
+    }, 150);
 
     return () => {
       isMounted = false;
@@ -120,17 +145,19 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
     };
   }, [activeTab]);
 
-  const stopCamera = () => {
-    if (html5QrCodeRef.current && html5QrCodeRef.current.isScanning) {
-      html5QrCodeRef.current
-        .stop()
-        .then(() => {
+  const stopCamera = async () => {
+    if (html5QrCodeRef.current) {
+      if (html5QrCodeRef.current.isScanning) {
+        try {
+          await html5QrCodeRef.current.stop();
           console.log("Câmera do scanner finalizada com sucesso.");
-        })
-        .catch((err) => {
+        } catch (err) {
           console.error("Erro ao finalizar câmera do scanner:", err);
-        });
+        }
+      }
+      html5QrCodeRef.current = null;
     }
+    setScannerActive(false);
   };
 
   // Look up scanned code in existing products
@@ -138,9 +165,12 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
     const trimmed = code.trim();
     if (!trimmed) return;
 
-    // First try matching barcode, then try matching product ID directly
+    // First try matching barcode, then try matching product ID directly, and finally try custom code if present
     const found = products.find(
-      (p) => p.barcode?.toLowerCase() === trimmed.toLowerCase() || p.id.toLowerCase() === trimmed.toLowerCase()
+      (p: any) => 
+        p.barcode?.toLowerCase() === trimmed.toLowerCase() || 
+        p.id.toLowerCase() === trimmed.toLowerCase() ||
+        p.code?.toLowerCase() === trimmed.toLowerCase()
     );
 
     if (found) {
@@ -362,7 +392,7 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Código de Barras</span>
-                    <p className="text-xs font-bold text-slate-600 mt-0.5 font-mono">{scannedProduct.barcode || "N/A"}</p>
+                    <p className="text-xs font-bold text-slate-600 mt-0.5 font-mono">{scannedProduct.barcode || (scannedProduct as any).code || "N/A"}</p>
                   </div>
                   <div>
                     <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Posição</span>
@@ -382,7 +412,7 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
               </div>
 
               {/* QR Code display - printable & scanable! */}
-              {scannedProduct.barcode && (
+              {(scannedProduct.barcode || (scannedProduct as any).code) && (
                 <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center justify-between gap-3">
                   <div className="text-left">
                     <p className="text-[10px] font-extrabold text-slate-700 flex items-center gap-1">
@@ -395,7 +425,7 @@ export default function ProductScanner({ onClose, onProductScanned, mode = "view
                   </div>
                   <div className="w-16 h-16 rounded-lg bg-white border border-slate-200 overflow-hidden flex items-center justify-center p-1 shadow-sm shrink-0">
                     <img
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(scannedProduct.barcode)}`}
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=${encodeURIComponent(scannedProduct.barcode || (scannedProduct as any).code)}`}
                       className="w-full h-full object-contain"
                       alt="Etiqueta QR"
                       referrerPolicy="no-referrer"

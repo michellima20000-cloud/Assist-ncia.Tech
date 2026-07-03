@@ -357,7 +357,39 @@ GARANTIA DE 90 DIAS.`;
         setSelectedEmp("");
         setUserForm({ id: "", name: "", email: "", role: "employee", password: "" });
       }
+    } catch (error: any) { console.error(error); }
+  };
+
+  const handleDeleteService = async (id: string) => {
+    if (!window.confirm("Excluir definitivamente este serviço?")) return;
+    try {
+      const res = await fetch(`/api/servicos/${id}`, { method: "DELETE" });
+      if (res.ok) fetchServices();
     } catch (err) { console.error(err); }
+  };
+
+  const handleDeleteProduct = async (id: string) => {
+    if (!window.confirm("Excluir definitivamente este produto?")) return;
+    try {
+      const res = await fetch(`/api/produtos/${id}`, { method: "DELETE" });
+      if (res.ok) fetchProducts();
+    } catch (err) { console.error(err); }
+  };
+
+  const handleClearDatabase = async () => {
+    try {
+      const res = await fetch("/api/admin/clear-test-data", { method: "POST" });
+      if (res.ok) {
+        const data = await res.json();
+        alert(data.message || "Sistema zerado com sucesso!");
+        window.location.reload();
+      } else {
+        alert("Erro ao zerar o banco de dados.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erro de conexão.");
+    }
   };
 
   // AUXILIARY TABLE SAVES
@@ -488,12 +520,28 @@ GARANTIA DE 90 DIAS.`;
 
           <button
             onClick={() => setActiveMenu('auxiliary')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-3"
+            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-2"
           >
             <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mx-auto">
               <Settings className="w-5 h-5" />
             </div>
             <span className="font-bold text-xs text-slate-700">Marcas, Itens & Convênios</span>
+          </button>
+
+          <button
+            onClick={() => {
+              if (window.confirm("ATENÇÃO: Isso irá apagar DEFINITIVAMENTE todos os clientes, serviços, produtos, marcas, itens, despesas e ordens de serviço de teste, e irá zerar o contador de OS para 0001.\n\nDeseja continuar e limpar o sistema para uso real?")) {
+                if (window.confirm("Confirmação final: Tem certeza absoluta? Essa ação NÃO pode ser desfeita.")) {
+                  handleClearDatabase();
+                }
+              }
+            }}
+            className="p-5 bg-white border border-red-100 hover:border-red-200 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-1"
+          >
+            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center mx-auto">
+              <ShieldAlert className="w-5 h-5" />
+            </div>
+            <span className="font-bold text-xs text-red-600">Zerar Sistema (Dados Reais)</span>
           </button>
         </div>
       )}
@@ -803,6 +851,13 @@ GARANTIA DE 90 DIAS.`;
                   >
                     <Edit className="w-4 h-4" />
                   </button>
+                  <button
+                    onClick={() => handleDeleteService(s.id)}
+                    className="p-1 hover:bg-red-50 text-red-600 rounded"
+                    title="Excluir"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
             ))}
@@ -939,6 +994,13 @@ GARANTIA DE 90 DIAS.`;
                       className="p-1 hover:bg-blue-50 text-blue-600 rounded"
                     >
                       <Edit className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteProduct(p.id)}
+                      className="p-1 hover:bg-red-50 text-red-600 rounded"
+                      title="Excluir"
+                    >
+                      <Trash2 className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
