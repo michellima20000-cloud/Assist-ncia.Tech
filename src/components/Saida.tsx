@@ -7,11 +7,13 @@ interface SaidaProps {
   onBack: () => void;
   onGoToPayment: (at: Atendimento, notesFin: string) => void;
   onPrintIntakeReceipt: (at: Atendimento) => void;
+  onUpdateAtendimento?: (at: Atendimento) => void;
 }
 
-export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntakeReceipt }: SaidaProps) {
+export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntakeReceipt, onUpdateAtendimento }: SaidaProps) {
   const [client, setClient] = useState<Cliente | null>(null);
   const [notesFin, setNotesFin] = useState(atendimento.notesFin || "");
+  const [updatingStatus, setUpdatingStatus] = useState(false);
 
   useEffect(() => {
     const fetchClient = async () => {
@@ -55,6 +57,42 @@ Valor total do serviço: R$ ${atendimento.totalAmount.toFixed(2)}. Estamos te ag
     window.open(url, "_blank");
   };
 
+  const handleMarkAsReady = async () => {
+    if (updatingStatus) return;
+    setUpdatingStatus(true);
+    try {
+      const res = await fetch(`/api/atendimentos/${atendimento.id}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ status: "entrega" }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        if (onUpdateAtendimento) {
+          onUpdateAtendimento(updated);
+        }
+        
+        // Open WhatsApp automatically
+        if (client) {
+          const cleanPhone = client.phone.replace(/\D/g, "");
+          const text = `Olá ${client.name}! O seu aparelho (${updated.item} ${updated.brand} ${updated.model}) sob OS número ${updated.controlNumber} já está PRONTO para retirada em nossa assistência!
+Valor total do serviço: R$ ${updated.totalAmount.toFixed(2)}. Estamos te aguardando!`;
+          const url = `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(text)}`;
+          window.open(url, "_blank");
+        }
+      } else {
+        alert("Erro ao alterar o status do atendimento.");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Erro ao conectar com o servidor.");
+    } finally {
+      setUpdatingStatus(false);
+    }
+  };
+
   const handlePrintEntryCopy = () => {
     onPrintIntakeReceipt(atendimento);
   };
@@ -93,7 +131,90 @@ Valor total do serviço: R$ ${atendimento.totalAmount.toFixed(2)}. Estamos te ag
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Data de Entrada</span>
             <p className="text-xs text-slate-600 font-mono">{entryDate.toLocaleString("pt-BR")}</p>
           </div>
+          {atendimento.imei && (
+            <div className="col-span-2 border-t border-slate-50 pt-2">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">IMEI do Aparelho</span>
+              <p className="text-xs font-mono font-semibold text-slate-700">{atendimento.imei}</p>
+            </div>
+          )}
         </div>
+
+        {/* Status of Work Order and Quick WhatsApp Notify */}
+        <div className="p-4 bg-slate-50 border border-slate-200/50 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-inner">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Status da Ordem de Serviço</span>
+            <div className="flex items-center gap-2">
+              <span className={`text-xs font-bold px-2.5 py-1 rounded-full ${
+                atendimento.status === "entrega" 
+                  ? "bg-emerald-50 text-emerald-700 border border-emerald-100" 
+                  : atendimento.status === "finalizado"
+                  ? "bg-blue-50 text-blue-700 border border-blue-100"
+                  : "bg-amber-50 text-amber-700 border border-amber-100"
+              }`}>
+                {atendimento.status === "entrega" ? "PRONTO PARA ENTREGA" : atendimento.status === "finalizado" ? "FINALIZADO" : "EM MANUTENÇÃO"}
+              </span>
+            </div>
+          </div>
+          {atendimento.status === "na_assistencia" && (
+            <button
+              type="button"
+              onClick={handleMarkAsReady}
+              disabled={updatingStatus}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition shadow-sm"
+            >
+              <Check className="w-4 h-4" />
+              {updatingStatus ? "Atualizando..." : "Marcar como Pronto & Enviar WhatsApp"}
+            </button>
+          )}
+          {atendimento.status === "entrega" && (
+            <button
+              type="button"
+              onClick={handleSendWhatsApp}
+              className="px-4 py-2 bg-emerald-100 hover:bg-emerald-200 text-emerald-800 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Reenviar WhatsApp de Pronto
+            </button>
+          )}
+        </div>
+
+        {/* Reported Defect and State Observations */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 border-b border-slate-100 pb-4">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Defeito Apresentado</span>
+            <div className="p-2.5 bg-red-50/30 border border-red-100/50 rounded-xl text-xs font-medium text-slate-700">
+              {atendimento.defeito || "Nenhum defeito especificado."}
+            </div>
+          </div>
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block mb-1">Observações do Estado / Acessórios</span>
+            <div className="p-2.5 bg-slate-50 border border-slate-100 rounded-xl text-xs text-slate-600">
+              {atendimento.observations || "Nenhuma observação informada."}
+            </div>
+          </div>
+        </div>
+
+        {/* Photos Gallery */}
+        {((atendimento.photoUrls && atendimento.photoUrls.length > 0) || atendimento.photoUrl) && (
+          <div className="border-b border-slate-100 pb-4 space-y-2">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Fotos de Entrada do Equipamento</span>
+            <div className="flex flex-wrap gap-2">
+              {atendimento.photoUrls && atendimento.photoUrls.length > 0 ? (
+                atendimento.photoUrls.map((url, idx) => (
+                  <a key={idx} href={url} target="_blank" rel="noreferrer" className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden shrink-0 hover:opacity-80 transition block">
+                    <img src={url} className="w-full h-full object-cover" alt={`Equipamento ${idx + 1}`} />
+                  </a>
+                ))
+              ) : (
+                atendimento.photoUrl && (
+                  <a href={atendimento.photoUrl} target="_blank" rel="noreferrer" className="relative w-16 h-16 rounded-lg border border-slate-200 overflow-hidden shrink-0 hover:opacity-80 transition block">
+                    <img src={atendimento.photoUrl} className="w-full h-full object-cover" alt="Equipamento" />
+                  </a>
+                )
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Client details block */}
         {client && (

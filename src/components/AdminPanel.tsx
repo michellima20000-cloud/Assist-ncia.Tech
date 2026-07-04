@@ -63,36 +63,48 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
         fetch("/api/atendimentos").then(r => r.json()),
         fetch("/api/clientes").then(r => r.json())
       ]);
-      setHistoryOrders(ats || []);
-      setAllClients(cls || []);
+      setHistoryOrders(Array.isArray(ats) ? ats : []);
+      setAllClients(Array.isArray(cls) ? cls : []);
     } catch (err) { console.error(err); }
   };
 
   const fetchServices = async () => {
     try {
       const res = await fetch("/api/servicos");
-      if (res.ok) setServices(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setServices(Array.isArray(data) ? data : []);
+      }
     } catch (err) { console.error(err); }
   };
 
   const fetchProducts = async () => {
     try {
       const res = await fetch("/api/produtos");
-      if (res.ok) setProducts(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setProducts(Array.isArray(data) ? data : []);
+      }
     } catch (err) { console.error(err); }
   };
 
   const fetchExpenses = async () => {
     try {
       const res = await fetch("/api/despesas");
-      if (res.ok) setExpenses(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setExpenses(Array.isArray(data) ? data : []);
+      }
     } catch (err) { console.error(err); }
   };
 
   const fetchUsers = async () => {
     try {
       const res = await fetch("/api/users");
-      if (res.ok) setEmployees(await res.json());
+      if (res.ok) {
+        const data = await res.json();
+        setEmployees(Array.isArray(data) ? data : []);
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -103,9 +115,9 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
         fetch("/api/itens").then(r => r.json()),
         fetch("/api/convenios").then(r => r.json())
       ]);
-      setBrands(br || []);
-      setItems(it || []);
-      setConvenios(co || []);
+      setBrands(Array.isArray(br) ? br : []);
+      setItems(Array.isArray(it) ? it : []);
+      setConvenios(Array.isArray(co) ? co : []);
     } catch (err) { console.error(err); }
   };
 
@@ -700,44 +712,60 @@ GARANTIA DE 90 DIAS.`;
           </div>
 
           <div className="space-y-3 max-h-[350px] overflow-y-auto pr-1">
-            {historyOrders
-              .filter(o => o.controlNumber.toLowerCase().includes(historySearch.toLowerCase()))
-              .map((o) => {
-                const client = allClients.find(c => c.id === o.clienteId) || { name: "Cliente Desconhecido" };
-                return (
-                  <div key={o.id} className="p-3 border border-slate-100 hover:border-blue-100 rounded-xl text-xs flex justify-between items-center gap-4 bg-slate-50/20">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="font-mono font-bold text-slate-800">{o.controlNumber}</span>
-                        <span className={`text-[10px] px-2 py-0.5 rounded ${
-                          o.status === 'finalizado' ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"
-                        }`}>
-                          {o.status.toUpperCase()}
-                        </span>
-                      </div>
-                      <p className="font-bold text-slate-700 mt-1">{o.item} {o.brand} {o.model}</p>
-                      <p className="text-slate-500">Cliente: {client.name}</p>
-                    </div>
-
-                    <div className="text-right flex items-center gap-3">
+            {Array.isArray(historyOrders) && historyOrders.length > 0 ? (
+              historyOrders
+                .filter(o => {
+                  if (!o) return false;
+                  const searchLower = (historySearch || "").toLowerCase();
+                  const client = Array.isArray(allClients) ? allClients.find(c => c.id === o.clienteId) : undefined;
+                  return (
+                    (o.controlNumber || "").toLowerCase().includes(searchLower) ||
+                    (o.item || "").toLowerCase().includes(searchLower) ||
+                    (o.brand || "").toLowerCase().includes(searchLower) ||
+                    (o.model || "").toLowerCase().includes(searchLower) ||
+                    (client?.name || "").toLowerCase().includes(searchLower)
+                  );
+                })
+                .map((o) => {
+                  if (!o) return null;
+                  const client = (Array.isArray(allClients) ? allClients.find(c => c.id === o.clienteId) : undefined) || { name: "Cliente Desconhecido" };
+                  return (
+                    <div key={o.id} className="p-3 border border-slate-100 hover:border-blue-100 rounded-xl text-xs flex justify-between items-center gap-4 bg-slate-50/20">
                       <div>
-                        <p className="font-mono font-bold text-slate-800">R$ {o.totalAmount.toFixed(2)}</p>
-                        <p className="text-[10px] text-slate-400">Entrada: {new Date(o.entryDate).toLocaleDateString()}</p>
+                        <div className="flex items-center gap-2">
+                          <span className="font-mono font-bold text-slate-800">{o.controlNumber || "OS"}</span>
+                          <span className={`text-[10px] px-2 py-0.5 rounded ${
+                            o.status === 'finalizado' ? "bg-emerald-50 text-emerald-700" : "bg-blue-50 text-blue-700"
+                          }`}>
+                            {(o.status || "").toUpperCase()}
+                          </span>
+                        </div>
+                        <p className="font-bold text-slate-700 mt-1">{o.item || ""} {o.brand || ""} {o.model || ""}</p>
+                        <p className="text-slate-500">Cliente: {client.name}</p>
                       </div>
 
-                      {o.status === "finalizado" && (
-                        <button
-                          onClick={() => handleReprintExitHistory(o)}
-                          className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg"
-                          title="Reimprimir Cupom de Saída"
-                        >
-                          <Printer className="w-4 h-4" />
-                        </button>
-                      )}
+                      <div className="text-right flex items-center gap-3">
+                        <div>
+                          <p className="font-mono font-bold text-slate-800">R$ {(o.totalAmount || 0).toFixed(2)}</p>
+                          <p className="text-[10px] text-slate-400">Entrada: {o.entryDate ? new Date(o.entryDate).toLocaleDateString() : "N/A"}</p>
+                        </div>
+
+                        {o.status === "finalizado" && (
+                          <button
+                            onClick={() => handleReprintExitHistory(o)}
+                            className="p-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg"
+                            title="Reimprimir Cupom de Saída"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                );
-              })}
+                  );
+                })
+            ) : (
+              <p className="text-xs text-slate-400 text-center py-4">Nenhuma ordem de serviço encontrada no histórico.</p>
+            )}
           </div>
         </div>
       )}

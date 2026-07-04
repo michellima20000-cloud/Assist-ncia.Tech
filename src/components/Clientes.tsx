@@ -48,8 +48,8 @@ export default function Clientes({ onSelect, isPicker = false }: ClientesProps) 
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone) {
-      alert("Nome e Telefone são obrigatórios!");
+    if (!name || !phone || !cpf) {
+      alert("Nome, Telefone e CPF são obrigatórios!");
       return;
     }
 
@@ -166,9 +166,10 @@ export default function Clientes({ onSelect, isPicker = false }: ClientesProps) 
               />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">CPF (Opcional)</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">CPF *</label>
               <input
                 type="text"
+                required
                 value={cpf}
                 onChange={(e) => setCpf(e.target.value)}
                 placeholder="Ex: 123.456.789-00"

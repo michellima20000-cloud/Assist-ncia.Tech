@@ -40,8 +40,11 @@ export interface Atendimento {
   item: string;
   brand: string;
   model: string;
+  imei?: string;
+  defeito?: string;
   observations: string;
   photoUrl?: string;
+  photoUrls?: string[];
   services: AtendimentoServico[];
   products: AtendimentoProduto[];
   entryDate: string;
@@ -95,12 +98,35 @@ export interface Agendamento {
 
 export interface Pagamento {
   id: string;
-  atendimentoId: string;
+  atendimentoId?: string;
+  vendaId?: string;
+  isVendaDirecta?: boolean;
   totalAmount: number;
   receivedAmount: number;
   change: number;
-  method: 'cash' | 'debit' | 'credit';
+  method: 'cash' | 'debit' | 'credit' | 'pix';
   date: string;
+}
+
+export interface VendaItem {
+  productId: string;
+  name: string;
+  quantity: number;
+  price: number;
+}
+
+export interface Venda {
+  id: string;
+  clienteId?: string;
+  clienteName?: string;
+  items: VendaItem[];
+  totalAmount: number;
+  receivedAmount: number;
+  change: number;
+  method: 'cash' | 'debit' | 'credit' | 'pix';
+  date: string;
+  sellerId?: string;
+  sellerName?: string;
 }
 
 export interface Marca {

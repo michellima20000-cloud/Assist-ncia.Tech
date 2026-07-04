@@ -45,8 +45,11 @@
         "item": { "type": "string" },
         "brand": { "type": "string" },
         "model": { "type": "string" },
+        "imei": { "type": "string" },
+        "defeito": { "type": "string" },
         "observations": { "type": "string" },
         "photoUrl": { "type": "string" },
+        "photoUrls": { "type": "array" },
         "services": { "type": "array" },
         "products": { "type": "array" },
         "entryDate": { "type": "string", "format": "date-time" },
@@ -198,6 +201,25 @@
         "createdBy": { "type": "string" }
       },
       "required": ["nextControlNumber"]
+    },
+    "Venda": {
+      "title": "Venda",
+      "description": "Direct product sales record",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "clienteId": { "type": "string" },
+        "clienteName": { "type": "string" },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "number" },
+        "receivedAmount": { "type": "number" },
+        "change": { "type": "number" },
+        "method": { "type": "string", "enum": ["cash", "debit", "credit", "pix"] },
+        "date": { "type": "string", "format": "date-time" },
+        "sellerId": { "type": "string" },
+        "sellerName": { "type": "string" }
+      },
+      "required": ["id", "items", "totalAmount", "receivedAmount", "change", "method", "date"]
     }
   },
   "firestore": {
@@ -236,6 +258,10 @@
     "/pagamentos/{pagamentoId}": {
       "schema": "Pagamento",
       "description": "Financial payment receipts"
+    },
+    "/vendas/{vendaId}": {
+      "schema": "Venda",
+      "description": "Direct sales receipts"
     },
     "/marcas/{marcaId}": {
       "schema": "Marca",

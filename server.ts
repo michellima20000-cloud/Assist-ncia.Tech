@@ -37,7 +37,9 @@ import {
   Agendamento,
   Pagamento,
   Marca,
-  Item
+  Item,
+  Venda,
+  VendaItem
 } from "./src/types.ts";
 
 // Initialize Firebase Client SDK with configuration from firebase-applet-config.json
@@ -580,8 +582,11 @@ async function startServer() {
         item: req.body.item || "Celular",
         brand: req.body.brand || "",
         model: req.body.model || "",
+        imei: req.body.imei || "",
+        defeito: req.body.defeito || "",
         observations: req.body.observations || "",
         photoUrl: req.body.photoUrl || "",
+        photoUrls: req.body.photoUrls || [],
         services: req.body.services || [],
         products: req.body.products || [],
         entryDate: new Date().toISOString(),
@@ -1104,6 +1109,86 @@ async function startServer() {
     }
   });
 
+  // Vendas Directas REST
+  app.get("/api/vendas", async (req, res) => {
+    try {
+      const list = await getCollection<Venda>("vendas");
+      // Sort sales by date descending
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      res.json(list);
+    } catch (error: any) {
+      console.error("Error fetching sales:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/vendas", async (req, res) => {
+    try {
+      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName } = req.body;
+
+      if (!items || items.length === 0) {
+        return res.status(400).json({ message: "A venda deve conter pelo menos um item." });
+      }
+
+      // Check stock
+      for (const item of items) {
+        const p = await getDocument<Produto>("produtos", item.productId);
+        if (!p) {
+          return res.status(400).json({ message: `Produto ${item.name} não encontrado.` });
+        }
+        if (p.stock < item.quantity) {
+          return res.status(400).json({ message: `Estoque insuficiente para o produto ${item.name}. Disponível: ${p.stock}` });
+        }
+      }
+
+      // Decrement stock for each item sold
+      for (const item of items) {
+        const p = await getDocument<Produto>("produtos", item.productId);
+        if (p) {
+          p.stock = Math.max(0, p.stock - item.quantity);
+          await setDocument("produtos", p.id, p);
+        }
+      }
+
+      const vendaId = "vend-" + Date.now();
+      const newVenda: Venda = {
+        id: vendaId,
+        clienteId: clienteId || null,
+        clienteName: clienteName || "Consumidor Final",
+        items,
+        totalAmount,
+        receivedAmount,
+        change,
+        method,
+        date: new Date().toISOString(),
+        sellerId: sellerId || null,
+        sellerName: sellerName || "Balcão"
+      };
+
+      // Save venda document
+      await setDocument("vendas", vendaId, newVenda);
+
+      // Create matching payment entry so it registers in dashboard statistics, caixa flow, and financial summaries
+      const payId = "pay-venda-" + Date.now();
+      const newPayment: Pagamento = {
+        id: payId,
+        vendaId,
+        isVendaDirecta: true,
+        totalAmount,
+        receivedAmount,
+        change,
+        method,
+        date: new Date().toISOString()
+      };
+      await setDocument("pagamentos", payId, newPayment);
+
+      res.status(201).json({ success: true, venda: newVenda, payment: newPayment });
+    } catch (error: any) {
+      console.error("Error creating direct sale:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   // Admin clear test data endpoint
   app.post("/api/admin/clear-test-data", async (req, res) => {
     try {
@@ -1116,7 +1201,8 @@ async function startServer() {
         "convenios",
         "marcas",
         "itens",
-        "pagamentos"
+        "pagamentos",
+        "vendas"
       ];
       
       for (const col of collections) {

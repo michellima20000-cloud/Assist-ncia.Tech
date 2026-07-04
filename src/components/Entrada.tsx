@@ -24,8 +24,11 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
   const [selectedItem, setSelectedItem] = useState("Celular");
   const [selectedBrand, setSelectedBrand] = useState("Samsung");
   const [model, setModel] = useState("");
+  const [imei, setImei] = useState("");
+  const [defeito, setDefeito] = useState("");
   const [observations, setObservations] = useState("");
   const [photoUrl, setPhotoUrl] = useState("");
+  const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [printTicket, setPrintTicket] = useState(true);
 
   // Selected Services/Products checklists
@@ -69,13 +72,31 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
 
   // Handle Photo Upload / Capture simulation
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setPhotoUrl(reader.result as string);
-      };
-      reader.readAsDataURL(file);
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const filesArr = Array.from(files) as File[];
+      if (photoUrls.length + filesArr.length > 6) {
+        alert("Você pode carregar no máximo 6 fotos do equipamento.");
+        return;
+      }
+
+      const promises = filesArr.map((file: File) => {
+        return new Promise<string>((resolve) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            resolve(reader.result as string);
+          };
+          reader.readAsDataURL(file);
+        });
+      });
+
+      Promise.all(promises).then(results => {
+        const updated = [...photoUrls, ...results].slice(0, 6);
+        setPhotoUrls(updated);
+        if (updated.length > 0) {
+          setPhotoUrl(updated[0]); // fallback for single-photo legacy fields
+        }
+      });
     }
   };
 
@@ -152,8 +173,11 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
       item: selectedItem,
       brand: selectedBrand,
       model,
+      imei,
+      defeito,
       observations,
       photoUrl,
+      photoUrls,
       services: selectedServices,
       products: selectedProducts,
       totalAmount
@@ -174,10 +198,14 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
 DATA: ${new Date(result.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${selectedCliente.name}
 FONE: ${selectedCliente.phone}
+CPF: ${selectedCliente.cpf || ""}
 ------------------------
 EQUIPAMENTO:
 ${result.item} ${result.brand} ${result.model}
-OBS: ${result.observations || "Nenhuma"}
+${result.imei ? `IMEI: ${result.imei}` : ""}
+------------------------
+DEFEITO: ${result.defeito || "Não informado"}
+ESTADO / OBS: ${result.observations || "Nenhuma"}
 ------------------------
 SERVICOS ADICIONADOS:
 ${selectedServices.map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
@@ -271,7 +299,7 @@ TERMO: Autorizo o diagnóstico.`;
               <span>Informações do Aparelho</span>
             </h3>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="block text-xs font-semibold text-slate-500 mb-1">Item / Categoria</label>
                 <select
@@ -303,6 +331,28 @@ TERMO: Autorizo o diagnóstico.`;
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Código IMEI (Opcional)</label>
+                <input
+                  type="text"
+                  value={imei}
+                  onChange={(e) => setImei(e.target.value)}
+                  placeholder="Ex: 357912345678901"
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Defeito Apresentado *</label>
+              <textarea
+                required
+                value={defeito}
+                onChange={(e) => setDefeito(e.target.value)}
+                placeholder="Ex: Não liga, tela piscando, alto falante mudo..."
+                rows={2}
+                className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+              />
             </div>
 
             <div>
@@ -310,37 +360,53 @@ TERMO: Autorizo o diagnóstico.`;
               <textarea
                 value={observations}
                 onChange={(e) => setObservations(e.target.value)}
-                placeholder="Ex: Trincado canto esquerdo, não liga, marcas de uso nas laterais..."
-                rows={3}
+                placeholder="Ex: Celular em bom estado, sem marcas de uso, deixou capa, deixou carregador..."
+                rows={2}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
             </div>
 
             {/* Simulated Photo Capture / Upload */}
             <div>
-              <label className="block text-xs font-semibold text-slate-500 mb-1">Foto do Equipamento</label>
-              <div className="flex items-center gap-3">
-                <label className="flex items-center gap-2 px-4 py-2.5 border border-slate-200 hover:bg-slate-50 rounded-xl cursor-pointer transition text-xs font-medium text-slate-600">
-                  <Camera className="w-4 h-4 text-blue-500" />
-                  <span>Tirar Foto / Carregar</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    onChange={handlePhotoUpload}
-                    className="hidden"
-                  />
-                </label>
-                {photoUrl && (
-                  <div className="relative w-12 h-12 rounded-lg border border-slate-200 overflow-hidden shrink-0 group">
-                    <img src={photoUrl} className="w-full h-full object-cover" alt="Anexo" />
-                    <button
-                      type="button"
-                      onClick={() => setPhotoUrl("")}
-                      className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-[9px] font-bold"
-                    >
-                      Remover
-                    </button>
-                  </div>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">
+                Fotos do Equipamento ({photoUrls.length} de 6)
+              </label>
+              <div className="space-y-3">
+                <div className="flex flex-wrap gap-2">
+                  <label className="flex flex-col items-center justify-center w-20 h-20 border border-dashed border-slate-300 hover:border-blue-500 hover:bg-blue-50/20 rounded-xl cursor-pointer transition text-center p-2 text-[10px] font-semibold text-slate-500">
+                    <Camera className="w-5 h-5 text-blue-500 mb-1" />
+                    <span>Adicionar</span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+                  </label>
+                  {photoUrls.map((url, idx) => (
+                    <div key={idx} className="relative w-20 h-20 rounded-xl border border-slate-200 overflow-hidden shrink-0 group">
+                      <img src={url} className="w-full h-full object-cover" alt={`Equipamento ${idx + 1}`} />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = photoUrls.filter((_, i) => i !== idx);
+                          setPhotoUrls(updated);
+                          if (updated.length > 0) {
+                            setPhotoUrl(updated[0]);
+                          } else {
+                            setPhotoUrl("");
+                          }
+                        }}
+                        className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 flex items-center justify-center text-white transition text-[9px] font-bold"
+                      >
+                        Remover
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                {photoUrls.length === 0 && (
+                  <p className="text-[10px] text-slate-400 font-medium">Recomendado registrar fotos para assegurar o estado de conservação e acessórios.</p>
                 )}
               </div>
             </div>

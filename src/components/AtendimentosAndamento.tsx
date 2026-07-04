@@ -51,11 +51,12 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento }: A
 
   const filtered = activeOrders.filter(a => {
     const cli = getCliente(a.clienteId);
+    const searchLower = (search || "").toLowerCase();
     return (
-      a.controlNumber.toLowerCase().includes(search.toLowerCase()) ||
-      a.model.toLowerCase().includes(search.toLowerCase()) ||
-      a.brand.toLowerCase().includes(search.toLowerCase()) ||
-      cli.name.toLowerCase().includes(search.toLowerCase())
+      (a.controlNumber || "").toLowerCase().includes(searchLower) ||
+      (a.model || "").toLowerCase().includes(searchLower) ||
+      (a.brand || "").toLowerCase().includes(searchLower) ||
+      (cli?.name || "").toLowerCase().includes(searchLower)
     );
   });
 

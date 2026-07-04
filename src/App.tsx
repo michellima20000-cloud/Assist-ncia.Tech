@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import {
   Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
-  Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode
+  Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode,
+  ShoppingBag
 } from "lucide-react";
 import { User, Atendimento, DashboardStats } from "./types";
 
@@ -17,6 +18,7 @@ import Clientes from "./components/Clientes";
 import PrinterConfig from "./components/PrinterConfig";
 import ReceiptModal from "./components/ReceiptModal";
 import ProductScanner from "./components/ProductScanner";
+import Vendas from "./components/Vendas";
 
 type ActiveTab =
   | "dashboard"
@@ -28,7 +30,8 @@ type ActiveTab =
   | "clientes"
   | "revisao"
   | "admin"
-  | "printer";
+  | "printer"
+  | "vendas";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -304,6 +307,20 @@ ________________________`;
                   </div>
                 </button>
 
+                {/* VENDAS (índigo) */}
+                <button
+                  onClick={() => setActiveTab("vendas")}
+                  className="p-5 bg-white border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-indigo-100 text-indigo-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <ShoppingBag className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-indigo-800">VENDAS</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Power bank, fones, carregadores...</p>
+                  </div>
+                </button>
+
                 {/* AGENDAR (roxo) */}
                 <button
                   onClick={() => setActiveTab("agendar")}
@@ -441,6 +458,9 @@ ________________________`;
           <Saida
             atendimento={selectedAtendimento}
             onBack={() => setActiveTab("atendimento")}
+            onUpdateAtendimento={(updated) => {
+              setSelectedAtendimento(updated);
+            }}
             onGoToPayment={(at, notes) => {
               setSelectedAtendimento(at);
               setTempNotesFin(notes);
@@ -506,6 +526,17 @@ TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`;
           <AdminPanel
             onBack={() => setActiveTab("dashboard")}
             onPrintReceipt={(content) => triggerReceiptPreview("Cupom de Relatório", content)}
+          />
+        )}
+
+        {/* DIRECT PRODUCT SALES */}
+        {activeTab === "vendas" && (
+          <Vendas
+            onBack={() => setActiveTab("dashboard")}
+            onSaleSuccess={(receipt) => {
+              triggerReceiptPreview("Recibo de Venda", receipt);
+              setActiveTab("dashboard");
+            }}
           />
         )}
       </main>
