@@ -63,7 +63,8 @@ async function initFirebase() {
 
 // Convert native types to Firestore compatible format
 function convertToFirestore(obj: any): any {
-  if (obj === null || obj === undefined) return obj;
+  if (obj === null) return null;
+  if (obj === undefined) return null;
   if (obj instanceof Date) return Timestamp.fromDate(obj);
   
   if (typeof obj === "string") {
@@ -79,16 +80,22 @@ function convertToFirestore(obj: any): any {
   }
   
   if (Array.isArray(obj)) {
-    return obj.map(item => convertToFirestore(item));
+    return obj.map(item => convertToFirestore(item)).filter(item => item !== undefined);
   }
   
   if (typeof obj === "object") {
     const result: any = {};
     for (const key of Object.keys(obj)) {
+      if (obj[key] === undefined) {
+        continue;
+      }
       if (key === "time") {
         result[key] = obj[key];
       } else {
-        result[key] = convertToFirestore(obj[key]);
+        const val = convertToFirestore(obj[key]);
+        if (val !== undefined) {
+          result[key] = val;
+        }
       }
     }
     return result;
@@ -1029,9 +1036,222 @@ async function startServer() {
         }
       }
 
+      // Schedule Feedback Automation
+      try {
+        const client = await getDocument<Cliente>("clientes", at.clienteId);
+        if (client) {
+          let config = await getDocument<any>("config", "feedback");
+          if (!config) {
+            config = {
+              enabled: true,
+              delayHours: 3,
+              messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇"
+            };
+          }
+          
+          if (config.enabled) {
+            const delayMs = (Number(config.delayHours) || 3) * 60 * 60 * 1000;
+            const scheduledTime = new Date(Date.now() + delayMs).toISOString();
+            
+            let messageText = config.messageTemplate || "";
+            messageText = messageText
+              .replace(/{cliente}/g, client.name || "Cliente")
+              .replace(/{aparelho}/g, at.item || "aparelho")
+              .replace(/{marca}/g, at.brand || "")
+              .replace(/{modelo}/g, at.model || "")
+              .replace(/{numero_os}/g, at.controlNumber || "");
+
+            const fbId = "fb-" + Date.now();
+            const newFeedback = {
+              id: fbId,
+              clienteId: at.clienteId,
+              clienteName: client.name || "Cliente",
+              clientePhone: client.phone || "",
+              atendimentoId: at.id,
+              controlNumber: at.controlNumber || "",
+              item: at.item || "",
+              brand: at.brand || "",
+              model: at.model || "",
+              scheduledTime,
+              status: "pending",
+              messageText,
+              createdAt: new Date().toISOString()
+            };
+            
+            await setDocument("feedbacks", fbId, newFeedback);
+          }
+        }
+      } catch (fbErr) {
+        console.error("Error scheduling feedback:", fbErr);
+      }
+
       res.status(201).json({ payment: newPayment, atendimento: at });
     } catch (error: any) {
       console.error("Error finalizing payment:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Feedback config
+  app.get("/api/config/feedback", async (req, res) => {
+    try {
+      let config = await getDocument<any>("config", "feedback");
+      if (!config) {
+        config = {
+          enabled: true,
+          delayHours: 3,
+          messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
+          readyMessageTemplate: "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
+          entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+        };
+      } else {
+        if (!config.readyMessageTemplate) {
+          config.readyMessageTemplate = "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!";
+        }
+        if (!config.entryMessageTemplate) {
+          config.entryMessageTemplate = "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!";
+        }
+      }
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Save Feedback config
+  app.post("/api/config/feedback", async (req, res) => {
+    try {
+      const config = {
+        enabled: req.body.enabled !== undefined ? !!req.body.enabled : true,
+        delayHours: Number(req.body.delayHours) || 3,
+        messageTemplate: req.body.messageTemplate || "",
+        readyMessageTemplate: req.body.readyMessageTemplate || "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
+        entryMessageTemplate: req.body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+      };
+      await setDocument("config", "feedback", config);
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Custom Statuses
+  app.get("/api/config/status", async (req, res) => {
+    try {
+      let docData = await getDocument<any>("config", "status");
+      const defaultStatuses = [
+        "Aguardando técnico",
+        "Em avaliação",
+        "Aguardando aprovação do cliente",
+        "Aprovado pelo cliente",
+        "Reprovado pelo cliente",
+        "Em manutenção",
+        "Pronto para entrega",
+        "Aguardando peça(s)",
+        "Peça(s) na assistência",
+        "Aguardando pagamento",
+        "Sem conserto",
+        "Não reclamado/Abandonado"
+      ];
+      if (!docData || !docData.list) {
+        docData = { list: defaultStatuses };
+        await setDocument("config", "status", docData);
+      }
+      res.json(docData.list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Add Custom Status
+  app.post("/api/config/status", async (req, res) => {
+    try {
+      const newStatus = req.body.status;
+      if (!newStatus || typeof newStatus !== "string" || !newStatus.trim()) {
+        return res.status(400).json({ error: "Status inválido" });
+      }
+      
+      let docData = await getDocument<any>("config", "status");
+      const defaultStatuses = [
+        "Aguardando técnico",
+        "Em avaliação",
+        "Aguardando aprovação do cliente",
+        "Aprovado pelo cliente",
+        "Reprovado pelo cliente",
+        "Em manutenção",
+        "Pronto para entrega",
+        "Aguardando peça(s)",
+        "Peça(s) na assistência",
+        "Aguardando pagamento",
+        "Sem conserto",
+        "Não reclamado/Abandonado"
+      ];
+      let list = docData && docData.list ? docData.list : [...defaultStatuses];
+      
+      const trimmed = newStatus.trim();
+      if (!list.includes(trimmed)) {
+        list.push(trimmed);
+        await setDocument("config", "status", { list });
+      }
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete Custom Status
+  app.delete("/api/config/status", async (req, res) => {
+    try {
+      const statusToDelete = req.body.status;
+      if (!statusToDelete || typeof statusToDelete !== "string") {
+        return res.status(400).json({ error: "Status inválido" });
+      }
+      let docData = await getDocument<any>("config", "status");
+      if (!docData || !docData.list) {
+        return res.status(404).json({ error: "Configuração não encontrada" });
+      }
+      const updatedList = docData.list.filter((s: string) => s !== statusToDelete);
+      await setDocument("config", "status", { list: updatedList });
+      res.json(updatedList);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Scheduled feedbacks
+  app.get("/api/feedbacks", async (req, res) => {
+    try {
+      const list = await getCollection<any>("feedbacks");
+      res.json(list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Update feedback status
+  app.put("/api/feedbacks/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const existing = await getDocument<any>("feedbacks", id);
+      if (!existing) return res.status(404).json({ error: "Feedback não encontrado." });
+
+      const updated = {
+        ...existing,
+        ...req.body
+      };
+      await setDocument("feedbacks", id, updated);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete feedback
+  app.delete("/api/feedbacks/:id", async (req, res) => {
+    try {
+      await deleteDocument("feedbacks", req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
@@ -1185,7 +1405,7 @@ async function startServer() {
       res.status(201).json({ success: true, venda: newVenda, payment: newPayment });
     } catch (error: any) {
       console.error("Error creating direct sale:", error);
-      res.status(500).json({ error: error.message });
+      res.status(500).json({ error: error.message, message: error.message });
     }
   });
 

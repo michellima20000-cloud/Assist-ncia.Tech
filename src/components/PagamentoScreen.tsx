@@ -6,7 +6,7 @@ interface PagamentoScreenProps {
   atendimento: Atendimento;
   notesFin: string;
   onBack: () => void;
-  onPaymentSuccess: (receiptContent: string) => void;
+  onPaymentSuccess: (receiptContent: string, phone: string, clientName: string) => void;
 }
 
 export default function PagamentoScreen({ atendimento, notesFin, onBack, onPaymentSuccess }: PagamentoScreenProps) {
@@ -86,7 +86,7 @@ FORMA PAGAMENTO: ${method === "cash" ? "Em espécie" : method === "debit" ? "Deb
 ------------------------
 GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
 
-        onPaymentSuccess(printReceipt ? receiptStr : "");
+        onPaymentSuccess(printReceipt ? receiptStr : "", client ? client.phone : "", client ? client.name : "");
       } else {
         alert("Erro ao salvar pagamento.");
       }

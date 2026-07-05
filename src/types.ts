@@ -52,6 +52,12 @@ export interface Atendimento {
   totalAmount: number;
   notesFin?: string;
   paymentId?: string;
+  senhaDesbloqueio?: string;
+  padraoDesbloqueio?: string;
+  inicioServico?: string;
+  fimServico?: string;
+  numeroSerie?: string;
+  detailedStatus?: string;
 }
 
 export interface Servico {

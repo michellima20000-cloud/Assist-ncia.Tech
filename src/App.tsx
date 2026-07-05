@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
   Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode,
-  ShoppingBag
+  ShoppingBag, MessageSquare
 } from "lucide-react";
 import { User, Atendimento, DashboardStats } from "./types";
 
@@ -19,6 +19,7 @@ import PrinterConfig from "./components/PrinterConfig";
 import ReceiptModal from "./components/ReceiptModal";
 import ProductScanner from "./components/ProductScanner";
 import Vendas from "./components/Vendas";
+import FeedbackAutomation from "./components/FeedbackAutomation";
 
 type ActiveTab =
   | "dashboard"
@@ -31,7 +32,8 @@ type ActiveTab =
   | "revisao"
   | "admin"
   | "printer"
-  | "vendas";
+  | "vendas"
+  | "feedback";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -51,6 +53,8 @@ export default function App() {
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [receiptTitle, setReceiptTitle] = useState("");
   const [receiptContent, setReceiptContent] = useState("");
+  const [receiptPhone, setReceiptPhone] = useState("");
+  const [receiptClientName, setReceiptClientName] = useState("");
 
   // Product QR & Barcode scanner states
   const [globalScannerOpen, setGlobalScannerOpen] = useState(false);
@@ -139,9 +143,11 @@ ________________________`;
   };
 
   // Callback helper for receipt modals triggered from other panels
-  const triggerReceiptPreview = (title: string, content: string) => {
+  const triggerReceiptPreview = (title: string, content: string, phone: string = "", clientName: string = "") => {
     setReceiptTitle(title);
     setReceiptContent(content);
+    setReceiptPhone(phone);
+    setReceiptClientName(clientName);
     setReceiptOpen(true);
   };
 
@@ -377,6 +383,20 @@ ________________________`;
                   </div>
                 </button>
 
+                {/* PÓS-VENDA & MARKETING (teal/emerald) */}
+                <button
+                  onClick={() => setActiveTab("feedback")}
+                  className="p-5 bg-white border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <MessageSquare className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-emerald-800">PÓS-VENDA</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Feedback via WhatsApp</p>
+                  </div>
+                </button>
+
                 {/* ADMIN OR IMPRESSORA SELECTOR */}
                 {isAdmin ? (
                   <button
@@ -431,9 +451,9 @@ ________________________`;
         {activeTab === "entrada" && (
           <Entrada
             onBack={() => setActiveTab("dashboard")}
-            onSaveSuccess={(receipt) => {
+            onSaveSuccess={(receipt, phone, clientName) => {
               if (receipt) {
-                triggerReceiptPreview("Recibo de Entrada OS", receipt);
+                triggerReceiptPreview("Recibo de Entrada OS", receipt, phone, clientName);
               } else {
                 alert("Ordem de serviço registrada com sucesso!");
               }
@@ -466,15 +486,15 @@ ________________________`;
               setTempNotesFin(notes);
               setActiveTab("pagamento");
             }}
-            onPrintIntakeReceipt={(at) => {
-              const recStr = `2A VIA RECIBO ENTRADA
+            onPrintIntakeReceipt={(at, hideValues) => {
+              const recStr = `${hideValues ? "2A VIA RECIBO ENTRADA (SEM VALOR)" : "2A VIA RECIBO ENTRADA"}
 CONTROLE: ${at.controlNumber}
 APARELHO: ${at.item} ${at.brand} ${at.model}
 ENTRADA: ${new Date(at.entryDate).toLocaleDateString("pt-BR")}
 SERVICOS ESTIMADOS:
-${at.services.map(s => `- ${s.name}: R$ ${s.price}`).join("\n")}
-TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`;
-              triggerReceiptPreview("Reimpressão OS Entrada", recStr);
+${at.services.map(s => hideValues ? `- ${s.name}` : `- ${s.name}: R$ ${s.price}`).join("\n")}
+${hideValues ? "" : `TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`}`;
+              triggerReceiptPreview(hideValues ? "Reimpressão OS Sem Valor" : "Reimpressão OS Entrada", recStr);
             }}
           />
         )}
@@ -485,9 +505,9 @@ TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`;
             atendimento={selectedAtendimento}
             notesFin={tempNotesFin}
             onBack={() => setActiveTab("saida")}
-            onPaymentSuccess={(receipt) => {
+            onPaymentSuccess={(receipt, phone, clientName) => {
               if (receipt) {
-                triggerReceiptPreview("Recibo de Saída / Garantia", receipt);
+                triggerReceiptPreview("Recibo de Saída / Garantia", receipt, phone, clientName);
               } else {
                 alert("Pagamento processado e OS finalizada!");
               }
@@ -539,6 +559,11 @@ TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`;
             }}
           />
         )}
+
+        {/* FEEDBACK & CUSTOMER RELATIONSHIP MANAGEMENT */}
+        {activeTab === "feedback" && (
+          <FeedbackAutomation onBack={() => setActiveTab("dashboard")} />
+        )}
       </main>
 
       {/* FOOTER METADATA */}
@@ -553,6 +578,8 @@ TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`;
         onClose={() => setReceiptOpen(false)}
         title={receiptTitle}
         content={receiptContent}
+        phone={receiptPhone}
+        clientName={receiptClientName}
       />
 
       {/* GLOBAL PRODUCT SCANNER OVERLAY */}

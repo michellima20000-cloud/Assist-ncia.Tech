@@ -98,8 +98,9 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   }, [clienteSearch, clientes]);
 
   const handleAddProduct = (product: Produto) => {
+    setError(null);
     if (product.stock <= 0) {
-      alert("Produto sem estoque disponível!");
+      setError("Produto sem estoque disponível!");
       return;
     }
 
@@ -107,7 +108,7 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
       const existing = prevCart.find(item => item.product.id === product.id);
       if (existing) {
         if (existing.quantity >= product.stock) {
-          alert(`Estoque máximo atingido para ${product.name}! Disponível: ${product.stock}`);
+          setError(`Estoque máximo atingido para ${product.name}! Disponível: ${product.stock}`);
           return prevCart;
         }
         return prevCart.map(item => 
@@ -122,13 +123,14 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   };
 
   const handleUpdateQuantity = (productId: string, delta: number) => {
+    setError(null);
     setCart(prevCart => {
       return prevCart.map(item => {
         if (item.product.id === productId) {
           const newQty = item.quantity + delta;
           if (newQty <= 0) return null;
           if (newQty > item.product.stock) {
-            alert(`Estoque máximo atingido! Disponível: ${item.product.stock}`);
+            setError(`Estoque máximo atingido! Disponível: ${item.product.stock}`);
             return item;
           }
           return { ...item, quantity: newQty };
@@ -173,12 +175,12 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   // Submit sale to backend
   const handleFinalizeSale = async () => {
     if (cart.length === 0) {
-      alert("Adicione pelo menos um produto ao carrinho!");
+      setError("Adicione pelo menos um produto ao carrinho!");
       return;
     }
 
     if (method === "cash" && receivedNum < totalAmount) {
-      alert("Valor recebido em dinheiro é menor do que o total da venda!");
+      setError("Valor recebido em dinheiro é menor do que o total da venda!");
       return;
     }
 
@@ -249,12 +251,18 @@ Volte sempre!`;
 
         onSaleSuccess(receiptText);
       } else {
-        const errData = await res.json();
-        setError(errData.message || "Erro ao registrar a venda.");
+        let errMsg = "Erro ao registrar a venda.";
+        try {
+          const errData = await res.json();
+          errMsg = errData.message || errData.error || errMsg;
+        } catch (_) {
+          // If the response is not valid JSON (e.g. HTML error), keep default message
+        }
+        setError(errMsg);
       }
     } catch (err: any) {
       console.error(err);
-      setError("Erro de rede ao salvar venda.");
+      setError(`Erro ao salvar venda: ${err?.message || err || "Erro de conexão com o servidor"}`);
     } finally {
       setLoading(false);
     }
