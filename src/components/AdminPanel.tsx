@@ -17,7 +17,8 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   const [activeMenu, setActiveMenu] = useState<'main' | 'reports' | 'history' | 'services' | 'products' | 'expenses' | 'users' | 'auxiliary'>('main');
 
   // Relatórios States
-  const [reportType, setReportType] = useState<'daily' | 'range'>('daily');
+  const [reportType, setReportType] = useState<'daily' | 'range' | 'annual'>('daily');
+  const [reportYear, setReportYear] = useState(new Date().getFullYear().toString());
   const [reportDate, setReportDate] = useState(new Date().toISOString().split("T")[0]);
   const [reportStartDate, setReportStartDate] = useState(new Date().toISOString().split("T")[0]);
   const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split("T")[0]);
@@ -134,9 +135,14 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   // Handle Generating Reports
   const handleGenerateReport = async () => {
     try {
-      const queryParams = reportType === 'daily'
-        ? `type=daily&date=${reportDate}`
-        : `type=range&startDate=${reportStartDate}&endDate=${reportEndDate}`;
+      let queryParams = "";
+      if (reportType === 'daily') {
+        queryParams = `type=daily&date=${reportDate}`;
+      } else if (reportType === 'range') {
+        queryParams = `type=range&startDate=${reportStartDate}&endDate=${reportEndDate}`;
+      } else if (reportType === 'annual') {
+        queryParams = `type=range&startDate=${reportYear}-01-01&endDate=${reportYear}-12-31`;
+      }
 
       const res = await fetch(`/api/reports?${queryParams}`);
       if (res.ok) {
@@ -572,22 +578,30 @@ GARANTIA DE 90 DIAS.`;
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo de Período</label>
-              <div className="flex gap-2">
+              <div className="grid grid-cols-3 gap-1.5">
                 <button
                   onClick={() => setReportType('daily')}
-                  className={`w-full py-2 text-xs font-bold rounded-xl border transition ${
+                  className={`py-2 px-1 text-[10px] font-bold rounded-xl border transition text-center ${
                     reportType === 'daily' ? "bg-blue-50 border-blue-200 text-[#1E88E5]" : "bg-slate-50 border-slate-100 text-slate-600"
                   }`}
                 >
-                  Por Dia Único
+                  Dia Único
                 </button>
                 <button
                   onClick={() => setReportType('range')}
-                  className={`w-full py-2 text-xs font-bold rounded-xl border transition ${
+                  className={`py-2 px-1 text-[10px] font-bold rounded-xl border transition text-center ${
                     reportType === 'range' ? "bg-blue-50 border-blue-200 text-[#1E88E5]" : "bg-slate-50 border-slate-100 text-slate-600"
                   }`}
                 >
-                  Período Personalizado
+                  Personalizado
+                </button>
+                <button
+                  onClick={() => setReportType('annual')}
+                  className={`py-2 px-1 text-[10px] font-bold rounded-xl border transition text-center ${
+                    reportType === 'annual' ? "bg-blue-50 border-blue-200 text-[#1E88E5]" : "bg-slate-50 border-slate-100 text-slate-600"
+                  }`}
+                >
+                  Visão Anual
                 </button>
               </div>
             </div>
@@ -602,7 +616,7 @@ GARANTIA DE 90 DIAS.`;
                   className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
                 />
               </div>
-            ) : (
+            ) : reportType === 'range' ? (
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">Data Inicial</label>
@@ -622,6 +636,19 @@ GARANTIA DE 90 DIAS.`;
                     className="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none"
                   />
                 </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Escolher Ano da Visão Mensal</label>
+                <select
+                  value={reportYear}
+                  onChange={(e) => setReportYear(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none font-bold text-slate-700"
+                >
+                  <option value="2026">Ano de 2026</option>
+                  <option value="2025">Ano de 2025</option>
+                  <option value="2024">Ano de 2024</option>
+                </select>
               </div>
             )}
           </div>
