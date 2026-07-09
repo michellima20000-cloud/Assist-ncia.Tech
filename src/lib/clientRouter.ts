@@ -261,6 +261,96 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       });
     }
 
+    // 5.5 Vendas Directas REST
+    if (path === "/api/vendas" && method === "GET") {
+      const snap = await getDocs(collection(db, "vendas"));
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      // Sort sales by date descending
+      list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+      return new Response(JSON.stringify(list), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path === "/api/vendas" && method === "POST") {
+      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method: payMethod, sellerId, sellerName } = body;
+
+      if (!items || items.length === 0) {
+        return new Response(JSON.stringify({ message: "A venda deve conter pelo menos um item." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      // Check stock
+      for (const item of items) {
+        const prodRef = doc(db, "produtos", item.productId);
+        const prodSnap = await getDoc(prodRef);
+        if (!prodSnap.exists()) {
+          return new Response(JSON.stringify({ message: `Produto ${item.name} não encontrado.` }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        const p = prodSnap.data() as any;
+        if ((Number(p.stock) || 0) < Number(item.quantity)) {
+          return new Response(JSON.stringify({ message: `Estoque insuficiente para o produto ${item.name}. Disponível: ${p.stock}` }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      // Decrement stock for each item sold
+      for (const item of items) {
+        const prodRef = doc(db, "produtos", item.productId);
+        const prodSnap = await getDoc(prodRef);
+        if (prodSnap.exists()) {
+          const p = { id: prodSnap.id, ...prodSnap.data() } as any;
+          p.stock = Math.max(0, (Number(p.stock) || 0) - (Number(item.quantity) || 0));
+          await setDoc(prodRef, p);
+        }
+      }
+
+      const vendaId = "vend-" + Date.now();
+      const newVenda = {
+        id: vendaId,
+        clienteId: clienteId || null,
+        clienteName: clienteName || "Consumidor Final",
+        items,
+        totalAmount,
+        receivedAmount,
+        change,
+        method: payMethod,
+        date: new Date().toISOString(),
+        sellerId: sellerId || null,
+        sellerName: sellerName || "Balcão"
+      };
+
+      // Save venda document
+      await setDoc(doc(db, "vendas", vendaId), newVenda);
+
+      // Create matching payment entry so it registers in dashboard statistics, caixa flow, and financial summaries
+      const payId = "pay-venda-" + Date.now();
+      const newPayment = {
+        id: payId,
+        vendaId,
+        isVendaDirecta: true,
+        totalAmount,
+        receivedAmount,
+        change,
+        method: payMethod,
+        date: new Date().toISOString()
+      };
+      await setDoc(doc(db, "pagamentos", payId), newPayment);
+
+      return new Response(JSON.stringify({ success: true, venda: newVenda, payment: newPayment }), {
+        status: 201,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     // 6. Generic Collections Handler
     const match = path.match(/^\/api\/([a-zA-Z0-9_-]+)(?:\/([a-zA-Z0-9_.-]+))?$/);
     if (match) {

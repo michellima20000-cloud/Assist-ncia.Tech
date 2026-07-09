@@ -29,7 +29,7 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   
   // Cart & Sale State
   const [cart, setCart] = useState<CartItem[]>([]);
-  const [discount, setDiscount] = useState("0"); // in R$
+  const [discount, setDiscount] = useState(""); // in R$ / % (blank starts at zero)
   const [discountType, setDiscountType] = useState<"value" | "percent">("value");
   const [method, setMethod] = useState<"cash" | "debit" | "credit" | "pix">("cash");
   const [receivedAmount, setReceivedAmount] = useState("");
@@ -157,14 +157,21 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   const receivedNum = Number(receivedAmount) || 0;
   const change = Math.max(0, receivedNum - totalAmount);
 
-  // Auto-set received amount if payment method is card/pix
+  // Reset received amount to "" only when method changes to cash, or auto-set for card/pix
+  useEffect(() => {
+    if (method === "cash") {
+      setReceivedAmount("");
+    } else {
+      setReceivedAmount(totalAmount.toFixed(2));
+    }
+  }, [method]);
+
+  // If method is not cash, keep it synced with totalAmount changes (no-op for cash to prevent wiping out user edits)
   useEffect(() => {
     if (method !== "cash") {
       setReceivedAmount(totalAmount.toFixed(2));
-    } else {
-      setReceivedAmount("");
     }
-  }, [method, totalAmount]);
+  }, [totalAmount]);
 
   // Handler for scanner detection
   const handleProductScanned = (scanned: Produto) => {
@@ -218,7 +225,18 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
 
       if (res.ok) {
         const result = await res.json();
-        const venda = result.venda;
+        // Fallback to result or constructed payload in case nested venda is not present
+        const venda = result.venda || result || {};
+        const finalVenda = {
+          id: venda.id || venda.vendaId || "vend-" + Date.now(),
+          date: venda.date || new Date().toISOString(),
+          sellerName: venda.sellerName || payload.sellerName,
+          clienteName: venda.clienteName || payload.clienteName,
+          items: venda.items || payload.items || [],
+          method: venda.method || payload.method,
+          receivedAmount: typeof venda.receivedAmount === 'number' ? venda.receivedAmount : payload.receivedAmount,
+          change: typeof venda.change === 'number' ? venda.change : payload.change
+        };
 
         // Generate ESC/POS Thermal Receipt Layout
         const receiptText = `CUPOM DE VENDA DIRETA
@@ -226,25 +244,25 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
 MINHA ASSISTÊNCIA
 CONECTADA • TECNOLOGIA & ACESSÓRIOS
 ================================
-DATA: ${new Date(venda.date).toLocaleString("pt-BR")}
-VENDA: ${venda.id}
-VENDEDOR: ${venda.sellerName}
-CLIENTE: ${venda.clienteName}
+DATA: ${new Date(finalVenda.date).toLocaleString("pt-BR")}
+VENDA: ${finalVenda.id}
+VENDEDOR: ${finalVenda.sellerName}
+CLIENTE: ${finalVenda.clienteName}
 ${selectedCliente?.phone ? `CONTATO: ${selectedCliente.phone}` : ""}
 --------------------------------
 ITENS VENDIDOS:
-${venda.items.map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
+${finalVenda.items.map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
 --------------------------------
 SUBTOTAL:       R$ ${subtotal.toFixed(2)}
 DESCONTO:       R$ ${calculatedDiscount.toFixed(2)}
 TOTAL GERAL:    R$ ${totalAmount.toFixed(2)}
 FORMA DE PGTO:  ${
-          venda.method === "cash" ? "Dinheiro" : 
-          venda.method === "pix" ? "PIX" : 
-          venda.method === "debit" ? "Cartão de Débito" : "Cartão de Crédito"
+          finalVenda.method === "cash" ? "Dinheiro" : 
+          finalVenda.method === "pix" ? "PIX" : 
+          finalVenda.method === "debit" ? "Cartão de Débito" : "Cartão de Crédito"
         }
-VALOR RECEBIDO: R$ ${venda.receivedAmount.toFixed(2)}
-TROCO REGISTRADO: R$ ${venda.change.toFixed(2)}
+VALOR RECEBIDO: R$ ${finalVenda.receivedAmount.toFixed(2)}
+TROCO REGISTRADO: R$ ${finalVenda.change.toFixed(2)}
 ================================
 Obrigado pela preferência!
 Volte sempre!`;
@@ -532,7 +550,7 @@ Volte sempre!`;
                         type="button"
                         onClick={() => {
                           setDiscountType("value");
-                          setDiscount("0");
+                          setDiscount("");
                         }}
                         className={`flex-1 py-1 text-[10px] font-bold rounded-md transition ${
                           discountType === "value" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
@@ -544,7 +562,7 @@ Volte sempre!`;
                         type="button"
                         onClick={() => {
                           setDiscountType("percent");
-                          setDiscount("0");
+                          setDiscount("");
                         }}
                         className={`flex-1 py-1 text-[10px] font-bold rounded-md transition ${
                           discountType === "percent" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
@@ -560,9 +578,17 @@ Volte sempre!`;
                     <input
                       type="number"
                       min="0"
+                      placeholder="0"
                       className="w-full px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500"
                       value={discount}
-                      onChange={(e) => setDiscount(Math.max(0, Number(e.target.value) || 0).toString())}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "") {
+                          setDiscount("");
+                        } else {
+                          setDiscount(Math.max(0, Number(val) || 0).toString());
+                        }
+                      }}
                     />
                   </div>
                 </div>
