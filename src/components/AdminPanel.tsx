@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import FinancialChart from "./FinancialChart";
 import {
   FileText, History, Settings, ShieldAlert, Award, ArrowLeft, Plus, Trash2, Edit, Save,
   Users, DollarSign, Tag, ListPlus, FileSpreadsheet, Printer, Search, RefreshCw, Barcode, Eye, QrCode, X
@@ -670,6 +671,15 @@ GARANTIA DE 90 DIAS.`;
                   <p className="text-sm font-bold text-[#1E88E5] font-mono">R$ {reportResult.summary.balance.toFixed(2)}</p>
                 </div>
               </div>
+
+              {/* Financial Performance Graphics Chart */}
+              <FinancialChart
+                reportResult={reportResult}
+                reportType={reportType}
+                reportDate={reportDate}
+                reportStartDate={reportStartDate}
+                reportEndDate={reportEndDate}
+              />
 
               {/* Deliveries detailed */}
               {reportResult.closedOrders.length > 0 && (

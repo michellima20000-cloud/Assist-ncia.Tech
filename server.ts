@@ -6,6 +6,8 @@ import { fileURLToPath } from "url";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
+  initializeFirestore,
+  memoryLocalCache,
   collection,
   doc,
   getDocs,
@@ -53,7 +55,9 @@ async function initFirebase() {
     
     const app = initializeApp(fbConfig);
     const dbId = fbConfig.firestoreDatabaseId;
-    db = (dbId && dbId !== "(default)") ? getFirestore(app, dbId) : getFirestore(app);
+    db = (dbId && dbId !== "(default)") 
+      ? initializeFirestore(app, { localCache: memoryLocalCache() }, dbId) 
+      : initializeFirestore(app, { localCache: memoryLocalCache() });
     console.log(`Firebase Client SDK initialized successfully with database ID: ${dbId || "(default)"}`);
   } catch (error) {
     console.error("Failed to initialize Firebase:", error);

@@ -1,6 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
+import { initializeFirestore, memoryLocalCache } from "firebase/firestore";
 import firebaseConfig from "../../firebase-applet-config.json";
 
 const app = initializeApp(firebaseConfig);
@@ -15,6 +15,8 @@ googleProvider.setCustomParameters({
 
 // Initialize Firestore
 const dbId = firebaseConfig.firestoreDatabaseId;
-export const db = (dbId && dbId !== "(default)") ? getFirestore(app, dbId) : getFirestore(app);
+export const db = (dbId && dbId !== "(default)") 
+  ? initializeFirestore(app, { localCache: memoryLocalCache() }, dbId) 
+  : initializeFirestore(app, { localCache: memoryLocalCache() });
 
 export default app;

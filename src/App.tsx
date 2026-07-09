@@ -58,6 +58,44 @@ export default function App() {
 
   // Product QR & Barcode scanner states
   const [globalScannerOpen, setGlobalScannerOpen] = useState(false);
+  const [publicOSLoading, setPublicOSLoading] = useState(false);
+
+  // Load public OS tracking if present in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const osParam = params.get("os") || params.get("control");
+    if (osParam) {
+      setPublicOSLoading(true);
+      fetch(`/api/atendimentos`)
+        .then(res => res.json())
+        .then(data => {
+          if (Array.isArray(data)) {
+            const found = data.find((a: any) => a.controlNumber === osParam || a.id === osParam);
+            if (found) {
+              const recStr = `ORDEM DE SERVIÇO
+CONTROLE: ${found.controlNumber}
+CLIENTE: ${found.clientName || found.client?.name || "Consumidor Final"}
+FONE: ${found.clientPhone || found.client?.phone || ""}
+APARELHO: ${found.item} ${found.brand} ${found.model}
+DEFEITO: ${found.defeito || "Avaliação técnica"}
+DATA: ${new Date(found.entryDate).toLocaleString("pt-BR")}
+SERVICOS REALIZADOS:
+${(found.services || []).map((s: any) => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
+TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
+
+              triggerReceiptPreview("Acompanhamento de Ordem de Serviço", recStr, found.clientPhone || found.client?.phone || "", found.clientName || found.client?.name || "");
+            } else {
+              alert("Ordem de serviço não encontrada.");
+            }
+          }
+          setPublicOSLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setPublicOSLoading(false);
+        });
+    }
+  }, []);
 
   // Load user session on start
   useEffect(() => {
@@ -151,7 +189,46 @@ ________________________`;
     setReceiptOpen(true);
   };
 
+  const params = new URLSearchParams(window.location.search);
+  const hasOsParam = params.has("os") || params.has("control");
+
   if (!currentUser) {
+    if (hasOsParam) {
+      return (
+        <div className="min-h-screen bg-slate-950 flex flex-col font-sans text-slate-100 p-4 justify-center items-center">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-2xl text-center space-y-4">
+            <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center mx-auto">
+              <QrCode className="w-6 h-6 animate-pulse" />
+            </div>
+            <h1 className="text-lg font-black tracking-tight text-white">Minha Assistência</h1>
+            <p className="text-xs text-slate-400">Portal do Cliente • Acompanhamento Online</p>
+            <div className="py-2">
+              <p className="text-xs text-[#1E88E5] font-bold">Carregando Ordem de Serviço Nº {params.get("os") || params.get("control")}</p>
+            </div>
+            <button
+              onClick={() => {
+                window.location.search = "";
+              }}
+              className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs rounded-xl uppercase tracking-wider transition"
+            >
+              Ir para Tela de Login
+            </button>
+          </div>
+
+          <ReceiptModal
+            isOpen={receiptOpen}
+            onClose={() => {
+              setReceiptOpen(false);
+              window.location.search = "";
+            }}
+            title={receiptTitle}
+            content={receiptContent}
+            phone={receiptPhone}
+            clientName={receiptClientName}
+          />
+        </div>
+      );
+    }
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 

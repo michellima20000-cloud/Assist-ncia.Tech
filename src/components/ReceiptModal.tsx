@@ -28,26 +28,46 @@ const DEFAULT_BUSINESS: BusinessSettings = {
 
 // Vector-perfect SVG Logo matching L-Tec's real visual brand!
 const LTecLogo = ({ className = "w-16 h-16" }: { className?: string }) => (
-  <svg viewBox="0 0 100 100" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="100" height="100" rx="16" fill="#021526" />
-    <rect x="15" y="15" width="70" height="50" rx="8" stroke="#38BDF8" strokeWidth="4" />
-    <path d="M 30 65 L 70 65 L 75 75 L 25 75 Z" fill="#38BDF8" />
-    <rect x="42" y="75" width="16" height="5" fill="#38BDF8" />
-    <text x="50" y="47" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">L.Tec</text>
-    <text x="50" y="88" fill="#38BDF8" fontSize="7" fontWeight="extrabold" textAnchor="middle" fontFamily="sans-serif" letterSpacing="0.2">ASSISTÊNCIA TÉCNICA</text>
-    <text x="50" y="95" fill="#94A3B8" fontSize="5" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif" letterSpacing="0.1">CELULARES & INFORMÁTICA</text>
+  <svg viewBox="0 0 100 115" className={className} fill="none" xmlns="http://www.w3.org/2000/svg">
+    {/* Laptop Screen in background */}
+    <rect x="18" y="16" width="64" height="41" rx="4" stroke="#000000" strokeWidth="4.5" fill="none" />
+    {/* Laptop Base */}
+    <path d="M 15 57 L 9 66 H 91 L 85 57" stroke="#000000" strokeWidth="4.5" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+    {/* Smartphone (white fill masks background laptop screen lines) */}
+    <rect x="33" y="5" width="34" height="48" rx="6" stroke="#000000" strokeWidth="4.5" fill="#ffffff" />
+    {/* Smartphone Screen */}
+    <rect x="38.5" y="14" width="23" height="28" rx="2.5" stroke="#000000" strokeWidth="3.5" fill="none" />
+    {/* Smartphone Speaker */}
+    <rect x="45" y="10" width="10" height="2" rx="1" fill="#000000" />
+    {/* Smartphone Home Button */}
+    <rect x="45" y="45" width="10" height="2" rx="1" fill="#000000" />
+    
+    {/* Text Logo Details matching real L-Tec attached brand */}
+    <text x="50" y="82" fill="#000000" fontSize="15" fontWeight="900" textAnchor="middle" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.5">L.Tec</text>
+    <text x="50" y="96" fill="#000000" fontSize="7" fontWeight="800" textAnchor="middle" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.8">ASSISTÊNCIA TÉCNICA</text>
+    <text x="50" y="106" fill="#000000" fontSize="5.5" fontWeight="700" textAnchor="middle" fontFamily="system-ui, -apple-system, sans-serif" letterSpacing="0.2">CELULARES E INFORMÁTICA</text>
   </svg>
 );
 
 const ltecLogoSvgHtml = `
-  <svg viewBox="0 0 100 100" style="width: 75px; height: 75px;" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <rect width="100" height="100" rx="16" fill="#021526" />
-    <rect x="15" y="15" width="70" height="50" rx="8" stroke="#38BDF8" strokeWidth="4" />
-    <path d="M 30 65 L 70 65 L 75 75 L 25 75 Z" fill="#38BDF8" />
-    <rect x="42" y="75" width="16" height="5" fill="#38BDF8" />
-    <text x="50" y="47" fill="#FFFFFF" fontSize="16" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif">L.Tec</text>
-    <text x="50" y="88" fill="#38BDF8" fontSize="7" fontWeight="extrabold" textAnchor="middle" fontFamily="sans-serif" letterSpacing="0.2">ASSISTÊNCIA TÉCNICA</text>
-    <text x="50" y="95" fill="#94A3B8" fontSize="5" fontWeight="bold" textAnchor="middle" fontFamily="sans-serif" letterSpacing="0.1">CELULARES & INFORMÁTICA</text>
+  <svg viewBox="0 0 100 115" style="width: 85px; height: 98px;" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <!-- Laptop Screen in background -->
+    <rect x="18" y="16" width="64" height="41" rx="4" stroke="#000000" stroke-width="4.5" fill="none" />
+    <!-- Laptop Base -->
+    <path d="M 15 57 L 9 66 H 91 L 85 57" stroke="#000000" stroke-width="4.5" stroke-linecap="round" stroke-linejoin="round" fill="none" />
+    <!-- Smartphone (white fill masks background laptop screen lines) -->
+    <rect x="33" y="5" width="34" height="48" rx="6" stroke="#000000" stroke-width="4.5" fill="#ffffff" />
+    <!-- Smartphone Screen -->
+    <rect x="38.5" y="14" width="23" height="28" rx="2.5" stroke="#000000" stroke-width="3.5" fill="none" />
+    <!-- Smartphone Speaker -->
+    <rect x="45" y="10" width="10" height="2" rx="1" fill="#000000" />
+    <!-- Smartphone Home Button -->
+    <rect x="45" y="45" width="10" height="2" rx="1" fill="#000000" />
+    
+    <!-- Text Logo Details matching real L-Tec attached brand -->
+    <text x="50" y="82" fill="#000000" font-size="15" font-weight="900" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" letter-spacing="0.5">L.Tec</text>
+    <text x="50" y="96" fill="#000000" font-size="7" font-weight="800" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" letter-spacing="0.8">ASSISTÊNCIA TÉCNICA</text>
+    <text x="50" y="106" fill="#000000" font-size="5.5" font-weight="700" text-anchor="middle" font-family="system-ui, -apple-system, sans-serif" letter-spacing="0.2">CELULARES E INFORMÁTICA</text>
   </svg>
 `;
 
@@ -257,10 +277,9 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
 }
 
 export default function ReceiptModal({ isOpen, onClose, title, content, phone, clientName }: ReceiptModalProps) {
-  if (!isOpen) return null;
-
   const [phoneInput, setPhoneInput] = useState(phone || "");
   const [copied, setCopied] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
 
   // Business Profile persisted in LocalStorage
@@ -285,6 +304,8 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
   useEffect(() => {
     setPhoneInput(phone || parsed.clientPhone || "");
   }, [phone, parsed.clientPhone]);
+
+  if (!isOpen) return null;
 
   const handleSaveSettings = (field: keyof BusinessSettings, value: any) => {
     const updated = { ...businessSettings, [field]: value };
@@ -369,8 +390,8 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                 margin-bottom: 20px;
               }
               .header-logo {
-                width: 75px;
-                height: 75px;
+                width: 85px;
+                height: 98px;
                 display: block;
               }
               .header-info {
@@ -557,7 +578,7 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
               <!-- QR Code -->
               ${businessSettings.showQrCode ? `
               <div class="qr-container">
-                <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(parsed.controlNumber)}" alt="QR Code" />
+                <img src="https://api.qrserver.com/v1/create-qr-code/?size=110x110&data=${encodeURIComponent(`${window.location.origin}/?os=${parsed.controlNumber}`)}" alt="QR Code" />
               </div>
               ` : ''}
 
@@ -669,6 +690,13 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleCopyLinkToClipboard = () => {
+    const shareUrl = `${window.location.origin}/?os=${parsed.controlNumber}`;
+    navigator.clipboard.writeText(shareUrl);
+    setCopiedLink(true);
+    setTimeout(() => setCopiedLink(false), 2000);
+  };
+
   const handleSendWhatsApp = () => {
     let cleanPhone = phoneInput.replace(/\D/g, "");
     if (!cleanPhone) {
@@ -682,7 +710,8 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
 
     let message = "";
     if (parsed.isServiceOrder) {
-      message = `Olá ${parsed.clientName}! Segue o link com os detalhes de sua *Ordem de Serviço (Nº ${parsed.controlNumber})* na nossa Assistência Técnica:\n\n*Aparelho:* ${parsed.equipmentName}\n*Defeito:* ${parsed.defeito}\n*Data de entrada:* ${parsed.date}\n*Total:* R$ ${parsed.totalAmount.toFixed(2).replace('.', ',')}\n\nAgradecemos a sua preferência e confiança!`;
+      const shareUrl = `${window.location.origin}/?os=${parsed.controlNumber}`;
+      message = `Olá ${parsed.clientName}! Segue o link com os detalhes de sua *Ordem de Serviço (Nº ${parsed.controlNumber})* na nossa Assistência Técnica:\n\n${shareUrl}\n\n*Aparelho:* ${parsed.equipmentName}\n*Defeito:* ${parsed.defeito}\n*Data de entrada:* ${parsed.date}\n*Total:* R$ ${parsed.totalAmount.toFixed(2).replace('.', ',')}\n\nAgradecemos a sua preferência e confiança!`;
     } else {
       message = `Olá! Segue o comprovante de sua compra na nossa loja:\n\n${content}\n\nAgradecemos a preferência!`;
     }
@@ -828,7 +857,7 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
               
               {/* Top Row Header with Logo on Left and Metadata on Right */}
               <div className="flex justify-between items-center mb-4">
-                <LTecLogo className="w-20 h-20" />
+                <LTecLogo className="w-20 h-[92px]" />
                 <div className="text-right">
                   <h3 className="font-extrabold text-slate-900 text-sm">{businessSettings.name}</h3>
                   <p className="text-[10px] text-slate-500 mt-0.5">{businessSettings.address}</p>
@@ -849,7 +878,7 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                 <div className="flex justify-center mb-4">
                   <div className="border border-slate-200 p-1.5 rounded-lg bg-white shadow-sm flex flex-col items-center">
                     <img 
-                      src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(parsed.controlNumber)}`} 
+                      src={`https://api.qrserver.com/v1/create-qr-code/?size=90x90&data=${encodeURIComponent(`${window.location.origin}/?os=${parsed.controlNumber}`)}`} 
                       alt="QR Code de Controle" 
                       className="w-16 h-16"
                     />
@@ -971,6 +1000,29 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
             <MessageSquare className="w-4 h-4" />
             Enviar por WhatsApp
           </button>
+
+          {parsed.isServiceOrder && (
+            <button
+              onClick={handleCopyLinkToClipboard}
+              className={`w-full py-2.5 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition uppercase tracking-wider border border-slate-700 ${
+                copiedLink
+                  ? "bg-emerald-600 text-white border-emerald-500/30"
+                  : "bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white"
+              }`}
+            >
+              {copiedLink ? (
+                <>
+                  <Check className="w-4 h-4 text-emerald-400" />
+                  Link de Acompanhamento Copiado!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4" />
+                  Copiar Link de Acompanhamento
+                </>
+              )}
+            </button>
+          )}
 
           <div className="grid grid-cols-2 gap-3">
             <button
