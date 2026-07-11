@@ -73,8 +73,8 @@ APARELHO:
 ${atendimento.item} ${atendimento.brand} ${atendimento.model}
 ------------------------
 SERVICOS REALIZADOS:
-${atendimento.services.map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
-${atendimento.products.length > 0 ? `PECAS TROCADAS:\n${atendimento.products.map(p => `- ${p.name} (x${p.quantity}): R$ ${(p.price * p.quantity).toFixed(2)}`).join("\n")}` : ""}
+${(atendimento.services || []).map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
+${(atendimento.products || []).length > 0 ? `PECAS TROCADAS:\n${(atendimento.products || []).map(p => `- ${p.name} (x${p.quantity}): R$ ${(p.price * p.quantity).toFixed(2)}`).join("\n")}` : ""}
 ------------------------
 LAUDO / OBSERVACOES SAIDA:
 ${notesFin || "Aparelho entregue em perfeito funcionamento."}

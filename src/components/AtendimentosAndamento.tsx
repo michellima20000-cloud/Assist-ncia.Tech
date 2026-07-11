@@ -69,14 +69,19 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
     );
   });
 
-  // Sort by entrance date descending
-  const sorted = [...filtered].sort((a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime());
+  // Sort by entrance date descending safely
+  const sorted = [...filtered].sort((a, b) => {
+    const timeA = a.entryDate ? new Date(a.entryDate).getTime() : 0;
+    const timeB = b.entryDate ? new Date(b.entryDate).getTime() : 0;
+    return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
+  });
 
-  // Group by Date (YYYY-MM-DD)
+  // Group by Date (YYYY-MM-DD) safely
   const groupOrdersByDate = () => {
     const groups: { [key: string]: Atendimento[] } = {};
     sorted.forEach(a => {
-      const dateStr = a.entryDate.split("T")[0];
+      const entryDateStr = a.entryDate || new Date().toISOString();
+      const dateStr = entryDateStr.includes("T") ? entryDateStr.split("T")[0] : entryDateStr;
       if (!groups[dateStr]) {
         groups[dateStr] = [];
       }
@@ -191,19 +196,31 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
                         <Phone className="w-3.5 h-3.5 text-blue-500" />
                         <span>{client.phone}</span>
                         <Clock className="w-3.5 h-3.5 text-slate-400 ml-2" />
-                        <span>Entrada: {new Date(a.entryDate).toLocaleTimeString("pt-BR", { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>
+                          Entrada:{" "}
+                          {(() => {
+                            if (!a.entryDate) return "N/A";
+                            const d = new Date(a.entryDate);
+                            return isNaN(d.getTime())
+                              ? "N/A"
+                              : d.toLocaleTimeString("pt-BR", {
+                                  hour: "2-digit",
+                                  minute: "2-digit",
+                                });
+                          })()}
+                        </span>
                       </div>
 
                       {/* Display items & services inside */}
                       <div className="p-2.5 bg-slate-50 rounded-xl space-y-1">
                         <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">Serviços adicionados</p>
                         <div className="flex flex-wrap gap-1">
-                          {a.services.map((s, idx) => (
+                          {(a.services || []).map((s, idx) => (
                             <span key={idx} className="text-[10px] bg-white border border-slate-200 text-slate-700 px-1.5 py-0.5 rounded">
                               {s.name}
                             </span>
                           ))}
-                          {a.products.map((p, idx) => (
+                          {(a.products || []).map((p, idx) => (
                             <span key={idx} className="text-[10px] bg-red-50 border border-red-100 text-red-700 px-1.5 py-0.5 rounded">
                               + {p.name} (x{p.quantity})
                             </span>
@@ -214,7 +231,7 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
                       {/* Action trigger footer */}
                       <div className="flex justify-between items-center border-t border-slate-50 pt-2.5">
                         <div className="text-xs font-bold text-[#1E88E5]">
-                          Total: <span className="font-mono text-slate-800">R$ {a.totalAmount.toFixed(2)}</span>
+                          Total: <span className="font-mono text-slate-800">R$ {(Number(a.totalAmount) || 0).toFixed(2)}</span>
                         </div>
                         <div className="flex gap-2">
                           <button

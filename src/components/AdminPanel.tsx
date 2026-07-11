@@ -218,8 +218,8 @@ APARELHO:
 ${at.item} ${at.brand} ${at.model}
 ------------------------
 SERVICOS REALIZADOS:
-${at.services.map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
-${at.products.length > 0 ? `PECAS TROCADAS:\n${at.products.map(p => `- ${p.name} (x${p.quantity}): R$ ${(p.price * p.quantity).toFixed(2)}`).join("\n")}` : ""}
+${(at.services || []).map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
+${(at.products || []).length > 0 ? `PECAS TROCADAS:\n${(at.products || []).map(p => `- ${p.name} (x${p.quantity}): R$ ${(p.price * p.quantity).toFixed(2)}`).join("\n")}` : ""}
 ------------------------
 TOTAL GERAL: R$ ${at.totalAmount.toFixed(2)}
 ------------------------

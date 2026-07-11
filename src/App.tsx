@@ -605,8 +605,8 @@ DEFEITO: ${at.defeito || "Não informado"}
 ESTADO / OBS: ${at.observations || "Nenhuma"}
 ------------------------
 SERVICOS ESTIMADOS:
-${at.services.map(s => hideValues ? `- ${s.name}` : `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
-${at.products && at.products.length > 0 ? `PECAS:\n${at.products.map(p => `- ${p.name} (x${p.quantity})${hideValues ? "" : `: R$ ${(p.price * p.quantity).toFixed(2)}`}`).join("\n")}` : ""}
+${(at.services || []).map(s => hideValues ? `- ${s.name}` : `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
+${at.products && (at.products || []).length > 0 ? `PECAS:\n${(at.products || []).map(p => `- ${p.name} (x${p.quantity})${hideValues ? "" : `: R$ ${(p.price * p.quantity).toFixed(2)}`}`).join("\n")}` : ""}
 ------------------------
 ${hideValues ? "" : `TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}\n------------------------`}
 ASSINATURA DO CLIENTE:

@@ -410,13 +410,13 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
     setPatternSeq([]);
   };
 
-  // Calculate product totals
-  const totalProductsPrice = atendimento.products.reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
+  // Calculate product totals safely
+  const totalProductsPrice = (atendimento.products || []).reduce((acc, curr) => acc + (curr.price * curr.quantity), 0);
 
-  // Open & setup modal local lists
+  // Open & setup modal local lists safely
   const openEditItemsModal = () => {
-    setModalServices([...atendimento.services]);
-    setModalProducts([...atendimento.products]);
+    setModalServices([...(atendimento.services || [])]);
+    setModalProducts([...(atendimento.products || [])]);
     setManualItemName("");
     setManualItemPrice("");
     setShowEditItemsModal(true);
@@ -652,10 +652,10 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
               </button>
             </div>
             <div className="p-3 bg-slate-50/50 border border-slate-100 rounded-xl space-y-1 text-xs">
-              {atendimento.services.length === 0 ? (
+              {!(atendimento.services && atendimento.services.length > 0) ? (
                 <span className="text-slate-400 italic">Nenhum serviço adicionado</span>
               ) : (
-                atendimento.services.map((s, idx) => (
+                (atendimento.services || []).map((s, idx) => (
                   <div key={idx} className="flex justify-between items-center py-0.5">
                     <span className="font-semibold text-slate-700">{s.name}</span>
                     <span className="font-mono text-slate-500 font-medium">R$ {s.price.toFixed(2)}</span>
@@ -689,7 +689,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
               <div className="p-3 bg-red-50/20 border border-red-100/40 rounded-xl font-mono text-sm font-bold text-red-700 flex justify-between items-center">
                 <span>R$ {totalProductsPrice.toFixed(2)}</span>
                 <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full font-sans">
-                  {atendimento.products.reduce((acc, curr) => acc + curr.quantity, 0)} itens
+                  {(atendimento.products || []).reduce((acc, curr) => acc + curr.quantity, 0)} itens
                 </span>
               </div>
             </div>
