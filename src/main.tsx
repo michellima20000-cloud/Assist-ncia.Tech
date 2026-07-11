@@ -4,6 +4,39 @@ import App from './App.tsx';
 import './index.css';
 import { handleClientRoute } from './lib/clientRouter.ts';
 
+// Silence benign dev-only Vite HMR WebSocket connection errors from triggering popups or noise
+if (typeof window !== 'undefined') {
+  const isViteWSWarning = (msg: string): boolean => {
+    if (!msg) return false;
+    const lower = msg.toLowerCase();
+    return (
+      lower.includes("websocket") ||
+      lower.includes("vite") ||
+      lower.includes("hmr") ||
+      lower.includes("ws://") ||
+      lower.includes("wss://") ||
+      lower.includes("closed without opened")
+    );
+  };
+
+  window.addEventListener('unhandledrejection', (event) => {
+    const reason = event.reason;
+    const msg = reason?.message || String(reason || "");
+    if (isViteWSWarning(msg)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+
+  window.addEventListener('error', (event) => {
+    const msg = event.message || "";
+    if (isViteWSWarning(msg)) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+  });
+}
+
 // Intercept all fetch requests to route /api to the Cloud Run backend when running on external domains like Vercel
 const originalFetch = window.fetch;
 try {
