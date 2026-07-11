@@ -2,7 +2,8 @@ import React, { useState, useEffect } from "react";
 import FinancialChart from "./FinancialChart";
 import {
   FileText, History, Settings, ShieldAlert, Award, ArrowLeft, Plus, Trash2, Edit, Save,
-  Users, DollarSign, Tag, ListPlus, FileSpreadsheet, Printer, Search, RefreshCw, Barcode, Eye, QrCode, X
+  Users, DollarSign, Tag, ListPlus, FileSpreadsheet, Printer, Search, RefreshCw, Barcode, Eye, QrCode, X,
+  Camera, Image
 } from "lucide-react";
 import {
   Servico, Produto, Despesa, Convenio, Marca, Item, User, Atendimento, Cliente
@@ -37,7 +38,7 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
 
   // Produtos States
   const [products, setProducts] = useState<Produto[]>([]);
-  const [productForm, setProductForm] = useState({ id: "", name: "", description: "", price: "", stock: "", minStockAlert: "", barcode: "", position: "" });
+  const [productForm, setProductForm] = useState({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "" });
   const [showProductForm, setShowProductForm] = useState(false);
   const [selectedProductQR, setSelectedProductQR] = useState<Produto | null>(null);
 
@@ -251,6 +252,19 @@ GARANTIA DE 90 DIAS.`;
     } catch (err) { console.error(err); }
   };
 
+  // Handle Product Photo Upload / Camera Capture
+  const handleProductPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (files && files.length > 0) {
+      const file = files[0];
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProductForm(prev => ({ ...prev, imageUrl: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
   // SAVE PRODUCT
   const handleSaveProduct = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -258,10 +272,12 @@ GARANTIA DE 90 DIAS.`;
       name: productForm.name,
       description: productForm.description,
       price: Number(productForm.price) || 0,
+      cost: Number(productForm.cost) || 0,
       stock: Number(productForm.stock) || 0,
       minStockAlert: Number(productForm.minStockAlert) || 0,
       barcode: productForm.barcode,
-      position: Number(productForm.position) || 1
+      position: Number(productForm.position) || 1,
+      imageUrl: productForm.imageUrl || ""
     };
 
     try {
@@ -275,7 +291,7 @@ GARANTIA DE 90 DIAS.`;
       if (res.ok) {
         fetchProducts();
         setShowProductForm(false);
-        setProductForm({ id: "", name: "", description: "", price: "", stock: "", minStockAlert: "", barcode: "", position: "" });
+        setProductForm({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "" });
       }
     } catch (err) { console.error(err); }
   };
@@ -937,7 +953,7 @@ GARANTIA DE 90 DIAS.`;
             <h3 className="font-bold text-sm text-slate-800">Estoques de Produtos & Peças</h3>
             <button
               onClick={() => {
-                setProductForm({ id: "", name: "", description: "", price: "", stock: "", minStockAlert: "", barcode: "", position: "" });
+                setProductForm({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "" });
                 setShowProductForm(!showProductForm);
               }}
               className="px-2.5 py-1.5 bg-blue-50 text-[#1E88E5] font-bold text-xs rounded-lg hover:bg-[#1E88E5] hover:text-white transition"
@@ -948,6 +964,61 @@ GARANTIA DE 90 DIAS.`;
 
           {showProductForm && (
             <form onSubmit={handleSaveProduct} className="p-4 border border-blue-100 bg-blue-50/10 rounded-2xl space-y-3 text-xs">
+              {/* Product Photo Upload/Capture UI */}
+              <div className="bg-white p-3 border border-slate-100 rounded-xl shadow-sm flex flex-col sm:flex-row items-center gap-3.5">
+                <div className="relative w-20 h-20 rounded-lg bg-slate-50 border border-slate-200 overflow-hidden flex items-center justify-center shrink-0">
+                  {productForm.imageUrl ? (
+                    <>
+                      <img src={productForm.imageUrl} className="w-full h-full object-cover" alt="Prévia do produto" />
+                      <button
+                        type="button"
+                        onClick={() => setProductForm({ ...productForm, imageUrl: "" })}
+                        className="absolute inset-0 bg-black/60 opacity-0 hover:opacity-100 flex items-center justify-center text-white transition font-bold text-[9px]"
+                      >
+                        Remover
+                      </button>
+                    </>
+                  ) : (
+                    <div className="text-center text-slate-400 p-1.5">
+                      <Camera className="w-5 h-5 mx-auto mb-1 text-slate-300" />
+                      <span className="text-[9px] font-bold block leading-none">Sem Foto</span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex-1 space-y-1.5 w-full text-center sm:text-left">
+                  <p className="font-bold text-slate-700 text-xs">Foto do Produto</p>
+                  <p className="text-[10px] text-slate-400 leading-tight">Use a câmera do seu celular ou envie um arquivo para identificar melhor este produto.</p>
+                  
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                    {/* Camera Button */}
+                    <label className="px-2.5 py-1.5 bg-blue-50 hover:bg-[#1E88E5] text-[#1E88E5] hover:text-white font-extrabold rounded-lg transition text-[9px] flex items-center gap-1 cursor-pointer shadow-sm">
+                      <Camera className="w-3.5 h-3.5" />
+                      <span>Tirar Foto</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        capture="environment"
+                        onChange={handleProductPhotoUpload}
+                        className="hidden"
+                      />
+                    </label>
+
+                    {/* Gallery Button */}
+                    <label className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-200 text-slate-600 hover:text-slate-800 font-extrabold rounded-lg transition text-[9px] flex items-center gap-1 cursor-pointer shadow-sm">
+                      <Image className="w-3.5 h-3.5" />
+                      <span>Galeria</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={handleProductPhotoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-slate-500 mb-1">Nome do Produto *</label>
@@ -978,6 +1049,16 @@ GARANTIA DE 90 DIAS.`;
                     value={productForm.price}
                     onChange={(e) => setProductForm({ ...productForm, price: e.target.value })}
                     placeholder="35"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
+                  />
+                </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Preço de Custo (R$)</label>
+                  <input
+                    type="number"
+                    value={productForm.cost}
+                    onChange={(e) => setProductForm({ ...productForm, cost: e.target.value })}
+                    placeholder="15"
                     className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
                   />
                 </div>
@@ -1024,12 +1105,24 @@ GARANTIA DE 90 DIAS.`;
               const lowStock = p.stock <= p.minStockAlert;
               return (
                 <div key={p.id} className="p-2.5 flex justify-between items-center text-xs">
-                  <div>
-                    <p className="font-bold text-slate-800">{p.name}</p>
-                    {p.barcode && <p className="text-[10px] text-slate-400 font-mono">Cód: {p.barcode}</p>}
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {p.imageUrl ? (
+                      <img src={p.imageUrl} alt={p.name} className="w-10 h-10 rounded-lg object-cover border border-slate-200 shrink-0 shadow-sm" />
+                    ) : (
+                      <div className="w-10 h-10 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-300 shrink-0">
+                        <span className="text-sm">📦</span>
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      <p className="font-bold text-slate-800 truncate">{p.name}</p>
+                      {p.barcode && <p className="text-[10px] text-slate-400 font-mono">Cód: {p.barcode}</p>}
+                    </div>
                   </div>
                   <div className="flex items-center gap-3">
-                    <span className="font-bold font-mono text-slate-700">R$ {p.price}</span>
+                    <div className="text-right">
+                      <p className="font-bold font-mono text-slate-700">Venda: R$ {p.price}</p>
+                      <p className="text-[10px] font-mono text-slate-500">Custo: R$ {p.cost || 0}</p>
+                    </div>
                     <span className={`px-2 py-0.5 rounded font-bold text-[10px] ${
                       lowStock ? "bg-red-50 text-red-600 border border-red-100 animate-pulse" : "bg-emerald-50 text-emerald-700"
                     }`}>
@@ -1049,10 +1142,12 @@ GARANTIA DE 90 DIAS.`;
                           name: p.name,
                           description: p.description,
                           price: p.price.toString(),
+                          cost: (p.cost !== undefined ? p.cost : 0).toString(),
                           stock: p.stock.toString(),
                           minStockAlert: p.minStockAlert.toString(),
                           barcode: p.barcode,
-                          position: p.position.toString()
+                          position: p.position.toString(),
+                          imageUrl: p.imageUrl || ""
                         });
                         setShowProductForm(true);
                       }}

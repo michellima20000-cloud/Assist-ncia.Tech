@@ -74,10 +74,12 @@ export interface Produto {
   name: string;
   description: string;
   price: number;
+  cost: number;
   stock: number;
   minStockAlert: number;
   barcode: string;
   position: number;
+  imageUrl?: string;
 }
 
 export interface Despesa {
@@ -133,6 +135,7 @@ export interface Venda {
   date: string;
   sellerId?: string;
   sellerName?: string;
+  observations?: string;
 }
 
 export interface Marca {

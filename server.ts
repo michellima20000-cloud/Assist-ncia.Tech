@@ -722,10 +722,12 @@ async function startServer() {
         name: req.body.name,
         description: req.body.description || "",
         price: Number(req.body.price) || 0,
+        cost: Number(req.body.cost) || 0,
         stock: Number(req.body.stock) || 0,
         minStockAlert: Number(req.body.minStockAlert) || 0,
         barcode: req.body.barcode || "",
-        position: Number(req.body.position) || count + 1
+        position: Number(req.body.position) || count + 1,
+        imageUrl: req.body.imageUrl || ""
       };
       await setDocument("produtos", id, newProduct);
       res.status(201).json(newProduct);
@@ -745,10 +747,12 @@ async function startServer() {
         name: req.body.name ?? existing.name,
         description: req.body.description ?? existing.description,
         price: req.body.price !== undefined ? Number(req.body.price) : existing.price,
+        cost: req.body.cost !== undefined ? Number(req.body.cost) : (existing.cost || 0),
         stock: req.body.stock !== undefined ? Number(req.body.stock) : existing.stock,
         minStockAlert: req.body.minStockAlert !== undefined ? Number(req.body.minStockAlert) : existing.minStockAlert,
         barcode: req.body.barcode ?? existing.barcode,
-        position: req.body.position !== undefined ? Number(req.body.position) : existing.position
+        position: req.body.position !== undefined ? Number(req.body.position) : existing.position,
+        imageUrl: req.body.imageUrl !== undefined ? req.body.imageUrl : existing.imageUrl
       };
       await setDocument("produtos", id, updated);
       res.json(updated);
@@ -1348,7 +1352,7 @@ async function startServer() {
 
   app.post("/api/vendas", async (req, res) => {
     try {
-      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName } = req.body;
+      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName, observations } = req.body;
 
       if (!items || items.length === 0) {
         return res.status(400).json({ message: "A venda deve conter pelo menos um item." });
@@ -1386,7 +1390,8 @@ async function startServer() {
         method,
         date: new Date().toISOString(),
         sellerId: sellerId || null,
-        sellerName: sellerName || "Balcão"
+        sellerName: sellerName || "Balcão",
+        observations: observations || ""
       };
 
       // Save venda document

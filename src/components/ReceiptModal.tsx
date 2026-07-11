@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Printer, Check, Copy, MessageSquare, Settings, FileText, ChevronDown, ChevronUp } from "lucide-react";
+import { jsPDF } from "jspdf";
 
 interface ReceiptModalProps {
   isOpen: boolean;
@@ -697,6 +698,230 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     setTimeout(() => setCopiedLink(false), 2000);
   };
 
+  const generateReceiptPDF = () => {
+    const doc = new jsPDF({
+      orientation: "portrait",
+      unit: "mm",
+      format: "a4"
+    });
+
+    // 1. BRAND HEADER
+    doc.setFillColor(30, 136, 229); // #1E88E5 blue primary
+    doc.rect(15, 15, 180, 1.5, "F"); // minimalist blue bar on top
+    
+    // Logo Text "L.Tec"
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(22);
+    doc.setTextColor(30, 136, 229); // #1E88E5 blue primary
+    doc.text("L.Tec", 15, 26);
+    
+    doc.setFontSize(8);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text("ASSISTÊNCIA TÉCNICA", 15, 31);
+    
+    doc.setFontSize(6.5);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("CELULARES E INFORMÁTICA", 15, 34);
+
+    // Business details right-aligned
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text(businessSettings.name, 195, 23, { align: "right" });
+    
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(businessSettings.address, 195, 27, { align: "right" });
+    doc.text(`WhatsApp: ${businessSettings.phone}`, 195, 31, { align: "right" });
+    doc.text(`CNPJ: ${businessSettings.cnpj}`, 195, 35, { align: "right" });
+
+    // Divider line
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.4);
+    doc.line(15, 40, 195, 40);
+
+    // 2. DOCUMENT SUBTITLE
+    doc.setFontSize(13);
+    doc.setFont("Helvetica", "bold");
+    doc.setTextColor(15, 23, 42); // slate-900
+    const docTitle = parsed.isServiceOrder 
+      ? `ORDEM DE SERVIÇO Nº ${parsed.controlNumber}` 
+      : `COMPROVANTE DE VENDA DIRETA Nº ${parsed.controlNumber}`;
+    doc.text(docTitle, 15, 48);
+
+    // 3. CLIENT INFO / IDENTIFICAÇÃO BOX
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.rect(15, 52, 180, 26, "F");
+    
+    // Borders for Client Info Box
+    doc.setDrawColor(241, 245, 249); // slate-100
+    doc.setLineWidth(0.5);
+    doc.rect(15, 52, 180, 26, "S");
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(2, 132, 199); // sky-700
+    doc.text("IDENTIFICAÇÃO DO CLIENTE", 20, 58);
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text(`Cliente: ${parsed.clientName || "Consumidor Final"}`, 20, 65);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105); // slate-600
+    doc.text(`Telefone: ${parsed.clientPhone || "Não cadastrado"}`, 20, 71);
+    
+    if (parsed.clientCpf) {
+      doc.text(`CPF: ${parsed.clientCpf}`, 110, 65);
+    }
+    doc.text(`Data: ${parsed.date}`, 110, 71);
+
+    // If Service Order, add equipment info
+    let tableStartY = 88;
+    if (parsed.isServiceOrder && parsed.equipmentName) {
+      doc.setFillColor(254, 243, 199); // amber-100
+      doc.rect(15, 79, 180, 10, "F");
+      
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(180, 83, 9); // amber-700
+      doc.text(`Equipamento: ${parsed.equipmentName}`, 20, 85);
+      
+      if (parsed.imei) {
+        doc.text(`IMEI/Nº Série: ${parsed.imei}`, 110, 85);
+      }
+      tableStartY = 98;
+    }
+
+    // 4. ITEMS TABLE HEADERS
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(30, 136, 229); // blue primary
+    doc.text("DESCRIÇÃO DOS ITENS E SERVIÇOS", 15, tableStartY);
+
+    doc.setFontSize(8);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text("Qtd", 15, tableStartY + 6);
+    doc.text("Descrição do Produto / Serviço", 27, tableStartY + 6);
+    doc.text("Valor Unit.", 145, tableStartY + 6, { align: "right" });
+    doc.text("Subtotal", 195, tableStartY + 6, { align: "right" });
+
+    // Table bottom line
+    doc.setDrawColor(15, 23, 42); // slate-900
+    doc.setLineWidth(0.4);
+    doc.line(15, tableStartY + 8, 195, tableStartY + 8);
+
+    // 5. RENDER ROWS
+    let currentY = tableStartY + 14;
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(9);
+    doc.setTextColor(51, 65, 85); // slate-700
+
+    if (parsed.items.length > 0) {
+      parsed.items.forEach((item, index) => {
+        // Stripe background
+        if (index % 2 === 1) {
+          doc.setFillColor(248, 250, 252);
+          doc.rect(15, currentY - 4.5, 180, 7, "F");
+        }
+
+        doc.setFont("Helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text(item.quantity.toString(), 18, currentY, { align: "center" });
+
+        doc.setFont("Helvetica", "normal");
+        doc.setTextColor(51, 65, 85);
+        doc.text(item.name, 27, currentY);
+
+        doc.text(`R$ ${item.price.toFixed(2).replace(".", ",")}`, 145, currentY, { align: "right" });
+
+        const subTotal = item.price * item.quantity;
+        doc.setFont("Helvetica", "bold");
+        doc.setTextColor(15, 23, 42);
+        doc.text(`R$ ${subTotal.toFixed(2).replace(".", ",")}`, 195, currentY, { align: "right" });
+
+        // Row border
+        doc.setDrawColor(241, 245, 249);
+        doc.setLineWidth(0.2);
+        doc.line(15, currentY + 2.5, 195, currentY + 2.5);
+
+        currentY += 7.5;
+      });
+    } else {
+      doc.setFont("Helvetica", "oblique");
+      doc.text("Nenhum item registrado nesta venda/OS.", 15, currentY);
+      currentY += 7.5;
+    }
+
+    // Table boundary
+    doc.setDrawColor(226, 232, 240);
+    doc.setLineWidth(0.4);
+    doc.line(15, currentY - 2, 195, currentY - 2);
+    
+    currentY += 4;
+
+    // 6. TOTAL ROW
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text(`Forma de Pagamento: ${parsed.paymentMethod || "Dinheiro"}`, 15, currentY);
+    
+    doc.setFontSize(11);
+    doc.text("TOTAL GERAL:", 145, currentY, { align: "right" });
+    doc.setTextColor(30, 136, 229); // blue primary
+    doc.text(`R$ ${parsed.totalAmount.toFixed(2).replace(".", ",")}`, 195, currentY, { align: "right" });
+
+    currentY += 12;
+
+    // 7. WARRANTY & OBSERVATIONS FOOTER BOX
+    doc.setFillColor(248, 250, 252); // slate-50
+    doc.setDrawColor(226, 232, 240); // slate-200
+    doc.setLineWidth(0.4);
+    doc.rect(15, currentY, 180, 26, "FD");
+
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(2, 132, 199); // sky-700
+    doc.text("OBSERVAÇÕES TÉCNICAS & GARANTIA", 19, currentY + 5.5);
+
+    doc.setFont("Helvetica", "normal");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105); // slate-600
+    
+    // Format the observations/warranty cleanly
+    const rawObs = parsed.observations || "Garantia legal de 90 dias (3 meses) cobrindo exclusivamente defeitos de fabricação ou de aplicação da película/peças, sob condições normais de uso.";
+    const splitObs = doc.splitTextToSize(rawObs, 172);
+    doc.text(splitObs, 19, currentY + 11);
+
+    currentY += 38;
+
+    // 8. SIGNATURE
+    doc.setDrawColor(148, 163, 184); // slate-400
+    doc.setLineWidth(0.3);
+    doc.line(70, currentY, 140, currentY);
+    
+    doc.setFont("Helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Assinatura do cliente", 105, currentY + 4, { align: "center" });
+
+    currentY += 10;
+
+    // 9. GREETING
+    doc.setFont("Helvetica", "oblique");
+    doc.setFontSize(8);
+    doc.setTextColor(148, 163, 184);
+    doc.text("Agradecemos imensamente a sua preferência!", 105, currentY, { align: "center" });
+
+    const filename = `comprovante-${parsed.controlNumber}.pdf`;
+    doc.save(filename);
+  };
+
   const handleSendWhatsApp = () => {
     let cleanPhone = phoneInput.replace(/\D/g, "");
     if (!cleanPhone) {
@@ -708,13 +933,22 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
       cleanPhone = "55" + cleanPhone;
     }
 
-    let message = "";
-    if (parsed.isServiceOrder) {
-      const shareUrl = `${window.location.origin}/?os=${parsed.controlNumber}`;
-      message = `Olá ${parsed.clientName}! Segue o link com os detalhes de sua *Ordem de Serviço (Nº ${parsed.controlNumber})* na nossa Assistência Técnica:\n\n${shareUrl}\n\n*Aparelho:* ${parsed.equipmentName}\n*Defeito:* ${parsed.defeito}\n*Data de entrada:* ${parsed.date}\n*Total:* R$ ${parsed.totalAmount.toFixed(2).replace('.', ',')}\n\nAgradecemos a sua preferência e confiança!`;
-    } else {
-      message = `Olá! Segue o comprovante de sua compra na nossa loja:\n\n${content}\n\nAgradecemos a preferência!`;
-    }
+    // Automatically generate and download the PDF
+    generateReceiptPDF();
+
+    const isVenda = parsed.isVenda || !parsed.isServiceOrder;
+    const documentType = isVenda ? "Comprovante de Venda" : "Ordem de Serviço";
+    const obsText = parsed.observations || "Garantia de 3 meses inclusa para películas e serviços.";
+
+    const message = `Olá *${parsed.clientName}*! Tudo bem? 🌟\n\n` +
+      `Seguindo o nosso compromisso com a transparência e organização, o *${documentType} em PDF* foi gerado e baixado automaticamente no seu dispositivo! 📂📄\n\n` +
+      `*Resumo da Transação:*\n` +
+      `📅 *Data:* ${parsed.date}\n` +
+      `🔢 *Nº de Controle:* ${parsed.controlNumber}\n` +
+      `💰 *Valor Total:* R$ ${parsed.totalAmount.toFixed(2).replace('.', ',')}\n` +
+      `🛡️ *Garantia / Obs:* ${obsText}\n\n` +
+      `_Por favor, se desejar, anexe o arquivo PDF que acabou de ser baixado nesta conversa para guardá-lo com você!_\n\n` +
+      `Agradecemos imensamente a preferência e a confiança na *${businessSettings.name}*! Qualquer dúvida, estamos à disposição. 🤝📱`;
 
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const baseUrl = isMobile ? "https://api.whatsapp.com/send" : "https://web.whatsapp.com/send";
@@ -1024,10 +1258,10 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
             </button>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={handleCopyToClipboard}
-              className={`py-2.5 font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition uppercase tracking-wider ${
+              className={`py-2.5 font-extrabold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition uppercase tracking-wider ${
                 copied
                   ? "bg-emerald-600 text-white border border-emerald-500/30"
                   : "bg-slate-700 hover:bg-slate-600 text-slate-200 hover:text-white"
@@ -1035,22 +1269,30 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
             >
               {copied ? (
                 <>
-                  <Check className="w-4 h-4 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
                   Copiado!
                 </>
               ) : (
                 <>
-                  <Copy className="w-4 h-4" />
+                  <Copy className="w-3.5 h-3.5" />
                   Copiar Texto
                 </>
               )}
             </button>
             <button
-              onClick={handlePrint}
-              className="py-2.5 bg-[#1E88E5] hover:bg-blue-600 text-white font-extrabold text-xs rounded-xl flex items-center justify-center gap-1.5 transition shadow-lg shadow-blue-500/20 uppercase tracking-wider"
+              onClick={() => generateReceiptPDF()}
+              className="py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-extrabold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition shadow-lg shadow-rose-500/20 uppercase tracking-wider"
+              title="Baixar Comprovante em PDF"
             >
-              <Printer className="w-4 h-4" />
-              Imprimir {layoutType === 'a4' ? 'Folha A4' : 'Bobina'}
+              <FileText className="w-3.5 h-3.5" />
+              Baixar PDF
+            </button>
+            <button
+              onClick={handlePrint}
+              className="py-2.5 bg-[#1E88E5] hover:bg-blue-600 text-white font-extrabold text-[10px] rounded-xl flex items-center justify-center gap-1.5 transition shadow-lg shadow-blue-500/20 uppercase tracking-wider"
+            >
+              <Printer className="w-3.5 h-3.5" />
+              Imprimir
             </button>
           </div>
         </div>

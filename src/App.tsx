@@ -630,8 +630,8 @@ ${hideValues ? "" : `TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`}`;
         {activeTab === "vendas" && (
           <Vendas
             onBack={() => setActiveTab("dashboard")}
-            onSaleSuccess={(receipt) => {
-              triggerReceiptPreview("Recibo de Venda", receipt);
+            onSaleSuccess={(receipt, phone, clientName) => {
+              triggerReceiptPreview("Recibo de Venda", receipt, phone, clientName);
               setActiveTab("dashboard");
             }}
           />

@@ -89,10 +89,12 @@
         "name": { "type": "string" },
         "description": { "type": "string" },
         "price": { "type": "number" },
+        "cost": { "type": "number" },
         "stock": { "type": "number" },
         "minStockAlert": { "type": "number" },
         "barcode": { "type": "string" },
         "position": { "type": "number" },
+        "imageUrl": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }
@@ -217,7 +219,8 @@
         "method": { "type": "string", "enum": ["cash", "debit", "credit", "pix"] },
         "date": { "type": "string", "format": "date-time" },
         "sellerId": { "type": "string" },
-        "sellerName": { "type": "string" }
+        "sellerName": { "type": "string" },
+        "observations": { "type": "string" }
       },
       "required": ["id", "items", "totalAmount", "receivedAmount", "change", "method", "date"]
     }

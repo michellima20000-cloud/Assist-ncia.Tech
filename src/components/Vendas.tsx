@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from "react";
 import {
   ShoppingBag, Search, Plus, Minus, Trash2, X, CreditCard, DollarSign,
-  User, CheckCircle, AlertTriangle, QrCode, ArrowLeft, RefreshCw, Sparkles, Receipt
+  User, CheckCircle, AlertTriangle, QrCode, ArrowLeft, RefreshCw, Sparkles, Receipt,
+  Package
 } from "lucide-react";
 import { Produto, Cliente, VendaItem } from "../types";
 import ProductScanner from "./ProductScanner";
 
 interface VendasProps {
   onBack: () => void;
-  onSaleSuccess: (receiptContent: string) => void;
+  onSaleSuccess: (receiptContent: string, phone: string, clientName: string) => void;
 }
 
 interface CartItem {
@@ -26,6 +27,14 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   const [clienteSearch, setClienteSearch] = useState("");
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null);
   const [showClienteDropdown, setShowClienteDropdown] = useState(false);
+
+  // Venda Rapida / Cliente Avulso states
+  const [clientInputMode, setClientInputMode] = useState<"manual" | "search">("manual");
+  const [customClientName, setCustomClientName] = useState("");
+  const [customClientPhone, setCustomClientPhone] = useState("");
+
+  // Observations
+  const [observations, setObservations] = useState("");
   
   // Cart & Sale State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -204,16 +213,20 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
     const savedUser = localStorage.getItem("user_session");
     const currentUser = savedUser ? JSON.parse(savedUser) : null;
 
+    const finalClientName = selectedCliente?.name || customClientName || "Consumidor Final";
+    const finalClientPhone = selectedCliente?.phone || customClientPhone || "";
+
     const payload = {
       clienteId: selectedCliente?.id || null,
-      clienteName: selectedCliente?.name || "Consumidor Final",
+      clienteName: finalClientName,
       items: itemsPayload,
       totalAmount,
       receivedAmount: method === "cash" ? receivedNum : totalAmount,
       change: method === "cash" ? change : 0,
       method,
       sellerId: currentUser?.id || null,
-      sellerName: currentUser?.name || "Balcão"
+      sellerName: currentUser?.name || "Balcão",
+      observations: observations
     };
 
     try {
@@ -235,7 +248,8 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
           items: venda.items || payload.items || [],
           method: venda.method || payload.method,
           receivedAmount: typeof venda.receivedAmount === 'number' ? venda.receivedAmount : payload.receivedAmount,
-          change: typeof venda.change === 'number' ? venda.change : payload.change
+          change: typeof venda.change === 'number' ? venda.change : payload.change,
+          observations: venda.observations || payload.observations || ""
         };
 
         // Generate ESC/POS Thermal Receipt Layout
@@ -248,7 +262,7 @@ DATA: ${new Date(finalVenda.date).toLocaleString("pt-BR")}
 VENDA: ${finalVenda.id}
 VENDEDOR: ${finalVenda.sellerName}
 CLIENTE: ${finalVenda.clienteName}
-${selectedCliente?.phone ? `CONTATO: ${selectedCliente.phone}` : ""}
+${finalClientPhone ? `CONTATO: ${finalClientPhone}` : ""}
 --------------------------------
 ITENS VENDIDOS:
 ${finalVenda.items.map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
@@ -264,10 +278,12 @@ FORMA DE PGTO:  ${
 VALOR RECEBIDO: R$ ${finalVenda.receivedAmount.toFixed(2)}
 TROCO REGISTRADO: R$ ${finalVenda.change.toFixed(2)}
 ================================
+${finalVenda.observations ? `OBS: ${finalVenda.observations}
+================================` : ""}
 Obrigado pela preferência!
 Volte sempre!`;
 
-        onSaleSuccess(receiptText);
+        onSaleSuccess(receiptText, finalClientPhone, finalClientName);
       } else {
         let errMsg = "Erro ao registrar a venda.";
         try {
@@ -328,13 +344,82 @@ Volte sempre!`;
         <div className="lg:col-span-7 space-y-6">
           {/* CLIENT SELECTOR */}
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-            <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-              <User className="w-4 h-4 text-slate-400" />
-              Identificar Cliente (Opcional)
-            </h3>
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 pb-3">
+              <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                <User className="w-4 h-4 text-slate-400" />
+                Identificar Cliente (Opcional)
+              </h3>
+              {!selectedCliente && (
+                <div className="flex rounded-lg border border-slate-200 p-0.5 bg-slate-50 self-start sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setClientInputMode("manual")}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition ${
+                      clientInputMode === "manual" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Venda Rápida
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setClientInputMode("search")}
+                    className={`px-2.5 py-1 text-[10px] font-bold rounded-md transition ${
+                      clientInputMode === "search" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    Buscar Cadastro
+                  </button>
+                </div>
+              )}
+            </div>
 
-            {!selectedCliente ? (
-              <div className="relative">
+            {selectedCliente ? (
+              <div className="p-3 bg-blue-50/50 border border-blue-100/50 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
+                    {selectedCliente.name.charAt(0).toUpperCase()}
+                  </div>
+                  <div>
+                    <p className="text-xs font-bold text-slate-800">{selectedCliente.name}</p>
+                    <p className="text-[10px] text-slate-500 font-semibold font-mono">{selectedCliente.phone}</p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedCliente(null);
+                    setClientInputMode("manual");
+                  }}
+                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            ) : clientInputMode === "manual" ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">Nome do Cliente (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="Ex: Michel"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition"
+                    value={customClientName}
+                    onChange={(e) => setCustomClientName(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">Telefone / WhatsApp (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="DDD + Telefone (ex: 11999998888)"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition font-mono"
+                    value={customClientPhone}
+                    onChange={(e) => setCustomClientPhone(e.target.value)}
+                  />
+                </div>
+              </div>
+            ) : (
+              <div className="relative pt-1">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                   <Search className="w-4 h-4 text-slate-400" />
                 </div>
@@ -372,24 +457,6 @@ Volte sempre!`;
                     ))}
                   </div>
                 )}
-              </div>
-            ) : (
-              <div className="p-3 bg-blue-50/50 border border-blue-100/50 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-blue-500 text-white flex items-center justify-center font-bold text-sm">
-                    {selectedCliente.name.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <p className="text-xs font-bold text-slate-800">{selectedCliente.name}</p>
-                    <p className="text-[10px] text-slate-500 font-semibold font-mono">{selectedCliente.phone}</p>
-                  </div>
-                </div>
-                <button
-                  onClick={() => setSelectedCliente(null)}
-                  className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition"
-                >
-                  <X className="w-4 h-4" />
-                </button>
               </div>
             )}
           </div>
@@ -434,35 +501,49 @@ Volte sempre!`;
                       key={p.id}
                       onClick={() => handleAddProduct(p)}
                       disabled={isOutOfStock}
-                      className={`p-3 text-left border rounded-xl flex flex-col justify-between transition ${
+                      className={`p-3 text-left border rounded-xl flex items-start gap-3 transition ${
                         isOutOfStock 
                           ? "bg-slate-50 border-slate-100 opacity-60 cursor-not-allowed" 
                           : "bg-white border-slate-100 hover:border-blue-200 hover:shadow-sm"
                       }`}
                     >
-                      <div className="w-full">
-                        <div className="flex items-start justify-between gap-1">
-                          <span className="text-xs font-extrabold text-slate-800 line-clamp-1">{p.name}</span>
-                          {inCartQty > 0 && (
-                            <span className="text-[10px] bg-blue-100 text-[#1E88E5] px-1.5 py-0.5 rounded-full font-black">
-                              x{inCartQty}
-                            </span>
-                          )}
+                      {p.imageUrl ? (
+                        <img 
+                          src={p.imageUrl} 
+                          alt={p.name} 
+                          className="w-12 h-12 rounded-lg object-cover border border-slate-150 shrink-0 shadow-sm" 
+                        />
+                      ) : (
+                        <div className="w-12 h-12 rounded-lg bg-slate-50 border border-slate-100 flex items-center justify-center text-slate-300 shrink-0">
+                          <Package className="w-5 h-5" />
                         </div>
-                        <p className="text-[10px] text-slate-500 line-clamp-2 mt-0.5 leading-relaxed">{p.description || "Sem descrição"}</p>
-                      </div>
+                      )}
 
-                      <div className="flex items-center justify-between w-full mt-3 pt-2 border-t border-slate-50">
-                        <span className="text-xs font-black text-emerald-600 font-mono">
-                          R$ {p.price.toFixed(2)}
-                        </span>
+                      <div className="flex-1 min-w-0 flex flex-col justify-between h-full min-h-[48px]">
+                        <div className="w-full">
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-xs font-extrabold text-slate-800 line-clamp-1">{p.name}</span>
+                            {inCartQty > 0 && (
+                              <span className="text-[10px] bg-blue-100 text-[#1E88E5] px-1.5 py-0.5 rounded-full font-black shrink-0">
+                                x{inCartQty}
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 leading-tight">{p.description || "Sem descrição"}</p>
+                        </div>
 
-                        <div className="text-right">
-                          <span className={`text-[9px] font-bold ${
-                            p.stock <= p.minStockAlert ? "text-amber-500" : "text-slate-400"
-                          }`}>
-                            Estoque: {p.stock} un
+                        <div className="flex items-center justify-between w-full mt-2 pt-1 border-t border-slate-50">
+                          <span className="text-xs font-black text-emerald-600 font-mono">
+                            R$ {p.price.toFixed(2)}
                           </span>
+
+                          <div className="text-right">
+                            <span className={`text-[9px] font-bold ${
+                              p.stock <= p.minStockAlert ? "text-amber-500" : "text-slate-400"
+                            }`}>
+                              Estoque: {p.stock} un
+                            </span>
+                          </div>
                         </div>
                       </div>
                     </button>
@@ -537,6 +618,20 @@ Volte sempre!`;
                 ))
               )}
             </div>
+
+            {/* OBSERVATIONS MANUALS */}
+            {cart.length > 0 && (
+              <div className="border-t border-slate-100 mt-4 pt-4">
+                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1.5">Observações da Venda (Opcional)</label>
+                <textarea
+                  rows={2}
+                  placeholder="Garantia, termos de troca ou observações gerais..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition"
+                  value={observations}
+                  onChange={(e) => setObservations(e.target.value)}
+                />
+              </div>
+            )}
 
             {/* DISCOUNT & PAYMENT CONTROLS */}
             {cart.length > 0 && (
