@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import FinancialChart from "./FinancialChart";
+import WeeklySalesChart from "./WeeklySalesChart";
 import {
   FileText, History, Settings, ShieldAlert, Award, ArrowLeft, Plus, Trash2, Edit, Save,
   Users, DollarSign, Tag, ListPlus, FileSpreadsheet, Printer, Search, RefreshCw, Barcode, Eye, QrCode, X,
@@ -493,92 +494,95 @@ GARANTIA DE 90 DIAS.`;
       </div>
 
       {activeMenu === 'main' && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <button
-            onClick={() => setActiveMenu('reports')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
-          >
-            <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
-              <FileText className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Relatórios</span>
-          </button>
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            <button
+              onClick={() => setActiveMenu('reports')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
+            >
+              <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Relatórios</span>
+            </button>
 
-          <button
-            onClick={() => setActiveMenu('history')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
-          >
-            <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
-              <History className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Histórico de OS</span>
-          </button>
+            <button
+              onClick={() => setActiveMenu('history')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
+            >
+              <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
+                <History className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Histórico de OS</span>
+            </button>
 
-          <button
-            onClick={() => setActiveMenu('services')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
-          >
-            <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
-              <ListPlus className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Serviços & Preços</span>
-          </button>
+            <button
+              onClick={() => setActiveMenu('services')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
+            >
+              <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center">
+                <ListPlus className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Serviços & Preços</span>
+            </button>
 
-          <button
-            onClick={() => setActiveMenu('products')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
-          >
-            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
-              <Barcode className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Produtos & Peças</span>
-          </button>
+            <button
+              onClick={() => setActiveMenu('products')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
+            >
+              <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center">
+                <Barcode className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Produtos & Peças</span>
+            </button>
 
-          <button
-            onClick={() => setActiveMenu('expenses')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
-          >
-            <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
-              <DollarSign className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Despesas</span>
-          </button>
+            <button
+              onClick={() => setActiveMenu('expenses')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
+            >
+              <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center">
+                <DollarSign className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Despesas</span>
+            </button>
 
-          <button
-            onClick={() => setActiveMenu('users')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
-          >
-            <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
-              <Users className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Funcionários</span>
-          </button>
+            <button
+              onClick={() => setActiveMenu('users')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition"
+            >
+              <div className="w-10 h-10 bg-purple-50 text-purple-600 rounded-xl flex items-center justify-center">
+                <Users className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Funcionários</span>
+            </button>
 
-          <button
-            onClick={() => setActiveMenu('auxiliary')}
-            className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-2"
-          >
-            <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mx-auto">
-              <Settings className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-slate-700">Marcas, Itens & Convênios</span>
-          </button>
+            <button
+              onClick={() => setActiveMenu('auxiliary')}
+              className="p-5 bg-white border border-slate-100 hover:border-blue-100 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-2"
+            >
+              <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center mx-auto">
+                <Settings className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Marcas, Itens & Convênios</span>
+            </button>
 
-          <button
-            onClick={() => {
-              if (window.confirm("ATENÇÃO: Isso irá apagar DEFINITIVAMENTE todos os clientes, serviços, produtos, marcas, itens, despesas e ordens de serviço de teste, e irá zerar o contador de OS para 0001.\n\nDeseja continuar e limpar o sistema para uso real?")) {
-                if (window.confirm("Confirmação final: Tem certeza absoluta? Essa ação NÃO pode ser desfeita.")) {
-                  handleClearDatabase();
+            <button
+              onClick={() => {
+                if (window.confirm("ATENÇÃO: Isso irá apagar DEFINITIVAMENTE todos os clientes, serviços, produtos, marcas, itens, despesas e ordens de serviço de teste, e irá zerar o contador de OS para 0001.\n\nDeseja continuar e limpar o sistema para uso real?")) {
+                  if (window.confirm("Confirmação final: Tem certeza absoluta? Essa ação NÃO pode ser desfeita.")) {
+                    handleClearDatabase();
+                  }
                 }
-              }
-            }}
-            className="p-5 bg-white border border-red-100 hover:border-red-200 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-1"
-          >
-            <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center mx-auto">
-              <ShieldAlert className="w-5 h-5" />
-            </div>
-            <span className="font-bold text-xs text-red-600">Zerar Sistema (Dados Reais)</span>
-          </button>
+              }}
+              className="p-5 bg-white border border-red-100 hover:border-red-200 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition col-span-2 sm:col-span-1"
+            >
+              <div className="w-10 h-10 bg-red-50 text-red-600 rounded-xl flex items-center justify-center mx-auto">
+                <ShieldAlert className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-red-600">Zerar Sistema (Dados Reais)</span>
+            </button>
+          </div>
+          <WeeklySalesChart />
         </div>
       )}
 
