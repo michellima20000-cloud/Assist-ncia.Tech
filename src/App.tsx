@@ -103,8 +103,21 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
     const savedUser = localStorage.getItem("user_session");
     const savedToken = localStorage.getItem("user_token");
     if (savedUser && savedToken) {
-      setCurrentUser(JSON.parse(savedUser));
-      setToken(savedToken);
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        if (parsedUser && typeof parsedUser === "object" && parsedUser.id) {
+          setCurrentUser(parsedUser);
+          setToken(savedToken);
+        } else {
+          // If the parsed object is invalid, clean it up
+          localStorage.removeItem("user_session");
+          localStorage.removeItem("user_token");
+        }
+      } catch (err) {
+        console.error("Failed to parse user session", err);
+        localStorage.removeItem("user_session");
+        localStorage.removeItem("user_token");
+      }
     }
   }, []);
 
@@ -301,7 +314,7 @@ ________________________`;
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Na Assistência</p>
-                  <p className="text-xl font-black text-slate-800">{stats.naAssistenciaCount}</p>
+                  <p className="text-xl font-black text-slate-800">{stats?.naAssistenciaCount ?? 0}</p>
                 </div>
               </div>
 
@@ -311,7 +324,7 @@ ________________________`;
                 </div>
                 <div>
                   <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Prontos / Entregas</p>
-                  <p className="text-xl font-black text-slate-800">{stats.entregaCount}</p>
+                  <p className="text-xl font-black text-slate-800">{stats?.entregaCount ?? 0}</p>
                 </div>
               </div>
 
@@ -324,7 +337,7 @@ ________________________`;
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento Diário</p>
-                      <p className="text-lg font-black text-emerald-600 font-mono">R$ {stats.financials.totalCollected.toFixed(2)}</p>
+                      <p className="text-lg font-black text-emerald-600 font-mono">R$ {(stats?.financials?.totalCollected ?? 0).toFixed(2)}</p>
                     </div>
                   </div>
 
@@ -334,7 +347,7 @@ ________________________`;
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Despesas Diárias</p>
-                      <p className="text-lg font-black text-red-600 font-mono">R$ {stats.financials.expenses.toFixed(2)}</p>
+                      <p className="text-lg font-black text-red-600 font-mono">R$ {(stats?.financials?.expenses ?? 0).toFixed(2)}</p>
                     </div>
                   </div>
                 </>
