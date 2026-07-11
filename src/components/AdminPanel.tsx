@@ -38,7 +38,7 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
 
   // Produtos States
   const [products, setProducts] = useState<Produto[]>([]);
-  const [productForm, setProductForm] = useState({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "" });
+  const [productForm, setProductForm] = useState({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "", warranty: "" });
   const [showProductForm, setShowProductForm] = useState(false);
   const [selectedProductQR, setSelectedProductQR] = useState<Produto | null>(null);
 
@@ -277,7 +277,8 @@ GARANTIA DE 90 DIAS.`;
       minStockAlert: Number(productForm.minStockAlert) || 0,
       barcode: productForm.barcode,
       position: Number(productForm.position) || 1,
-      imageUrl: productForm.imageUrl || ""
+      imageUrl: productForm.imageUrl || "",
+      warranty: productForm.warranty || ""
     };
 
     try {
@@ -291,7 +292,7 @@ GARANTIA DE 90 DIAS.`;
       if (res.ok) {
         fetchProducts();
         setShowProductForm(false);
-        setProductForm({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "" });
+        setProductForm({ id: "", name: "", description: "", price: "", cost: "", stock: "", minStockAlert: "", barcode: "", position: "", imageUrl: "", warranty: "" });
       }
     } catch (err) { console.error(err); }
   };
@@ -715,6 +716,24 @@ GARANTIA DE 90 DIAS.`;
                 </div>
               </div>
 
+              {/* Product Gross Profit Stats Row */}
+              {reportResult.summary.productRevenue !== undefined && (
+                <div className="grid grid-cols-3 gap-3 text-center border-t border-dashed border-slate-200 pt-3">
+                  <div className="bg-[#F8FAF6] p-2.5 border border-emerald-50 rounded-xl">
+                    <p className="text-[9px] text-emerald-700 font-bold uppercase">Venda Produtos</p>
+                    <p className="text-xs font-mono font-bold text-emerald-600">R$ {reportResult.summary.productRevenue.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-[#FAF8F8] p-2.5 border border-red-50 rounded-xl">
+                    <p className="text-[9px] text-red-700 font-bold uppercase">Custo Produtos</p>
+                    <p className="text-xs font-mono font-bold text-red-500">R$ {reportResult.summary.productCost.toFixed(2)}</p>
+                  </div>
+                  <div className="bg-[#F6FAFE] p-2.5 border border-blue-50 rounded-xl">
+                    <p className="text-[9px] text-blue-700 font-bold uppercase">Lucro de Vendas</p>
+                    <p className="text-xs font-mono font-bold text-blue-600">R$ {reportResult.summary.productGrossProfit.toFixed(2)}</p>
+                  </div>
+                </div>
+              )}
+
               {/* Financial Performance Graphics Chart */}
               <FinancialChart
                 reportResult={reportResult}
@@ -1092,6 +1111,16 @@ GARANTIA DE 90 DIAS.`;
                     className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none font-mono"
                   />
                 </div>
+                <div>
+                  <label className="block text-slate-500 mb-1">Garantia Padrão</label>
+                  <input
+                    type="text"
+                    value={productForm.warranty}
+                    onChange={(e) => setProductForm({ ...productForm, warranty: e.target.value })}
+                    placeholder="ex: Garantia de 3 meses"
+                    className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
+                  />
+                </div>
               </div>
 
               <button type="submit" className="w-full py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl transition">
@@ -1115,7 +1144,10 @@ GARANTIA DE 90 DIAS.`;
                     )}
                     <div className="min-w-0">
                       <p className="font-bold text-slate-800 truncate">{p.name}</p>
-                      {p.barcode && <p className="text-[10px] text-slate-400 font-mono">Cód: {p.barcode}</p>}
+                      <div className="flex flex-wrap gap-x-2 text-[10px] text-slate-400">
+                        {p.barcode && <span className="font-mono">Cód: {p.barcode}</span>}
+                        {p.warranty && <span className="text-blue-600 font-semibold">🛡️ {p.warranty}</span>}
+                      </div>
                     </div>
                   </div>
                   <div className="flex items-center gap-3">
@@ -1147,7 +1179,8 @@ GARANTIA DE 90 DIAS.`;
                           minStockAlert: p.minStockAlert.toString(),
                           barcode: p.barcode,
                           position: p.position.toString(),
-                          imageUrl: p.imageUrl || ""
+                          imageUrl: p.imageUrl || "",
+                          warranty: p.warranty || ""
                         });
                         setShowProductForm(true);
                       }}

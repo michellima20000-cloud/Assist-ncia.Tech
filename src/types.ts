@@ -80,6 +80,7 @@ export interface Produto {
   barcode: string;
   position: number;
   imageUrl?: string;
+  warranty?: string;
 }
 
 export interface Despesa {
@@ -121,6 +122,7 @@ export interface VendaItem {
   name: string;
   quantity: number;
   price: number;
+  cost?: number;
 }
 
 export interface Venda {

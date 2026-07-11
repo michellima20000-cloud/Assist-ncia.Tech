@@ -17,6 +17,15 @@ interface CartItem {
   quantity: number;
 }
 
+const formatPhoneNumber = (value: string) => {
+  const cleaned = value.replace(/\D/g, "");
+  if (cleaned.length === 0) return "";
+  if (cleaned.length <= 2) return `(${cleaned}`;
+  if (cleaned.length <= 6) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2)}`;
+  if (cleaned.length <= 10) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+  return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
+};
+
 export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   const [products, setProducts] = useState<Produto[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Produto[]>([]);
@@ -113,6 +122,10 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
       return;
     }
 
+    if (product.warranty && !observations) {
+      setObservations(product.warranty);
+    }
+
     setCart(prevCart => {
       const existing = prevCart.find(item => item.product.id === product.id);
       if (existing) {
@@ -155,6 +168,7 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
 
   // Calculations
   const subtotal = cart.reduce((acc, item) => acc + (item.product.price * item.quantity), 0);
+  const totalCost = cart.reduce((acc, item) => acc + ((item.product.cost || 0) * item.quantity), 0);
   
   const discountNum = Number(discount) || 0;
   const calculatedDiscount = discountType === "value" 
@@ -162,8 +176,9 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
     : (subtotal * discountNum) / 100;
   
   const totalAmount = Math.max(0, subtotal - calculatedDiscount);
+  const estimatedProfit = Math.max(0, totalAmount - totalCost);
 
-  const receivedNum = Number(receivedAmount) || 0;
+  const receivedNum = Number(receivedAmount.replace(",", ".")) || 0;
   const change = Math.max(0, receivedNum - totalAmount);
 
   // Reset received amount to "" only when method changes to cash, or auto-set for card/pix
@@ -207,7 +222,8 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
       productId: item.product.id,
       name: item.product.name,
       quantity: item.quantity,
-      price: item.product.price
+      price: item.product.price,
+      cost: item.product.cost
     }));
 
     const savedUser = localStorage.getItem("user_session");
@@ -411,10 +427,10 @@ Volte sempre!`;
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">Telefone / WhatsApp (Opcional)</label>
                   <input
                     type="text"
-                    placeholder="DDD + Telefone (ex: 11999998888)"
+                    placeholder="(DD) 99999-9999"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition font-mono"
                     value={customClientPhone}
-                    onChange={(e) => setCustomClientPhone(e.target.value)}
+                    onChange={(e) => setCustomClientPhone(formatPhoneNumber(e.target.value))}
                   />
                 </div>
               </div>
@@ -530,6 +546,18 @@ Volte sempre!`;
                             )}
                           </div>
                           <p className="text-[10px] text-slate-500 line-clamp-1 mt-0.5 leading-tight">{p.description || "Sem descrição"}</p>
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {p.cost !== undefined && p.cost > 0 && (
+                              <span className="text-[9px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
+                                Custo: R$ {p.cost.toFixed(2)}
+                              </span>
+                            )}
+                            {p.cost !== undefined && p.cost > 0 && p.price > p.cost && (
+                              <span className="text-[9px] font-bold bg-emerald-50 text-emerald-700 px-1.5 py-0.5 rounded">
+                                Lucro: R$ {(p.price - p.cost).toFixed(2)}
+                              </span>
+                            )}
+                          </div>
                         </div>
 
                         <div className="flex items-center justify-between w-full mt-2 pt-1 border-t border-slate-50">
@@ -556,7 +584,7 @@ Volte sempre!`;
 
         {/* RIGHT COLUMN: SHOPPING CART & TOTALS & CHECKOUT (5 Cols) */}
         <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col max-h-[650px]">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm flex flex-col">
             <h3 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-1.5">
               <ShoppingBag className="w-4 h-4 text-slate-400" />
               Carrinho de Compras
@@ -580,9 +608,21 @@ Volte sempre!`;
                   >
                     <div className="flex-1 min-w-0">
                       <p className="font-extrabold text-slate-800 truncate">{item.product.name}</p>
-                      <p className="text-[10px] text-[#1E88E5] font-black font-mono mt-0.5">
-                        R$ {item.product.price.toFixed(2)} / un
-                      </p>
+                      <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                        <span className="text-[10px] text-[#1E88E5] font-black font-mono">
+                          R$ {item.product.price.toFixed(2)} / un
+                        </span>
+                        {item.product.cost !== undefined && item.product.cost > 0 && (
+                          <span className="text-[9px] font-bold text-slate-400 font-mono">
+                            (Custo: R$ {item.product.cost.toFixed(2)})
+                          </span>
+                        )}
+                        {item.product.cost !== undefined && item.product.cost > 0 && item.product.price > item.product.cost && (
+                          <span className="text-[9px] font-bold text-emerald-600 font-mono">
+                            (Lucro: R$ {(item.product.price - item.product.cost).toFixed(2)})
+                          </span>
+                        )}
+                      </div>
                     </div>
 
                     {/* Quantity Controls */}
@@ -630,6 +670,24 @@ Volte sempre!`;
                   value={observations}
                   onChange={(e) => setObservations(e.target.value)}
                 />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {[
+                    "Garantia de 3 meses",
+                    "Garantia de 30 dias",
+                    "Garantia de 90 dias",
+                    "Sem garantia",
+                    "Película de vidro - Garantia de 3 meses"
+                  ].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => setObservations(preset)}
+                      className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 text-[10px] text-slate-600 hover:text-[#1E88E5] rounded-lg font-bold border border-slate-200/60 transition cursor-pointer"
+                    >
+                      + {preset}
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
 
@@ -745,26 +803,54 @@ Volte sempre!`;
 
                 {/* If cash, show received calculation */}
                 {method === "cash" && (
-                  <div className="grid grid-cols-2 gap-3 p-3 bg-amber-50/50 border border-amber-100/30 rounded-xl">
-                    <div>
-                      <label className="text-[9px] font-extrabold text-amber-800 uppercase tracking-wide block mb-1">Valor Recebido</label>
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1.5 text-xs font-bold text-amber-700">R$</span>
-                        <input
-                          type="text"
-                          placeholder="0,00"
-                          className="w-full pl-7 pr-2 py-1 bg-white border border-amber-200 rounded-lg text-xs font-black text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
-                          value={receivedAmount}
-                          onChange={(e) => setReceivedAmount(e.target.value.replace(/[^0-9.]/g, ""))}
-                        />
+                  <div className="space-y-2 p-3 bg-amber-50/50 border border-amber-100/30 rounded-xl">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-[9px] font-extrabold text-amber-800 uppercase tracking-wide block mb-1">Valor Recebido</label>
+                        <div className="relative">
+                          <span className="absolute left-2.5 top-1.5 text-xs font-bold text-amber-700">R$</span>
+                          <input
+                            type="text"
+                            placeholder="0,00"
+                            className="w-full pl-7 pr-2 py-1 bg-white border border-amber-200 rounded-lg text-xs font-black text-slate-800 focus:outline-none focus:ring-1 focus:ring-amber-500"
+                            value={receivedAmount}
+                            onChange={(e) => setReceivedAmount(e.target.value.replace(/[^0-9.,]/g, ""))}
+                          />
+                        </div>
+                      </div>
+
+                      <div className="text-right flex flex-col justify-center">
+                        <span className="text-[9px] font-extrabold text-amber-800 uppercase tracking-wide">Troco a Devolver</span>
+                        <p className="text-base font-black text-amber-700 font-mono">
+                          R$ {change.toFixed(2)}
+                        </p>
                       </div>
                     </div>
 
-                    <div className="text-right flex flex-col justify-center">
-                      <span className="text-[9px] font-extrabold text-amber-800 uppercase tracking-wide">Troco a Devolver</span>
-                      <p className="text-base font-black text-amber-700 font-mono">
-                        R$ {change.toFixed(2)}
-                      </p>
+                    {/* Quick Payment Helpers */}
+                    <div className="flex flex-wrap gap-1.5 pt-1 border-t border-amber-100/30">
+                      <button
+                        type="button"
+                        onClick={() => setReceivedAmount(totalAmount.toFixed(2))}
+                        className="px-2 py-1 bg-amber-100 hover:bg-amber-200 text-[9px] font-extrabold rounded text-amber-900 transition"
+                      >
+                        Troco Zero
+                      </button>
+                      {[10, 20, 50, 100, 200].map(val => {
+                        if (val >= totalAmount) {
+                          return (
+                            <button
+                              key={val}
+                              type="button"
+                              onClick={() => setReceivedAmount(val.toFixed(2))}
+                              className="px-2 py-1 bg-white hover:bg-slate-100 border border-slate-200/60 text-[9px] font-extrabold rounded text-slate-700 transition"
+                            >
+                              R$ {val}
+                            </button>
+                          );
+                        }
+                        return null;
+                      })}
                     </div>
                   </div>
                 )}
@@ -785,6 +871,12 @@ Volte sempre!`;
                     <span>Total da Venda</span>
                     <span className="font-mono text-emerald-600">R$ {totalAmount.toFixed(2)}</span>
                   </div>
+                  {totalCost > 0 && (
+                    <div className="flex justify-between text-blue-600 font-bold border-t border-dashed border-slate-250 pt-1.5 mt-1.5">
+                      <span>Lucro Estimado</span>
+                      <span className="font-mono">R$ {estimatedProfit.toFixed(2)}</span>
+                    </div>
+                  )}
                 </div>
 
                 <button

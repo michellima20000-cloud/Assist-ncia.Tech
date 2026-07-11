@@ -1269,9 +1269,18 @@ async function startServer() {
     try {
       const { type, date, startDate, endDate } = req.query;
 
-      const pagamentos = await getCollection<Pagamento>("pagamentos");
-      const despesas = await getCollection<Despesa>("despesas");
-      const atendimentos = await getCollection<Atendimento>("atendimentos");
+      const [pagamentos, despesas, atendimentos, vendas, produtos] = await Promise.all([
+        getCollection<Pagamento>("pagamentos"),
+        getCollection<Despesa>("despesas"),
+        getCollection<Atendimento>("atendimentos"),
+        getCollection<Venda>("vendas"),
+        getCollection<Produto>("produtos")
+      ]);
+
+      const productCostMap = new Map<string, number>();
+      produtos.forEach(p => {
+        productCostMap.set(p.id, p.cost || 0);
+      });
 
       let filteredPayments: Pagamento[] = [];
       let startLimit: number;
@@ -1307,6 +1316,46 @@ async function startServer() {
         return exitTime >= startLimit && exitTime <= endLimit;
       });
 
+      // Filter direct sales in the range
+      const filteredVendas = vendas.filter(v => {
+        const vTime = new Date(v.date).getTime();
+        return vTime >= startLimit && vTime <= endLimit;
+      });
+
+      // Direct sales product financials
+      let directSalesRevenue = 0;
+      let directSalesCost = 0;
+      filteredVendas.forEach(v => {
+        const items = v.items || [];
+        items.forEach(item => {
+          const qty = item.quantity || 1;
+          const price = item.price || 0;
+          const cost = item.cost !== undefined ? item.cost : (productCostMap.get(item.productId) || 0);
+          
+          directSalesRevenue += price * qty;
+          directSalesCost += cost * qty;
+        });
+      });
+
+      // Service orders product financials
+      let serviceProductsRevenue = 0;
+      let serviceProductsCost = 0;
+      closedOrders.forEach(a => {
+        const productsUsed = a.products || [];
+        productsUsed.forEach(p => {
+          const qty = p.quantity || 1;
+          const price = p.price || 0;
+          const cost = productCostMap.get(p.productId) || 0;
+
+          serviceProductsRevenue += price * qty;
+          serviceProductsCost += cost * qty;
+        });
+      });
+
+      const productRevenue = directSalesRevenue + serviceProductsRevenue;
+      const productCost = directSalesCost + serviceProductsCost;
+      const productGrossProfit = productRevenue - productCost;
+
       // Totals
       let totalCash = 0;
       let totalCard = 0;
@@ -1328,7 +1377,10 @@ async function startServer() {
           card: totalCard,
           revenue: totalRevenue,
           expense: totalExpense,
-          balance
+          balance,
+          productRevenue,
+          productCost,
+          productGrossProfit
         }
       });
     } catch (error: any) {

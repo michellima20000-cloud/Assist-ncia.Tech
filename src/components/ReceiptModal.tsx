@@ -277,8 +277,17 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
   };
 }
 
+const formatPhoneNumber = (value: string) => {
+  const cleaned = value.replace(/\D/g, "");
+  if (cleaned.length === 0) return "";
+  if (cleaned.length <= 2) return `(${cleaned}`;
+  if (cleaned.length <= 6) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2)}`;
+  if (cleaned.length <= 10) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+  return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
+};
+
 export default function ReceiptModal({ isOpen, onClose, title, content, phone, clientName }: ReceiptModalProps) {
-  const [phoneInput, setPhoneInput] = useState(phone || "");
+  const [phoneInput, setPhoneInput] = useState(() => formatPhoneNumber(phone || ""));
   const [copied, setCopied] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
@@ -303,7 +312,7 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
   );
 
   useEffect(() => {
-    setPhoneInput(phone || parsed.clientPhone || "");
+    setPhoneInput(formatPhoneNumber(phone || parsed.clientPhone || ""));
   }, [phone, parsed.clientPhone]);
 
   if (!isOpen) return null;
@@ -593,16 +602,18 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                   <span class="grid-item-label">Telefone</span>
                   <span class="grid-item-value">${parsed.clientPhone || 'Não informado'}</span>
                 </div>
+                ${parsed.isServiceOrder ? `
                 <div class="grid-item" style="grid-column: span 2;">
                   <span class="grid-item-label">Equipamento / Item em manutenção</span>
                   <span class="grid-item-value">${parsed.equipmentName || 'Não informado'}</span>
                 </div>
+                ` : ''}
                 <div class="grid-item">
                   <span class="grid-item-label">Número / Controle</span>
                   <span class="grid-item-value" style="font-family: monospace;">${parsed.controlNumber}</span>
                 </div>
                 <div class="grid-item">
-                  <span class="grid-item-label">Data/Hora Entrada</span>
+                  <span class="grid-item-label">${parsed.isServiceOrder ? 'Data/Hora Entrada' : 'Data/Hora da Venda'}</span>
                   <span class="grid-item-value">${parsed.date}</span>
                 </div>
                 ${parsed.clientCpf ? `
@@ -613,24 +624,26 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                 ` : ''}
                 ${parsed.imei ? `
                 <div class="grid-item">
-                  <span class="grid-item-label">IMEI</span>
+                  <span class="grid-item-label">${parsed.isServiceOrder ? 'IMEI' : 'Identificação'}</span>
                   <span class="grid-item-value" style="font-family: monospace;">${parsed.imei}</span>
                 </div>
                 ` : ''}
               </div>
 
+              ${parsed.isServiceOrder ? `
               <!-- Defeito -->
               <div class="section-block">
                 <h3 class="section-title">Defeito</h3>
                 <div class="section-content">${parsed.defeito || 'Avaliação de hardware'}</div>
               </div>
+              ` : ''}
 
               <!-- Serviços / Produtos Table -->
               <div class="section-block">
                 <table class="table">
                   <thead>
                     <tr>
-                      <th>Nome do Serviço / Item</th>
+                      <th>${parsed.isServiceOrder ? 'Nome do Serviço / Item' : 'Nome do Produto / Item'}</th>
                       <th class="right">Valor</th>
                     </tr>
                   </thead>
@@ -645,7 +658,7 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                       </tr>
                     `).join('') : `
                       <tr>
-                        <td style="color: #64748b; font-style: italic;">Diagnóstico inicial a realizar</td>
+                        <td style="color: #64748b; font-style: italic;">${parsed.isServiceOrder ? 'Diagnóstico inicial a realizar' : 'Nenhum item registrado'}</td>
                         <td class="right" style="font-family: monospace;">R$ 0,00</td>
                       </tr>
                     `}
@@ -655,8 +668,8 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
 
               <!-- Observações -->
               <div class="section-block">
-                <h3 class="section-title">Observações</h3>
-                <div class="section-content">${parsed.observations || 'Nenhuma observação cadastrada'}</div>
+                <h3 class="section-title">${parsed.isServiceOrder ? 'Observações' : 'Garantia / Observações'}</h3>
+                <div class="section-content">${parsed.observations || (parsed.isServiceOrder ? 'Nenhuma observação cadastrada' : 'Garantia de acordo com os termos descritos.')}</div>
               </div>
 
               <!-- Total -->
@@ -743,7 +756,129 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     doc.setLineWidth(0.4);
     doc.line(15, 40, 195, 40);
 
-    // 2. DOCUMENT SUBTITLE
+    const isReport = content.toUpperCase().includes("FECHAMENTO DO DIA") || 
+                     content.toUpperCase().includes("FECHAMENTO DE CAIXA") || 
+                     content.toUpperCase().includes("RESUMO DO CAIXA") ||
+                     title.toUpperCase().includes("FECHAMENTO") ||
+                     title.toUpperCase().includes("RELATÓRIO") ||
+                     (!parsed.isServiceOrder && !parsed.isVenda && parsed.items.length === 0);
+
+    if (isReport) {
+      // 2. REPORT TITLE
+      doc.setFontSize(13);
+      doc.setFont("Helvetica", "bold");
+      doc.setTextColor(15, 23, 42); // slate-900
+      doc.text(title.toUpperCase(), 15, 48);
+
+      // 3. META DATA BOX
+      doc.setFillColor(248, 250, 252); // slate-50
+      doc.rect(15, 52, 180, 16, "F");
+      
+      doc.setDrawColor(241, 245, 249); // slate-100
+      doc.setLineWidth(0.5);
+      doc.rect(15, 52, 180, 16, "S");
+
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(8.5);
+      doc.setTextColor(2, 132, 199); // sky-700
+      doc.text("INFORMAÇÕES DE CONTROLE DE CAIXA", 20, 58);
+
+      doc.setFont("Helvetica", "normal");
+      doc.setFontSize(9);
+      doc.setTextColor(51, 65, 85);
+      doc.text(`Operador: Administrador`, 20, 64);
+      doc.text(`Data/Hora de Emissão: ${parsed.date || new Date().toLocaleString("pt-BR")}`, 110, 64);
+
+      let currentY = 78;
+
+      // Split the raw content by lines and format beautifully
+      const lines = content.split("\n").map(l => l.trim());
+      
+      lines.forEach((line) => {
+        if (!line) {
+          currentY += 3;
+          return;
+        }
+
+        // Handle page break
+        if (currentY > 270) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        const upper = line.toUpperCase();
+
+        if (line.startsWith("---") || line.startsWith("===")) {
+          doc.setDrawColor(226, 232, 240); // slate-200
+          doc.setLineWidth(0.4);
+          doc.line(15, currentY, 195, currentY);
+          currentY += 5;
+        } else if (
+          upper.startsWith("FECHAMENTO") || 
+          upper.startsWith("RESUMO DO CAIXA") || 
+          upper.startsWith("ORDENS ENTREGUES") ||
+          upper.startsWith("ASSINATURA RESPONSÁVEL")
+        ) {
+          currentY += 4;
+          doc.setFont("Helvetica", "bold");
+          doc.setFontSize(10);
+          doc.setTextColor(30, 136, 229); // blue primary
+          doc.text(line, 15, currentY);
+          currentY += 7;
+        } else {
+          doc.setFont("Helvetica", "normal");
+          doc.setFontSize(9);
+          
+          const colonIndex = line.indexOf(":");
+          if (colonIndex !== -1) {
+            const label = line.substring(0, colonIndex + 1).trim();
+            const val = line.substring(colonIndex + 1).trim();
+
+            doc.setFont("Helvetica", "bold");
+            doc.setTextColor(15, 23, 42); // slate-900
+            doc.text(label, 15, currentY);
+
+            doc.setFont("Helvetica", "bold");
+            if (val.includes("R$")) {
+              if (val.includes("(+)") || val.includes("Total") || val.includes("Saldo") || val.includes("ARRECADADO")) {
+                doc.setTextColor(16, 185, 129); // emerald-600
+              } else if (val.includes("(-)") || val.includes("DESPESAS")) {
+                doc.setTextColor(239, 68, 68); // red-600
+              } else {
+                doc.setTextColor(15, 23, 42);
+              }
+            } else {
+              doc.setFont("Helvetica", "normal");
+              doc.setTextColor(71, 85, 105); // slate-600
+            }
+            doc.text(val, 195, currentY, { align: "right" });
+          } else {
+            doc.setTextColor(71, 85, 105); // slate-600
+            doc.text(line, 15, currentY);
+          }
+          currentY += 6.5;
+        }
+      });
+
+      // Signature line for report if space is available
+      if (currentY < 240) {
+        currentY += 15;
+        doc.setDrawColor(148, 163, 184); // slate-400
+        doc.setLineWidth(0.3);
+        doc.line(70, currentY, 140, currentY);
+        
+        doc.setFont("Helvetica", "bold");
+        doc.setFontSize(8.5);
+        doc.setTextColor(71, 85, 105);
+        doc.text("Assinatura do Responsável", 105, currentY + 4, { align: "center" });
+      }
+
+      const filename = `relatorio-caixa-${new Date().toISOString().split('T')[0]}.pdf`;
+      doc.save(filename);
+      return;
+    }
+
+    // 2. DOCUMENT SUBTITLE FOR STANDARD OS / VENDA
     doc.setFontSize(13);
     doc.setFont("Helvetica", "bold");
     doc.setTextColor(15, 23, 42); // slate-900
@@ -802,12 +937,12 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(30, 136, 229); // blue primary
-    doc.text("DESCRIÇÃO DOS ITENS E SERVIÇOS", 15, tableStartY);
+    doc.text(parsed.isServiceOrder ? "DESCRIÇÃO DOS ITENS E SERVIÇOS" : "DESCRIÇÃO DOS PRODUTOS", 15, tableStartY);
 
     doc.setFontSize(8);
     doc.setTextColor(100, 116, 139); // slate-500
     doc.text("Qtd", 15, tableStartY + 6);
-    doc.text("Descrição do Produto / Serviço", 27, tableStartY + 6);
+    doc.text(parsed.isServiceOrder ? "Descrição do Produto / Serviço" : "Nome do Produto", 27, tableStartY + 6);
     doc.text("Valor Unit.", 145, tableStartY + 6, { align: "right" });
     doc.text("Subtotal", 195, tableStartY + 6, { align: "right" });
 
@@ -824,6 +959,24 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
 
     if (parsed.items.length > 0) {
       parsed.items.forEach((item, index) => {
+        // Handle page overflow for item list
+        if (currentY > 260) {
+          doc.addPage();
+          
+          // Draw a small header on the next page
+          doc.setFillColor(30, 136, 229);
+          doc.rect(15, 15, 180, 1.5, "F");
+          doc.setFont("Helvetica", "bold");
+          doc.setFontSize(8);
+          doc.setTextColor(100, 116, 139);
+          doc.text(`Comprovante ${parsed.controlNumber} - Continuação`, 15, 22);
+          
+          doc.setDrawColor(226, 232, 240);
+          doc.line(15, 25, 195, 25);
+          
+          currentY = 35;
+        }
+
         // Stripe background
         if (index % 2 === 1) {
           doc.setFillColor(248, 250, 252);
@@ -836,7 +989,13 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
 
         doc.setFont("Helvetica", "normal");
         doc.setTextColor(51, 65, 85);
-        doc.text(item.name, 27, currentY);
+
+        // Truncate name safely to avoid overflow
+        let displayName = item.name;
+        if (doc.getTextWidth(displayName) > 110) {
+          displayName = displayName.substring(0, 52) + "...";
+        }
+        doc.text(displayName, 27, currentY);
 
         doc.text(`R$ ${item.price.toFixed(2).replace(".", ",")}`, 145, currentY, { align: "right" });
 
@@ -865,6 +1024,12 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     
     currentY += 4;
 
+    // Handle page overflow for Total row
+    if (currentY > 255) {
+      doc.addPage();
+      currentY = 25;
+    }
+
     // 6. TOTAL ROW
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(10);
@@ -879,26 +1044,41 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     currentY += 12;
 
     // 7. WARRANTY & OBSERVATIONS FOOTER BOX
+    const defaultObs = parsed.isServiceOrder 
+      ? "Garantia legal de 90 dias (3 meses) cobrindo exclusivamente defeitos de fabricação ou de aplicação da película/peças, sob condições normais de uso."
+      : "Garantia legal conforme termos estabelecidos. Os produtos adquiridos possuem garantia conforme especificação do fabricante ou estabelecimento.";
+    const rawObs = parsed.observations || defaultObs;
+    const splitObs = doc.splitTextToSize(rawObs, 172);
+    const boxHeight = Math.max(26, 12 + (splitObs.length * 4.5));
+
+    // Handle page overflow for observations box
+    if (currentY + boxHeight > 265) {
+      doc.addPage();
+      currentY = 25;
+    }
+
     doc.setFillColor(248, 250, 252); // slate-50
     doc.setDrawColor(226, 232, 240); // slate-200
     doc.setLineWidth(0.4);
-    doc.rect(15, currentY, 180, 26, "FD");
+    doc.rect(15, currentY, 180, boxHeight, "FD");
 
     doc.setFont("Helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(2, 132, 199); // sky-700
-    doc.text("OBSERVAÇÕES TÉCNICAS & GARANTIA", 19, currentY + 5.5);
+    doc.text(parsed.isServiceOrder ? "OBSERVAÇÕES TÉCNICAS & GARANTIA" : "OBSERVAÇÕES & GARANTIA DE VENDA", 19, currentY + 5.5);
 
     doc.setFont("Helvetica", "normal");
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105); // slate-600
-    
-    // Format the observations/warranty cleanly
-    const rawObs = parsed.observations || "Garantia legal de 90 dias (3 meses) cobrindo exclusivamente defeitos de fabricação ou de aplicação da película/peças, sob condições normais de uso.";
-    const splitObs = doc.splitTextToSize(rawObs, 172);
     doc.text(splitObs, 19, currentY + 11);
 
-    currentY += 38;
+    currentY += boxHeight + 12;
+
+    // Handle page overflow for signature block
+    if (currentY + 25 > 280) {
+      doc.addPage();
+      currentY = 25;
+    }
 
     // 8. SIGNATURE
     doc.setDrawColor(148, 163, 184); // slate-400
@@ -1122,7 +1302,7 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
               )}
 
               {/* Client Grid */}
-              <div className="grid grid-cols-2 gap-x-6 gap-y-3 mb-6 text-[11px] leading-relaxed">
+              <div className="grid-cols-2 gap-x-6 gap-y-3 mb-6 text-[11px] leading-relaxed grid">
                 <div className="flex flex-col border-b border-slate-100 pb-1.5">
                   <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">Nome</span>
                   <span className="font-bold text-slate-800">{parsed.clientName}</span>
@@ -1131,16 +1311,20 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                   <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">Telefone</span>
                   <span className="font-bold text-slate-800">{parsed.clientPhone || "Não cadastrado"}</span>
                 </div>
-                <div className="flex flex-col border-b border-slate-100 pb-1.5 col-span-2">
-                  <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">Item em manutenção</span>
-                  <span className="font-bold text-slate-800">{parsed.equipmentName || "Dispositivo em diagnóstico"}</span>
-                </div>
+                {parsed.isServiceOrder && (
+                  <div className="flex flex-col border-b border-slate-100 pb-1.5 col-span-2">
+                    <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">Item em manutenção</span>
+                    <span className="font-bold text-slate-800">{parsed.equipmentName || "Dispositivo em diagnóstico"}</span>
+                  </div>
+                )}
                 <div className="flex flex-col border-b border-slate-100 pb-1.5">
                   <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">Número de Controle</span>
                   <span className="font-mono font-bold text-slate-800">{parsed.controlNumber}</span>
                 </div>
                 <div className="flex flex-col border-b border-slate-100 pb-1.5">
-                  <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">Data de Entrada</span>
+                  <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">
+                    {parsed.isServiceOrder ? "Data de Entrada" : "Data da Venda"}
+                  </span>
                   <span className="font-bold text-slate-800">{parsed.date}</span>
                 </div>
                 {parsed.clientCpf && (
@@ -1151,22 +1335,26 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                 )}
                 {parsed.imei && (
                   <div className="flex flex-col border-b border-slate-100 pb-1.5">
-                    <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">IMEI / Identificação</span>
+                    <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">
+                      {parsed.isServiceOrder ? "IMEI / Identificação" : "Identificação"}
+                    </span>
                     <span className="font-mono font-bold text-slate-800">{parsed.imei}</span>
                   </div>
                 )}
               </div>
 
               {/* Defeito Section */}
-              <div className="mb-4">
-                <h5 className="font-bold text-slate-900 border-b border-slate-200 pb-1 text-[11px] uppercase tracking-wider mb-1.5">Defeito</h5>
-                <p className="text-slate-700 font-medium whitespace-pre-wrap pl-1">{parsed.defeito || "Problemas gerais na placa ou circuito"}</p>
-              </div>
+              {parsed.isServiceOrder && (
+                <div className="mb-4">
+                  <h5 className="font-bold text-slate-900 border-b border-slate-200 pb-1 text-[11px] uppercase tracking-wider mb-1.5">Defeito</h5>
+                  <p className="text-slate-700 font-medium whitespace-pre-wrap pl-1">{parsed.defeito || "Problemas gerais na placa ou circuito"}</p>
+                </div>
+              )}
 
               {/* Services List Table */}
               <div className="mb-4">
                 <div className="flex justify-between font-black text-slate-900 border-b border-slate-900 pb-1 text-[11px] uppercase tracking-wider mb-1.5">
-                  <span>Nome do serviço</span>
+                  <span>{parsed.isServiceOrder ? "Nome do serviço / peça" : "Nome do produto"}</span>
                   <span>Valor R$</span>
                 </div>
                 <div className="space-y-1.5">
@@ -1181,15 +1369,21 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                       </span>
                     </div>
                   )) : (
-                    <div className="text-slate-400 italic text-[11px] py-1">Análise inicial do hardware pendente</div>
+                    <div className="text-slate-400 italic text-[11px] py-1">
+                      {parsed.isServiceOrder ? "Análise inicial do hardware pendente" : "Nenhum produto registrado"}
+                    </div>
                   )}
                 </div>
               </div>
 
               {/* Observações Section */}
               <div className="mb-4">
-                <h5 className="font-bold text-slate-900 border-b border-slate-200 pb-1 text-[11px] uppercase tracking-wider mb-1.5">Observações</h5>
-                <p className="text-slate-700 font-medium whitespace-pre-wrap pl-1">{parsed.observations || "Nenhuma observação técnica registrada."}</p>
+                <h5 className="font-bold text-slate-900 border-b border-slate-200 pb-1 text-[11px] uppercase tracking-wider mb-1.5">
+                  {parsed.isServiceOrder ? "Observações" : "Garantia / Observações"}
+                </h5>
+                <p className="text-slate-700 font-medium whitespace-pre-wrap pl-1">
+                  {parsed.observations || (parsed.isServiceOrder ? "Nenhuma observação técnica registrada." : "Garantia de acordo com os termos descritos.")}
+                </p>
               </div>
 
               {/* Total Row */}
@@ -1218,8 +1412,8 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
             <input
               type="text"
               value={phoneInput}
-              onChange={(e) => setPhoneInput(e.target.value)}
-              placeholder="DDD + Número (ex: 11999998888)"
+              onChange={(e) => setPhoneInput(formatPhoneNumber(e.target.value))}
+              placeholder="(DD) 99999-9999"
               className="flex-1 px-3 py-2 bg-slate-900 border border-slate-700 rounded-xl text-xs text-white outline-none focus:border-blue-500 font-mono placeholder:text-slate-600"
             />
           </div>
