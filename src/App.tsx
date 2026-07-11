@@ -111,7 +111,8 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
   const fetchStats = async () => {
     try {
       const todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD local format
-      const res = await fetch(`/api/stats?today=${todayStr}`);
+      const offset = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/stats?today=${todayStr}&offset=${offset}`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -146,8 +147,9 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
   // Build and display daily summary ESC/POS ticket
   const handlePrintDailySummary = async () => {
     try {
-      const todayStr = new Date().toISOString().split("T")[0];
-      const res = await fetch(`/api/reports?type=daily&date=${todayStr}`);
+      const todayStr = new Date().toLocaleDateString('sv-SE');
+      const offset = new Date().getTimezoneOffset();
+      const res = await fetch(`/api/reports?type=daily&date=${todayStr}&offset=${offset}`);
       if (res.ok) {
         const data = await res.json();
         const { summary, closedOrders } = data;

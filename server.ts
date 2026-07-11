@@ -455,13 +455,23 @@ async function startServer() {
       // Get target date (default to server's local YYYY-MM-DD)
       const todayQuery = req.query.today as string;
       const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
+      const offsetQuery = req.query.offset ? Number(req.query.offset) : null;
+
+      const getLocalDateStr = (isoString: string) => {
+        if (!isoString) return "";
+        if (offsetQuery === null) return isoString.substring(0, 10);
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        return localTime.toISOString().substring(0, 10);
+      };
 
       // Financial calculations
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p.date && p.date.substring(0, 10) === todayStr);
+      const todayPagamentos = pagamentos.filter(p => p.date && getLocalDateStr(p.date) === todayStr);
 
       todayPagamentos.forEach(p => {
         if (p.method === "cash") {
@@ -476,7 +486,7 @@ async function startServer() {
         .filter(a => a.status !== "finalizado")
         .reduce((acc, a) => acc + (a.totalAmount || 0), 0);
 
-      const todayDespesas = despesas.filter(d => d.date && d.date.substring(0, 10) === todayStr);
+      const todayDespesas = despesas.filter(d => d.date && getLocalDateStr(d.date) === todayStr);
       const expenses = todayDespesas.reduce((acc, d) => acc + (d.amount || 0), 0);
 
       res.json({
@@ -1274,7 +1284,8 @@ async function startServer() {
   // History / Reports
   app.get("/api/reports", async (req, res) => {
     try {
-      const { type, date, startDate, endDate } = req.query;
+      const { type, date, startDate, endDate, offset } = req.query;
+      const offsetQuery = offset ? Number(offset) : null;
 
       const [pagamentos, despesas, atendimentos, vendas, produtos] = await Promise.all([
         getCollection<Pagamento>("pagamentos"),
@@ -1289,44 +1300,54 @@ async function startServer() {
         productCostMap.set(p.id, p.cost || 0);
       });
 
+      const getLocalDateStr = (isoString: string) => {
+        if (!isoString) return "";
+        if (offsetQuery === null) return isoString.substring(0, 10);
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        return localTime.toISOString().substring(0, 10);
+      };
+
       let filteredPayments: Pagamento[] = [];
-      let startLimit: number;
-      let endLimit: number;
+      let startLimitStr: string;
+      let endLimitStr: string;
 
       if (type === "daily") {
-        const targetDateStr = (date as string) || new Date().toISOString().split("T")[0];
-        startLimit = new Date(`${targetDateStr}T00:00:00`).getTime();
-        endLimit = new Date(`${targetDateStr}T23:59:59.999`).getTime();
+        const targetDateStr = (date as string) || new Date().toISOString().substring(0, 10);
+        startLimitStr = targetDateStr;
+        endLimitStr = targetDateStr;
       } else {
-        const sDate = (startDate as string) || new Date().toISOString().split("T")[0];
-        const eDate = (endDate as string) || new Date().toISOString().split("T")[0];
-        startLimit = new Date(`${sDate}T00:00:00`).getTime();
-        endLimit = new Date(`${eDate}T23:59:59.999`).getTime();
+        startLimitStr = (startDate as string) || new Date().toISOString().substring(0, 10);
+        endLimitStr = (endDate as string) || new Date().toISOString().substring(0, 10);
       }
 
       // Filter payments in the range
       filteredPayments = pagamentos.filter(p => {
-        const pTime = new Date(p.date).getTime();
-        return pTime >= startLimit && pTime <= endLimit;
+        if (!p.date) return false;
+        const localDate = getLocalDateStr(p.date);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Filter expenses in the range
       const filteredExpenses = despesas.filter(d => {
-        const dTime = new Date(d.date).getTime();
-        return dTime >= startLimit && dTime <= endLimit;
+        if (!d.date) return false;
+        const localDate = getLocalDateStr(d.date);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Detailed service orders closed in this range
       const closedOrders = atendimentos.filter(a => {
         if (a.status !== "finalizado" || !a.exitDate) return false;
-        const exitTime = new Date(a.exitDate).getTime();
-        return exitTime >= startLimit && exitTime <= endLimit;
+        const localDate = getLocalDateStr(a.exitDate);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Filter direct sales in the range
       const filteredVendas = vendas.filter(v => {
-        const vTime = new Date(v.date).getTime();
-        return vTime >= startLimit && vTime <= endLimit;
+        if (!v.date) return false;
+        const localDate = getLocalDateStr(v.date);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Direct sales product financials

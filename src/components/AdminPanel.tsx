@@ -138,12 +138,13 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   const handleGenerateReport = async () => {
     try {
       let queryParams = "";
+      const offset = new Date().getTimezoneOffset();
       if (reportType === 'daily') {
-        queryParams = `type=daily&date=${reportDate}`;
+        queryParams = `type=daily&date=${reportDate}&offset=${offset}`;
       } else if (reportType === 'range') {
-        queryParams = `type=range&startDate=${reportStartDate}&endDate=${reportEndDate}`;
+        queryParams = `type=range&startDate=${reportStartDate}&endDate=${reportEndDate}&offset=${offset}`;
       } else if (reportType === 'annual') {
-        queryParams = `type=range&startDate=${reportYear}-01-01&endDate=${reportYear}-12-31`;
+        queryParams = `type=range&startDate=${reportYear}-01-01&endDate=${reportYear}-12-31&offset=${offset}`;
       }
 
       const res = await fetch(`/api/reports?${queryParams}`);

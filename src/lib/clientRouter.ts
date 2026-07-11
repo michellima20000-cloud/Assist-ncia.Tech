@@ -98,12 +98,23 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       // Get target date (default to server's/client's local YYYY-MM-DD)
       const todayQuery = urlObj.searchParams.get("today");
       const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
+      const offsetParam = urlObj.searchParams.get("offset");
+      const offsetQuery = offsetParam ? Number(offsetParam) : null;
+
+      const getLocalDateStr = (isoString: string) => {
+        if (!isoString) return "";
+        if (offsetQuery === null) return isoString.substring(0, 10);
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        return localTime.toISOString().substring(0, 10);
+      };
 
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p.date && p.date.substring(0, 10) === todayStr);
+      const todayPagamentos = pagamentos.filter(p => p.date && getLocalDateStr(p.date) === todayStr);
 
       todayPagamentos.forEach(p => {
         const amount = Number(p.totalAmount || 0);
@@ -119,7 +130,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         .filter(a => a.status !== "finalizado")
         .reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0);
 
-      const todayDespesas = despesas.filter(d => d.date && d.date.substring(0, 10) === todayStr);
+      const todayDespesas = despesas.filter(d => d.date && getLocalDateStr(d.date) === todayStr);
       const expenses = todayDespesas.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
 
       return new Response(JSON.stringify({
@@ -144,6 +155,8 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const dateParam = urlObj.searchParams.get("date");
       const startDateParam = urlObj.searchParams.get("startDate");
       const endDateParam = urlObj.searchParams.get("endDate");
+      const offsetParam = urlObj.searchParams.get("offset");
+      const offsetQuery = offsetParam ? Number(offsetParam) : null;
 
       const pagamentosSnap = await getDocs(collection(db, "pagamentos"));
       const pagamentos = pagamentosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
@@ -154,37 +167,44 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const atendimentosSnap = await getDocs(collection(db, "atendimentos"));
       const atendimentos = atendimentosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
 
+      const getLocalDateStr = (isoString: string) => {
+        if (!isoString) return "";
+        if (offsetQuery === null) return isoString.substring(0, 10);
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        return localTime.toISOString().substring(0, 10);
+      };
+
       let filteredPayments: any[] = [];
-      let startLimit: number;
-      let endLimit: number;
+      let startLimitStr: string;
+      let endLimitStr: string;
 
       if (type === "daily") {
-        const targetDateStr = dateParam || new Date().toISOString().split("T")[0];
-        startLimit = new Date(`${targetDateStr}T00:00:00`).getTime();
-        endLimit = new Date(`${targetDateStr}T23:59:59.999`).getTime();
+        const targetDateStr = dateParam || new Date().toISOString().substring(0, 10);
+        startLimitStr = targetDateStr;
+        endLimitStr = targetDateStr;
       } else {
-        const sDate = startDateParam || new Date().toISOString().split("T")[0];
-        const eDate = endDateParam || new Date().toISOString().split("T")[0];
-        startLimit = new Date(`${sDate}T00:00:00`).getTime();
-        endLimit = new Date(`${eDate}T23:59:59.999`).getTime();
+        startLimitStr = startDateParam || new Date().toISOString().substring(0, 10);
+        endLimitStr = endDateParam || new Date().toISOString().substring(0, 10);
       }
 
       filteredPayments = pagamentos.filter(p => {
         if (!p.date) return false;
-        const pTime = new Date(p.date).getTime();
-        return pTime >= startLimit && pTime <= endLimit;
+        const localDate = getLocalDateStr(p.date);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       const filteredExpenses = despesas.filter(d => {
         if (!d.date) return false;
-        const dTime = new Date(d.date).getTime();
-        return dTime >= startLimit && dTime <= endLimit;
+        const localDate = getLocalDateStr(d.date);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       const closedOrders = atendimentos.filter(a => {
         if (a.status !== "finalizado" || !a.exitDate) return false;
-        const exitTime = new Date(a.exitDate).getTime();
-        return exitTime >= startLimit && exitTime <= endLimit;
+        const localDate = getLocalDateStr(a.exitDate);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       let totalCash = 0;

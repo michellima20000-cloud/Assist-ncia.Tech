@@ -43,14 +43,15 @@ export default function WeeklySalesChart() {
       setLoading(true);
       setError(null);
 
-      const todayStr = new Date().toISOString().substring(0, 10);
+      const todayStr = new Date().toLocaleDateString('sv-SE');
       const sevenDaysAgo = new Date();
       sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 6);
-      const startStr = sevenDaysAgo.toISOString().substring(0, 10);
+      const startStr = sevenDaysAgo.toLocaleDateString('sv-SE');
+      const offset = new Date().getTimezoneOffset();
 
       const [vendasRes, reportsRes] = await Promise.all([
         fetch("/api/vendas"),
-        fetch(`/api/reports?type=range&startDate=${startStr}&endDate=${todayStr}`)
+        fetch(`/api/reports?type=range&startDate=${startStr}&endDate=${todayStr}&offset=${offset}`)
       ]);
 
       if (!vendasRes.ok || !reportsRes.ok) {
