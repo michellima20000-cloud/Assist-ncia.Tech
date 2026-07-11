@@ -39,6 +39,7 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
+  const [atendimentoFlowMode, setAtendimentoFlowMode] = useState<"atendimento" | "saida">("atendimento");
   const [stats, setStats] = useState<DashboardStats>({
     naAssistenciaCount: 0,
     entregaCount: 0,
@@ -367,7 +368,10 @@ ________________________`;
 
                 {/* ATENDIMENTO (azul) */}
                 <button
-                  onClick={() => setActiveTab("atendimento")}
+                  onClick={() => {
+                    setAtendimentoFlowMode("atendimento");
+                    setActiveTab("atendimento");
+                  }}
                   className="p-5 bg-white border border-slate-100 hover:border-blue-200 hover:bg-blue-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
                 >
                   <div className="w-12 h-12 bg-blue-100 text-[#1E88E5] rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
@@ -381,7 +385,10 @@ ________________________`;
 
                 {/* SAÍDA (vermelho) */}
                 <button
-                  onClick={() => setActiveTab("atendimento")} // Click flows to active list where selecting an item triggers Saida
+                  onClick={() => {
+                    setAtendimentoFlowMode("saida");
+                    setActiveTab("atendimento");
+                  }}
                   className="p-5 bg-white border border-slate-100 hover:border-red-200 hover:bg-red-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
                 >
                   <div className="w-12 h-12 bg-red-100 text-red-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
@@ -546,6 +553,7 @@ ________________________`;
         {activeTab === "atendimento" && (
           <AtendimentosAndamento
             onBack={() => setActiveTab("dashboard")}
+            flowMode={atendimentoFlowMode}
             onSelectAtendimento={(a) => {
               setSelectedAtendimento(a);
               setActiveTab("saida");
@@ -557,6 +565,7 @@ ________________________`;
         {activeTab === "saida" && selectedAtendimento && (
           <Saida
             atendimento={selectedAtendimento}
+            flowMode={atendimentoFlowMode}
             onBack={() => setActiveTab("atendimento")}
             onUpdateAtendimento={(updated) => {
               setSelectedAtendimento(updated);

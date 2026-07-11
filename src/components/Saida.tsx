@@ -29,6 +29,7 @@ interface SaidaProps {
   onGoToPayment: (at: Atendimento, notesFin: string) => void;
   onPrintIntakeReceipt: (at: Atendimento, hideValues: boolean, clientObj?: Cliente | null) => void;
   onUpdateAtendimento?: (at: Atendimento) => void;
+  flowMode?: "atendimento" | "saida";
 }
 
 const STATUS_OPTIONS = [
@@ -58,7 +59,7 @@ const DOT_COORDINATES: Record<number, { x: string; y: string }> = {
   9: { x: "83.3%", y: "83.3%" }
 };
 
-export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntakeReceipt, onUpdateAtendimento }: SaidaProps) {
+export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntakeReceipt, onUpdateAtendimento, flowMode }: SaidaProps) {
   const [client, setClient] = useState<Cliente | null>(null);
   const [notesFin, setNotesFin] = useState(atendimento.notesFin || "");
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -531,8 +532,12 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-base font-bold text-slate-800">Finalizar & Entregar Equipamento</h2>
-            <p className="text-slate-500 text-xs">Revisão completa e checkout da Ordem de Serviço</p>
+            <h2 className="text-base font-bold text-slate-800">
+              {flowMode === "atendimento" ? "Ficha de Atendimento Técnico" : "Finalizar & Entregar Equipamento"}
+            </h2>
+            <p className="text-slate-500 text-xs">
+              {flowMode === "atendimento" ? "Atualização técnica e laudo do aparelho na bancada" : "Revisão completa e checkout da Ordem de Serviço"}
+            </p>
           </div>
         </div>
       </div>
@@ -1281,24 +1286,69 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
 
         {/* Bottom Actions Row styled exactly like the user's screenshot */}
         <div className="flex flex-col gap-3 pt-4 border-t border-slate-100">
-          {/* Button 1: PAGAMENTO */}
-          <button
-            onClick={() => onGoToPayment(atendimento, notesFin)}
-            className="w-full py-3.5 bg-[#1E88E5] hover:bg-blue-600 active:bg-blue-700 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 transition uppercase tracking-widest shadow-lg shadow-blue-500/10"
-          >
-            <CreditCard className="w-5 h-5 text-white" />
-            PAGAMENTO
-          </button>
+          {flowMode === "atendimento" ? (
+            /* Button 1: MARCAR COMO PRONTO */
+            <button
+              onClick={async () => {
+                try {
+                  const res = await fetch(`/api/atendimentos/${atendimento.id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                      status: "entrega",
+                      detailedStatus: "Pronto para entrega",
+                      notesFin
+                    })
+                  });
+                  if (res.ok) {
+                    const updated = await res.json();
+                    if (onUpdateAtendimento) {
+                      onUpdateAtendimento(updated);
+                    }
+                    alert("Equipamento marcado como PRONTO PARA ENTREGA!");
+                    // Trigger WhatsApp
+                    if (client) {
+                      const cleanPhone = client.phone.replace(/\D/g, "");
+                      const text = `Olá ${client.name}! Seu equipamento ${atendimento.item} ${atendimento.brand} ${atendimento.model} (OS: ${atendimento.controlNumber}) está pronto para entrega! Valor total: R$ ${atendimento.totalAmount.toFixed(2)}.`;
+                      const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                      const baseUrl = isMobile ? "https://api.whatsapp.com/send" : "https://web.whatsapp.com/send";
+                      const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : "55" + cleanPhone;
+                      const url = `${baseUrl}?phone=${formattedPhone}&text=${encodeURIComponent(text)}`;
+                      window.open(url, "_blank");
+                    }
+                    onBack();
+                  }
+                } catch (err) {
+                  console.error(err);
+                }
+              }}
+              className="w-full py-3.5 bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 transition uppercase tracking-widest shadow-lg shadow-emerald-500/10"
+            >
+              <Check className="w-5 h-5 text-white" />
+              CONCLUIR MANUTENÇÃO (MARCAR COMO PRONTO)
+            </button>
+          ) : (
+            /* Button 1: PAGAMENTO */
+            <button
+              onClick={() => onGoToPayment(atendimento, notesFin)}
+              className="w-full py-3.5 bg-[#1E88E5] hover:bg-blue-600 active:bg-blue-700 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 transition uppercase tracking-widest shadow-lg shadow-blue-500/10"
+            >
+              <CreditCard className="w-5 h-5 text-white" />
+              PAGAMENTO
+            </button>
+          )}
 
           {/* Button 2: ENVIAR MENSAGEM: FIM DO SERVIÇO */}
-          <button
-            type="button"
-            onClick={handleSendWhatsApp}
-            className="w-full py-3.5 bg-slate-600 hover:bg-slate-700 active:bg-slate-800 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 transition uppercase tracking-widest"
-          >
-            <MessageSquare className="w-5 h-5 text-white" />
-            ENVIAR MENSAGEM: FIM DO SERVIÇO
-          </button>
+          {flowMode !== "atendimento" && (
+            <button
+              type="button"
+              onClick={handleSendWhatsApp}
+              className="w-full py-3.5 bg-slate-600 hover:bg-slate-700 active:bg-slate-800 text-white font-black text-sm rounded-xl flex items-center justify-center gap-2 transition uppercase tracking-widest"
+            >
+              <MessageSquare className="w-5 h-5 text-white" />
+              ENVIAR MENSAGEM: FIM DO SERVIÇO
+            </button>
+          )}
 
           {/* Button 3: 2ª VIA RECIBO DE ENTRADA */}
           <button

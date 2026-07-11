@@ -5,9 +5,10 @@ import { Atendimento, Cliente } from "../types";
 interface AtendimentosAndamentoProps {
   onBack: () => void;
   onSelectAtendimento: (a: Atendimento) => void;
+  flowMode?: "atendimento" | "saida";
 }
 
-export default function AtendimentosAndamento({ onBack, onSelectAtendimento }: AtendimentosAndamentoProps) {
+export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flowMode }: AtendimentosAndamentoProps) {
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [search, setSearch] = useState("");
@@ -46,8 +47,16 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento }: A
     }
   };
 
-  // Filter only active ones ("na_assistencia" or "entrega")
-  const activeOrders = atendimentos.filter(a => a.status === "na_assistencia" || a.status === "entrega");
+  // Filter only active ones ("na_assistencia" or "entrega") depending on flowMode
+  const activeOrders = atendimentos.filter(a => {
+    if (flowMode === "atendimento") {
+      return a.status === "na_assistencia";
+    }
+    if (flowMode === "saida") {
+      return a.status === "entrega";
+    }
+    return a.status === "na_assistencia" || a.status === "entrega";
+  });
 
   const filtered = activeOrders.filter(a => {
     const cli = getCliente(a.clienteId);
@@ -92,8 +101,20 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento }: A
             <ArrowLeft className="w-5 h-5" />
           </button>
           <div>
-            <h2 className="text-base font-bold text-slate-800">Aparelhos na Assistência</h2>
-            <p className="text-slate-500 text-xs">Aparelhos em manutenção e prontos para entrega</p>
+            <h2 className="text-base font-bold text-slate-800">
+              {flowMode === "atendimento" 
+                ? "Aparelhos na Bancada (Manutenção)" 
+                : flowMode === "saida" 
+                  ? "Aparelhos Prontos para Saída" 
+                  : "Aparelhos na Assistência"}
+            </h2>
+            <p className="text-slate-500 text-xs">
+              {flowMode === "atendimento" 
+                ? "Dispositivos em diagnóstico ou manutenção ativa na assistência" 
+                : flowMode === "saida" 
+                  ? "Dispositivos prontos para faturamento, pagamento e retirada" 
+                  : "Aparelhos em manutenção e prontos para entrega"}
+            </p>
           </div>
         </div>
       </div>

@@ -98,6 +98,33 @@ interface ParsedReceipt {
   paymentMethod: string;
 }
 
+// Helper to parse currency strings of various formats (PT-BR, standard, etc.) safely
+function parsePriceStr(str: string): number {
+  if (!str) return 0;
+  let cleaned = str.replace(/R\$/gi, "").trim();
+  const hasComma = cleaned.includes(",");
+  const hasDot = cleaned.includes(".");
+  
+  if (hasComma && hasDot) {
+    const commaIndex = cleaned.lastIndexOf(",");
+    const dotIndex = cleaned.lastIndexOf(".");
+    if (commaIndex > dotIndex) {
+      // PT-BR style: 1.500,00
+      cleaned = cleaned.replace(/\./g, "").replace(",", ".");
+    } else {
+      // US style: 1,500.00
+      cleaned = cleaned.replace(/,/g, "");
+    }
+  } else if (hasComma) {
+    // ONLY comma: 150,00 -> 150.00
+    cleaned = cleaned.replace(",", ".");
+  } else {
+    // ONLY dot (e.g. 150.00 or 1500.00) or NO separator. Do nothing, standard float.
+  }
+  const val = parseFloat(cleaned);
+  return isNaN(val) ? 0 : val;
+}
+
 // Structured line-by-line receipt parser
 function parseReceipt(content: string, defaultClientName: string = "", defaultPhone: string = "", originalTitle: string = ""): ParsedReceipt {
   const lines = content.split("\n").map(l => l.trim());
@@ -150,17 +177,17 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
     } else if (upper.startsWith("TOTAL ESTIMADO:") || upper.startsWith("TOTAL GERAL:") || upper.startsWith("TOTAL:")) {
       const match = line.match(/R\$\s*([\d.,]+)/i);
       if (match) {
-        totalAmount = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
+        totalAmount = parsePriceStr(match[1]);
       }
     } else if (upper.startsWith("VALOR RECEBIDO:") || upper.startsWith("RECEBIDO:")) {
       const match = line.match(/R\$\s*([\d.,]+)/i);
       if (match) {
-        receivedAmount = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
+        receivedAmount = parsePriceStr(match[1]);
       }
     } else if (upper.startsWith("TROCO REGISTRADO:") || upper.startsWith("TROCO:")) {
       const match = line.match(/R\$\s*([\d.,]+)/i);
       if (match) {
-        change = parseFloat(match[1].replace(/\./g, "").replace(",", "."));
+        change = parsePriceStr(match[1]);
       }
     } else if (upper.startsWith("FORMA DE PGTO:") || upper.startsWith("FORMA PAGAMENTO:")) {
       paymentMethod = line.substring(line.indexOf(":") + 1).trim();
@@ -209,7 +236,7 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
         const match = itemLine.match(/(.*?):\s*R\$\s*([\d.,]+)/i) || itemLine.match(/(.*?)\s+R\$\s*([\d.,]+)/i);
         if (match) {
           const rawName = match[1].trim();
-          const price = parseFloat(match[2].replace(/\./g, "").replace(",", "."));
+          const price = parsePriceStr(match[2]);
           let qty = 1;
           let cleanName = rawName;
           
@@ -231,9 +258,9 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
         let price = 0;
         if (match.length === 4) {
           qty = parseInt(match[2], 10);
-          price = parseFloat(match[3].replace(/\./g, "").replace(",", "."));
+          price = parsePriceStr(match[3]);
         } else {
-          price = parseFloat(match[2].replace(/\./g, "").replace(",", "."));
+          price = parsePriceStr(match[2]);
         }
         items.push({ name, quantity: qty, price: price / qty });
       }
