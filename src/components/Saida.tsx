@@ -27,7 +27,7 @@ interface SaidaProps {
   atendimento: Atendimento;
   onBack: () => void;
   onGoToPayment: (at: Atendimento, notesFin: string) => void;
-  onPrintIntakeReceipt: (at: Atendimento, hideValues?: boolean) => void;
+  onPrintIntakeReceipt: (at: Atendimento, hideValues: boolean, clientObj?: Cliente | null) => void;
   onUpdateAtendimento?: (at: Atendimento) => void;
 }
 
@@ -1303,7 +1303,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
           {/* Button 3: 2ª VIA RECIBO DE ENTRADA */}
           <button
             type="button"
-            onClick={() => onPrintIntakeReceipt(atendimento, false)}
+            onClick={() => onPrintIntakeReceipt(atendimento, false, client)}
             className="w-full py-3.5 bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-black text-xs rounded-xl flex items-center justify-between px-6 transition uppercase tracking-wider"
           >
             <span className="flex items-center gap-2">
@@ -1316,7 +1316,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
           {/* Button 4: 2ª VIA RECIBO SEM VALOR R$ */}
           <button
             type="button"
-            onClick={() => onPrintIntakeReceipt(atendimento, true)}
+            onClick={() => onPrintIntakeReceipt(atendimento, true, client)}
             className="w-full py-3.5 bg-slate-500 hover:bg-slate-600 active:bg-slate-700 text-white font-black text-xs rounded-xl flex items-center justify-between px-6 transition uppercase tracking-wider"
           >
             <span className="flex items-center gap-2">

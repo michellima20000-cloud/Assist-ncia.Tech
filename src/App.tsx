@@ -563,15 +563,37 @@ ________________________`;
               setTempNotesFin(notes);
               setActiveTab("pagamento");
             }}
-            onPrintIntakeReceipt={(at, hideValues) => {
+            onPrintIntakeReceipt={(at, hideValues, client?: any) => {
               const recStr = `${hideValues ? "2A VIA RECIBO ENTRADA (SEM VALOR)" : "2A VIA RECIBO ENTRADA"}
 CONTROLE: ${at.controlNumber}
-APARELHO: ${at.item} ${at.brand} ${at.model}
-ENTRADA: ${new Date(at.entryDate).toLocaleDateString("pt-BR")}
+DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
+CLIENTE: ${client ? client.name : "Consumidor Final"}
+FONE: ${client ? client.phone : ""}
+CPF: ${client ? client.cpf || "" : ""}
+------------------------
+EQUIPAMENTO:
+${at.item} ${at.brand} ${at.model}
+${at.imei ? `IMEI: ${at.imei}` : ""}
+${at.numeroSerie ? `SÉRIE: ${at.numeroSerie}` : ""}
+------------------------
+DEFEITO: ${at.defeito || "Não informado"}
+ESTADO / OBS: ${at.observations || "Nenhuma"}
+------------------------
 SERVICOS ESTIMADOS:
-${at.services.map(s => hideValues ? `- ${s.name}` : `- ${s.name}: R$ ${s.price}`).join("\n")}
-${hideValues ? "" : `TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}`}`;
-              triggerReceiptPreview(hideValues ? "Reimpressão OS Sem Valor" : "Reimpressão OS Entrada", recStr);
+${at.services.map(s => hideValues ? `- ${s.name}` : `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
+${at.products && at.products.length > 0 ? `PECAS:\n${at.products.map(p => `- ${p.name} (x${p.quantity})${hideValues ? "" : `: R$ ${(p.price * p.quantity).toFixed(2)}`}`).join("\n")}` : ""}
+------------------------
+${hideValues ? "" : `TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}\n------------------------`}
+ASSINATURA DO CLIENTE:
+
+________________________
+TERMO: Autorizo o diagnóstico.`;
+              triggerReceiptPreview(
+                hideValues ? "Reimpressão OS Sem Valor" : "Reimpressão OS Entrada",
+                recStr,
+                client ? client.phone : "",
+                client ? client.name : ""
+              );
             }}
           />
         )}
