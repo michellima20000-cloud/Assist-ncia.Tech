@@ -452,12 +452,18 @@ async function startServer() {
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
 
+      // Get target date (default to server's local YYYY-MM-DD)
+      const todayQuery = req.query.today as string;
+      const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
+
       // Financial calculations
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      pagamentos.forEach(p => {
+      const todayPagamentos = pagamentos.filter(p => p.date && p.date.substring(0, 10) === todayStr);
+
+      todayPagamentos.forEach(p => {
         if (p.method === "cash") {
           cash += p.totalAmount;
         } else {
@@ -470,7 +476,8 @@ async function startServer() {
         .filter(a => a.status !== "finalizado")
         .reduce((acc, a) => acc + (a.totalAmount || 0), 0);
 
-      const expenses = despesas.reduce((acc, d) => acc + (d.amount || 0), 0);
+      const todayDespesas = despesas.filter(d => d.date && d.date.substring(0, 10) === todayStr);
+      const expenses = todayDespesas.reduce((acc, d) => acc + (d.amount || 0), 0);
 
       res.json({
         naAssistenciaCount,

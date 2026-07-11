@@ -110,7 +110,8 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
   // Fetch stats from backend
   const fetchStats = async () => {
     try {
-      const res = await fetch("/api/stats");
+      const todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD local format
+      const res = await fetch(`/api/stats?today=${todayStr}`);
       if (res.ok) {
         const data = await res.json();
         setStats(data);
@@ -319,7 +320,7 @@ ________________________`;
                       <FileText className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento Diário</p>
                       <p className="text-lg font-black text-emerald-600 font-mono">R$ {stats.financials.totalCollected.toFixed(2)}</p>
                     </div>
                   </div>
@@ -329,7 +330,7 @@ ________________________`;
                       <PlusCircle className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Despesas Totais</p>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Despesas Diárias</p>
                       <p className="text-lg font-black text-red-600 font-mono">R$ {stats.financials.expenses.toFixed(2)}</p>
                     </div>
                   </div>
@@ -631,7 +632,7 @@ TERMO: Autorizo o diagnóstico.`;
               </button>
               <h2 className="text-base font-bold text-slate-800">Diretório de Clientes</h2>
             </div>
-            <Clientes />
+            <Clientes onPrintReceipt={triggerReceiptPreview} />
           </div>
         )}
 

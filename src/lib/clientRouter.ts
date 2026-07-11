@@ -95,11 +95,17 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
 
+      // Get target date (default to server's/client's local YYYY-MM-DD)
+      const todayQuery = urlObj.searchParams.get("today");
+      const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
+
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      pagamentos.forEach(p => {
+      const todayPagamentos = pagamentos.filter(p => p.date && p.date.substring(0, 10) === todayStr);
+
+      todayPagamentos.forEach(p => {
         const amount = Number(p.totalAmount || 0);
         if (p.method === "cash") {
           cash += amount;
@@ -113,7 +119,8 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         .filter(a => a.status !== "finalizado")
         .reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0);
 
-      const expenses = despesas.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
+      const todayDespesas = despesas.filter(d => d.date && d.date.substring(0, 10) === todayStr);
+      const expenses = todayDespesas.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
 
       return new Response(JSON.stringify({
         naAssistenciaCount,
@@ -205,6 +212,65 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         }
       }), {
         status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // 4.5 Atendimentos custom POST route
+    if (path === "/api/atendimentos" && method === "POST") {
+      const configRef = doc(db, "config", "main");
+      let nextNum = 1;
+
+      try {
+        const configSnap = await getDoc(configRef);
+        if (!configSnap.exists()) {
+          await setDoc(configRef, {
+            nextControlNumber: 2,
+            printerConfigured: false,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+            createdBy: "system"
+          });
+          nextNum = 1;
+        } else {
+          const configData = configSnap.data() || {};
+          nextNum = configData.nextControlNumber || 1;
+          await setDoc(configRef, {
+            ...configData,
+            nextControlNumber: nextNum + 1,
+            updatedAt: new Date().toISOString()
+          }, { merge: true });
+        }
+      } catch (err) {
+        console.error("Error updating config control number in clientRouter:", err);
+      }
+
+      const controlNumber = `OS-${String(nextNum).padStart(4, "0")}`;
+      const id = "ate-" + Date.now();
+      
+      const newAtendimento = {
+        id,
+        controlNumber,
+        status: "na_assistencia",
+        clienteId: body.clienteId || "",
+        item: body.item || "Celular",
+        brand: body.brand || "",
+        model: body.model || "",
+        imei: body.imei || "",
+        defeito: body.defeito || "",
+        observations: body.observations || "",
+        photoUrl: body.photoUrl || "",
+        photoUrls: body.photoUrls || [],
+        services: body.services || [],
+        products: body.products || [],
+        entryDate: new Date().toISOString(),
+        totalAmount: body.totalAmount || 0
+      };
+
+      await setDoc(doc(db, "atendimentos", id), newAtendimento);
+
+      return new Response(JSON.stringify(newAtendimento), {
+        status: 201,
         headers: { "Content-Type": "application/json" }
       });
     }

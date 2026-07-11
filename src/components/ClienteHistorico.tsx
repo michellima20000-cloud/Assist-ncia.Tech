@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { 
   Search, Calendar, ShoppingBag, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, 
-  User, Phone, DollarSign, Clock, FileText, ArrowRight, Package, Wrench, RefreshCw, BadgePercent 
+  User, Phone, DollarSign, Clock, FileText, ArrowRight, Package, Wrench, RefreshCw, BadgePercent,
+  Printer
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Cliente, Atendimento, Venda } from "../types";
@@ -17,7 +18,11 @@ interface CombinedClient {
   totalSpent: number;
 }
 
-export default function ClienteHistorico() {
+interface ClienteHistoricoProps {
+  onPrintReceipt?: (title: string, content: string, phone: string, clientName: string) => void;
+}
+
+export default function ClienteHistorico({ onPrintReceipt }: ClienteHistoricoProps) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -26,6 +31,108 @@ export default function ClienteHistorico() {
   const [loading, setLoading] = useState(true);
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
+
+  const handlePrintVenda = (v: Venda, client: CombinedClient) => {
+    const finalClientPhone = client.phone || "";
+    const finalClientCpf = client.cpf || "";
+    
+    const recStr = `CUPOM DE VENDA DIRETA
+================================
+MINHA ASSISTÊNCIA
+CONECTADA • TECNOLOGIA & ACESSÓRIOS
+================================
+DATA: ${new Date(v.date).toLocaleString("pt-BR")}
+VENDA: ${v.id}
+VENDEDOR: ${v.sellerName || "Balcão"}
+CLIENTE: ${client.name}
+${finalClientPhone ? `FONE: ${finalClientPhone}` : ""}
+${finalClientCpf ? `CPF: ${finalClientCpf}` : ""}
+--------------------------------
+ITENS VENDIDOS:
+${(v.items || []).map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
+--------------------------------
+TOTAL GERAL:    R$ ${v.totalAmount.toFixed(2)}
+FORMA DE PGTO:  ${
+      v.method === "cash" ? "Dinheiro" : 
+      v.method === "pix" ? "PIX" : 
+      v.method === "debit" ? "Cartão de Débito" : "Cartão de Crédito"
+    }
+VALOR RECEBIDO: R$ ${(v.receivedAmount || v.totalAmount).toFixed(2)}
+TROCO REGISTRADO: R$ ${(v.change || 0).toFixed(2)}
+================================
+${v.observations ? `OBS: ${v.observations}\n================================` : ""}
+Obrigado pela preferência!
+Volte sempre!`;
+
+    if (onPrintReceipt) {
+      onPrintReceipt("Recibo de Venda", recStr, finalClientPhone, client.name);
+    }
+  };
+
+  const handlePrintAtendimento = (at: Atendimento, client: CombinedClient) => {
+    const finalClientPhone = client.phone || "";
+    const finalClientCpf = client.cpf || "";
+    
+    if (at.status === "finalizado") {
+      const recStr = `CUPOM DE SAIDA
+CONTROLE: ${at.controlNumber}
+FINALIZADO: ${at.exitDate ? new Date(at.exitDate).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR")}
+CLIENTE: ${client.name}
+${finalClientPhone ? `FONE: ${finalClientPhone}` : ""}
+${finalClientCpf ? `CPF: ${finalClientCpf}` : ""}
+------------------------
+APARELHO:
+${at.item} ${at.brand} ${at.model}
+${at.imei ? `IMEI: ${at.imei}` : ""}
+------------------------
+SERVICOS REALIZADOS:
+${(at.services || []).map(s => `- ${s.name}: R$ ${Number(s.price).toFixed(2)}`).join("\n")}
+${at.products && at.products.length > 0 ? `PECAS TROCADAS:\n${at.products.map(p => `- ${p.name} (x${p.quantity}): R$ ${(Number(p.price) * Number(p.quantity)).toFixed(2)}`).join("\n")}` : ""}
+------------------------
+LAUDO / OBSERVACOES SAIDA:
+${at.notesFin || at.observations || "Aparelho entregue em perfeito funcionamento."}
+------------------------
+TOTAL GERAL: R$ ${at.totalAmount.toFixed(2)}
+RECEBIDO: R$ ${at.totalAmount.toFixed(2)}
+TROCO: R$ 0,00
+------------------------
+GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
+
+      if (onPrintReceipt) {
+        onPrintReceipt("Recibo de Saída / Garantia", recStr, finalClientPhone, client.name);
+      }
+    } else {
+      const recStr = `2A VIA RECIBO ENTRADA
+CONTROLE: ${at.controlNumber}
+DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
+CLIENTE: ${client.name}
+FONE: ${finalClientPhone}
+CPF: ${finalClientCpf}
+------------------------
+EQUIPAMENTO:
+${at.item} ${at.brand} ${at.model}
+${at.imei ? `IMEI: ${at.imei}` : ""}
+${at.numeroSerie ? `SÉRIE: ${at.numeroSerie}` : ""}
+------------------------
+DEFEITO: ${at.defeito || "Não informado"}
+ESTADO / OBS: ${at.observations || "Nenhuma"}
+------------------------
+SERVICOS ESTIMADOS:
+${(at.services || []).map(s => `- ${s.name}: R$ ${Number(s.price).toFixed(2)}`).join("\n")}
+${at.products && at.products.length > 0 ? `PECAS:\n${at.products.map(p => `- ${p.name} (x${p.quantity}): R$ ${(Number(p.price) * Number(p.quantity)).toFixed(2)}`).join("\n")}` : ""}
+------------------------
+TOTAL ESTIMADO: R$ ${at.totalAmount.toFixed(2)}
+------------------------
+ASSINATURA DO CLIENTE:
+
+________________________
+TERMO: Autorizo o diagnóstico.`;
+
+      if (onPrintReceipt) {
+        onPrintReceipt("Recibo de Entrada OS", recStr, finalClientPhone, client.name);
+      }
+    }
+  };
 
   // Fetch all data needed
   const fetchData = async () => {
@@ -499,6 +606,24 @@ export default function ClienteHistorico() {
                                     </span>
                                   </div>
                                 )}
+                              </div>
+
+                              {/* Print Receipt Action */}
+                              <div className="flex justify-end pt-3 border-t border-slate-150">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (isService) {
+                                      handlePrintAtendimento(item.raw, selectedClient);
+                                    } else {
+                                      handlePrintVenda(item.raw, selectedClient);
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-[10px] uppercase tracking-wider transition shadow-sm hover:shadow active:scale-95 cursor-pointer"
+                                >
+                                  <Printer className="w-3.5 h-3.5 text-blue-400" />
+                                  Emitir / Imprimir Recibo
+                                </button>
                               </div>
                               
                             </div>

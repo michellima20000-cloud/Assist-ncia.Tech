@@ -6,6 +6,7 @@ import ClienteHistorico from "./ClienteHistorico";
 interface ClientesProps {
   onSelect?: (cliente: Cliente) => void;
   isPicker?: boolean;
+  onPrintReceipt?: (title: string, content: string, phone: string, clientName: string) => void;
 }
 
 const formatPhoneNumber = (value: string) => {
@@ -26,7 +27,7 @@ const formatCpf = (value: string) => {
   return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
 };
 
-export default function Clientes({ onSelect, isPicker = false }: ClientesProps) {
+export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }: ClientesProps) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [search, setSearch] = useState("");
   const [showForm, setShowForm] = useState(false);
@@ -162,7 +163,7 @@ export default function Clientes({ onSelect, isPicker = false }: ClientesProps) 
       )}
 
       {activeSubTab === "historico" && !isPicker ? (
-        <ClienteHistorico />
+        <ClienteHistorico onPrintReceipt={onPrintReceipt} />
       ) : (
         <>
           {/* Title / Action Header */}

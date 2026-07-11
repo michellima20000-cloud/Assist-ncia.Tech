@@ -26,6 +26,15 @@ const formatPhoneNumber = (value: string) => {
   return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
 };
 
+const formatCpf = (value: string) => {
+  const cleaned = value.replace(/\D/g, "");
+  if (cleaned.length === 0) return "";
+  if (cleaned.length <= 3) return cleaned;
+  if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}.${cleaned.slice(3)}`;
+  if (cleaned.length <= 9) return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6)}`;
+  return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
+};
+
 export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   const [products, setProducts] = useState<Produto[]>([]);
   const [filteredProducts, setFilteredProducts] = useState<Produto[]>([]);
@@ -41,6 +50,7 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   const [clientInputMode, setClientInputMode] = useState<"manual" | "search">("manual");
   const [customClientName, setCustomClientName] = useState("");
   const [customClientPhone, setCustomClientPhone] = useState("");
+  const [customClientCpf, setCustomClientCpf] = useState("");
 
   // Observations
   const [observations, setObservations] = useState("");
@@ -231,6 +241,7 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
 
     const finalClientName = selectedCliente?.name || customClientName || "Consumidor Final";
     const finalClientPhone = selectedCliente?.phone || customClientPhone || "";
+    const finalClientCpf = selectedCliente?.cpf || customClientCpf || "";
 
     const payload = {
       clienteId: selectedCliente?.id || null,
@@ -278,7 +289,8 @@ DATA: ${new Date(finalVenda.date).toLocaleString("pt-BR")}
 VENDA: ${finalVenda.id}
 VENDEDOR: ${finalVenda.sellerName}
 CLIENTE: ${finalVenda.clienteName}
-${finalClientPhone ? `CONTATO: ${finalClientPhone}` : ""}
+${finalClientPhone ? `FONE: ${finalClientPhone}` : ""}
+${finalClientCpf ? `CPF: ${finalClientCpf}` : ""}
 --------------------------------
 ITENS VENDIDOS:
 ${finalVenda.items.map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
@@ -412,7 +424,7 @@ Volte sempre!`;
                 </button>
               </div>
             ) : clientInputMode === "manual" ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1">
                 <div>
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">Nome do Cliente (Opcional)</label>
                   <input
@@ -431,6 +443,16 @@ Volte sempre!`;
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition font-mono"
                     value={customClientPhone}
                     onChange={(e) => setCustomClientPhone(formatPhoneNumber(e.target.value))}
+                  />
+                </div>
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">CPF do Cliente (Opcional)</label>
+                  <input
+                    type="text"
+                    placeholder="000.000.000-00"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition font-mono"
+                    value={customClientCpf}
+                    onChange={(e) => setCustomClientCpf(formatCpf(e.target.value))}
                   />
                 </div>
               </div>
