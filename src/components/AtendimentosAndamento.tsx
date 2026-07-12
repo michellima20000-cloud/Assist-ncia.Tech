@@ -32,8 +32,26 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
     fetchData();
   }, []);
 
-  const getCliente = (id: string) => {
-    return (clientes || []).find(c => c && c.id === id) || { name: "Cliente Desconhecido", phone: "N/A" };
+  const getCliente = (a: Atendimento) => {
+    if (!a) return { name: "Cliente Desconhecido", phone: "N/A" } as Cliente;
+    const directCl = (clientes || []).find(c => c && c.id === a.clienteId);
+    if (directCl) return directCl;
+    
+    // Check if the atendimento object itself has embedded client info
+    const embeddedName = (a as any).clientName || (a as any).client?.name || "Cliente Desconhecido";
+    const embeddedPhone = (a as any).clientPhone || (a as any).client?.phone || "N/A";
+    const embeddedCpf = (a as any).clientCpf || (a as any).client?.cpf || "";
+    const embeddedEmail = (a as any).clientEmail || (a as any).client?.email || "";
+    const embeddedAddress = (a as any).clientAddress || (a as any).client?.address || "";
+    
+    return {
+      id: a.clienteId,
+      name: embeddedName,
+      phone: embeddedPhone,
+      cpf: embeddedCpf,
+      email: embeddedEmail,
+      address: embeddedAddress
+    } as Cliente;
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -74,21 +92,16 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
     return String(entryDate);
   };
 
-  // Filter only active ones ("na_assistencia" or "entrega") depending on flowMode safely
+  // Filter only active ones ("na_assistencia" or "entrega") safely
   const activeOrders = (atendimentos || []).filter(a => {
     if (!a) return false;
-    if (flowMode === "atendimento") {
-      return a.status === "na_assistencia";
-    }
-    if (flowMode === "saida") {
-      return a.status === "entrega";
-    }
+    // Show both na_assistencia and entrega so that devices are always visible and accessible in both flows
     return a.status === "na_assistencia" || a.status === "entrega";
   });
 
   const filtered = activeOrders.filter(a => {
     if (!a) return false;
-    const cli = getCliente(a.clienteId);
+    const cli = getCliente(a);
     const searchLower = (search || "").toLowerCase();
     return (
       (a.controlNumber || "").toLowerCase().includes(searchLower) ||
@@ -219,7 +232,7 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {grouped[dateKey].map(a => {
-                  const client = getCliente(a.clienteId);
+                  const client = getCliente(a);
                   const isReady = a.status === "entrega";
 
                   return (
