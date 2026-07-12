@@ -16,6 +16,31 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) {
+  const getSafeDate = (dt: any): Date => {
+    if (!dt) return new Date();
+    if (dt instanceof Date) return dt;
+    if (typeof dt === "string") {
+      const parsed = new Date(dt);
+      return isNaN(parsed.getTime()) ? new Date() : parsed;
+    }
+    if (dt && typeof dt.toDate === "function") {
+      try {
+        return dt.toDate();
+      } catch (e) {}
+    }
+    if (dt && typeof dt._seconds === "number") {
+      return new Date(dt._seconds * 1000);
+    }
+    if (dt && typeof dt.seconds === "number") {
+      return new Date(dt.seconds * 1000);
+    }
+    const parsedTime = Number(dt);
+    if (!isNaN(parsedTime) && parsedTime > 0) {
+      return new Date(parsedTime);
+    }
+    return new Date();
+  };
+
   const [activeMenu, setActiveMenu] = useState<'main' | 'reports' | 'history' | 'services' | 'products' | 'expenses' | 'users' | 'auxiliary'>('main');
 
   // Relatórios States
@@ -824,7 +849,7 @@ GARANTIA DE 90 DIAS.`;
                       <div className="text-right flex items-center gap-3">
                         <div>
                           <p className="font-mono font-bold text-slate-800">R$ {(o.totalAmount || 0).toFixed(2)}</p>
-                          <p className="text-[10px] text-slate-400">Entrada: {o.entryDate ? new Date(o.entryDate).toLocaleDateString() : "N/A"}</p>
+                          <p className="text-[10px] text-slate-400">Entrada: {o.entryDate ? getSafeDate(o.entryDate).toLocaleDateString() : "N/A"}</p>
                         </div>
 
                         {o.status === "finalizado" && (

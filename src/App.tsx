@@ -35,6 +35,31 @@ type ActiveTab =
   | "vendas"
   | "feedback";
 
+const getSafeDate = (dt: any): Date => {
+  if (!dt) return new Date();
+  if (dt instanceof Date) return dt;
+  if (typeof dt === "string") {
+    const parsed = new Date(dt);
+    return isNaN(parsed.getTime()) ? new Date() : parsed;
+  }
+  if (dt && typeof dt.toDate === "function") {
+    try {
+      return dt.toDate();
+    } catch (e) {}
+  }
+  if (dt && typeof dt._seconds === "number") {
+    return new Date(dt._seconds * 1000);
+  }
+  if (dt && typeof dt.seconds === "number") {
+    return new Date(dt.seconds * 1000);
+  }
+  const parsedTime = Number(dt);
+  if (!isNaN(parsedTime) && parsedTime > 0) {
+    return new Date(parsedTime);
+  }
+  return new Date();
+};
+
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -79,7 +104,7 @@ CLIENTE: ${found.clientName || found.client?.name || "Consumidor Final"}
 FONE: ${found.clientPhone || found.client?.phone || ""}
 APARELHO: ${found.item} ${found.brand} ${found.model}
 DEFEITO: ${found.defeito || "Avaliação técnica"}
-DATA: ${new Date(found.entryDate).toLocaleString("pt-BR")}
+DATA: ${getSafeDate(found.entryDate).toLocaleString("pt-BR")}
 SERVICOS REALIZADOS:
 ${(found.services || []).map((s: any) => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
 TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
@@ -591,7 +616,7 @@ ________________________`;
             onPrintIntakeReceipt={(at, hideValues, client?: any) => {
               const recStr = `${hideValues ? "2A VIA RECIBO ENTRADA (SEM VALOR)" : "2A VIA RECIBO ENTRADA"}
 CONTROLE: ${at.controlNumber}
-DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
+DATA: ${getSafeDate(at.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${client ? client.name : "Consumidor Final"}
 FONE: ${client ? client.phone : ""}
 CPF: ${client ? client.cpf || "" : ""}

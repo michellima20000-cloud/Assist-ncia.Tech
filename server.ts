@@ -124,6 +124,9 @@ function convertFromFirestore(obj: any): any {
     if (obj._seconds !== undefined && obj._nanoseconds !== undefined) {
       return new Date(obj._seconds * 1000).toISOString();
     }
+    if (obj.seconds !== undefined && obj.nanoseconds !== undefined) {
+      return new Date(obj.seconds * 1000).toISOString();
+    }
     const result: any = {};
     for (const key of Object.keys(obj)) {
       result[key] = convertFromFirestore(obj[key]);
