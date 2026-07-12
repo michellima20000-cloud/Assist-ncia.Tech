@@ -12,6 +12,50 @@ import {
 import { db } from "./firebase";
 import firebaseConfig from "../../firebase-applet-config.json";
 
+function convertFromFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return obj;
+  
+  if (obj && typeof obj.toDate === "function") {
+    return obj.toDate().toISOString();
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => convertFromFirestore(item));
+  }
+  
+  if (typeof obj === "object") {
+    if (obj._seconds !== undefined && obj._nanoseconds !== undefined) {
+      return new Date(obj._seconds * 1000).toISOString();
+    }
+    if (obj.seconds !== undefined && obj.nanoseconds !== undefined) {
+      return new Date(obj.seconds * 1000).toISOString();
+    }
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      result[key] = convertFromFirestore(obj[key]);
+    }
+    return result;
+  }
+  
+  return obj;
+}
+
+function getDocData(docSnap: any): any {
+  if (!docSnap || !docSnap.exists()) return null;
+  return {
+    id: docSnap.id,
+    ...convertFromFirestore(docSnap.data())
+  };
+}
+
+function getDocsData(snap: any): any[] {
+  if (!snap || !snap.docs) return [];
+  return snap.docs.map((d: any) => ({
+    id: d.id,
+    ...convertFromFirestore(d.data())
+  }));
+}
+
 export async function handleClientRoute(url: string, init?: RequestInit): Promise<Response> {
   try {
     const urlObj = new URL(url, window.location.origin);
@@ -84,13 +128,13 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
     // 3. Stats Dashboard route
     if (path === "/api/stats" && method === "GET") {
       const atendimentosSnap = await getDocs(collection(db, "atendimentos"));
-      const atendimentos = atendimentosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const atendimentos = getDocsData(atendimentosSnap);
 
       const pagamentosSnap = await getDocs(collection(db, "pagamentos"));
-      const pagamentos = pagamentosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const pagamentos = getDocsData(pagamentosSnap);
 
       const despesasSnap = await getDocs(collection(db, "despesas"));
-      const despesas = despesasSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const despesas = getDocsData(despesasSnap);
 
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
@@ -159,13 +203,13 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const offsetQuery = offsetParam ? Number(offsetParam) : null;
 
       const pagamentosSnap = await getDocs(collection(db, "pagamentos"));
-      const pagamentos = pagamentosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const pagamentos = getDocsData(pagamentosSnap);
 
       const despesasSnap = await getDocs(collection(db, "despesas"));
-      const despesas = despesasSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const despesas = getDocsData(despesasSnap);
 
       const atendimentosSnap = await getDocs(collection(db, "atendimentos"));
-      const atendimentos = atendimentosSnap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const atendimentos = getDocsData(atendimentosSnap);
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
@@ -308,7 +352,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         });
       }
 
-      const at = { id: atSnap.id, ...atSnap.data() } as any;
+      const at = getDocData(atSnap);
       const payId = "pay-" + Date.now();
       const newPayment = {
         id: payId,
@@ -335,7 +379,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         const prodRef = doc(db, "produtos", atProd.productId);
         const prodSnap = await getDoc(prodRef);
         if (prodSnap.exists()) {
-          const p = { id: prodSnap.id, ...prodSnap.data() } as any;
+          const p = getDocData(prodSnap);
           p.stock = Math.max(0, (Number(p.stock) || 0) - (Number(atProd.quantity) || 0));
           await setDoc(prodRef, p);
         }
@@ -350,7 +394,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
     // 5.5 Vendas Directas REST
     if (path === "/api/vendas" && method === "GET") {
       const snap = await getDocs(collection(db, "vendas"));
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() })) as any[];
+      const list = getDocsData(snap);
       // Sort sales by date descending
       list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       return new Response(JSON.stringify(list), {
@@ -453,13 +497,13 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
               headers: { "Content-Type": "application/json" }
             });
           }
-          return new Response(JSON.stringify({ id: docSnap.id, ...docSnap.data() }), {
+          return new Response(JSON.stringify(getDocData(docSnap)), {
             status: 200,
             headers: { "Content-Type": "application/json" }
           });
         } else {
           const snap = await getDocs(collection(db, collectionName));
-          const data = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+          const data = getDocsData(snap);
           return new Response(JSON.stringify(data), {
             status: 200,
             headers: { "Content-Type": "application/json" }
