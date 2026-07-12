@@ -19,10 +19,12 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
         fetch("/api/atendimentos").then(r => r.json()),
         fetch("/api/clientes").then(r => r.json())
       ]);
-      setAtendimentos(ats || []);
-      setClientes(cls || []);
+      setAtendimentos(Array.isArray(ats) ? ats : []);
+      setClientes(Array.isArray(cls) ? cls : []);
     } catch (err) {
       console.error(err);
+      setAtendimentos([]);
+      setClientes([]);
     }
   };
 
@@ -31,7 +33,7 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
   }, []);
 
   const getCliente = (id: string) => {
-    return clientes.find(c => c.id === id) || { name: "Cliente Desconhecido", phone: "N/A" };
+    return (clientes || []).find(c => c && c.id === id) || { name: "Cliente Desconhecido", phone: "N/A" };
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {
@@ -47,8 +49,34 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
     }
   };
 
-  // Filter only active ones ("na_assistencia" or "entrega") depending on flowMode
-  const activeOrders = atendimentos.filter(a => {
+  // Helper to safely convert any entryDate representation (string, object, timestamp, number) into a valid string
+  const getEntryDateStr = (entryDate: any): string => {
+    if (!entryDate) return new Date().toISOString();
+    if (typeof entryDate === "string") return entryDate;
+    if (entryDate && typeof entryDate.toDate === "function") {
+      try {
+        return entryDate.toDate().toISOString();
+      } catch (e) {}
+    }
+    if (entryDate && typeof entryDate._seconds === "number") {
+      return new Date(entryDate._seconds * 1000).toISOString();
+    }
+    if (entryDate && typeof entryDate.seconds === "number") {
+      return new Date(entryDate.seconds * 1000).toISOString();
+    }
+    if (entryDate instanceof Date) {
+      return entryDate.toISOString();
+    }
+    const parsedTime = Number(entryDate);
+    if (!isNaN(parsedTime) && parsedTime > 0) {
+      return new Date(parsedTime).toISOString();
+    }
+    return String(entryDate);
+  };
+
+  // Filter only active ones ("na_assistencia" or "entrega") depending on flowMode safely
+  const activeOrders = (atendimentos || []).filter(a => {
+    if (!a) return false;
     if (flowMode === "atendimento") {
       return a.status === "na_assistencia";
     }
@@ -59,20 +87,23 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
   });
 
   const filtered = activeOrders.filter(a => {
+    if (!a) return false;
     const cli = getCliente(a.clienteId);
     const searchLower = (search || "").toLowerCase();
     return (
       (a.controlNumber || "").toLowerCase().includes(searchLower) ||
       (a.model || "").toLowerCase().includes(searchLower) ||
       (a.brand || "").toLowerCase().includes(searchLower) ||
-      (cli?.name || "").toLowerCase().includes(searchLower)
+      ((cli?.name || "")).toLowerCase().includes(searchLower)
     );
   });
 
   // Sort by entrance date descending safely
   const sorted = [...filtered].sort((a, b) => {
-    const timeA = a.entryDate ? new Date(a.entryDate).getTime() : 0;
-    const timeB = b.entryDate ? new Date(b.entryDate).getTime() : 0;
+    const dateStrA = getEntryDateStr(a?.entryDate);
+    const dateStrB = getEntryDateStr(b?.entryDate);
+    const timeA = new Date(dateStrA).getTime();
+    const timeB = new Date(dateStrB).getTime();
     return (isNaN(timeB) ? 0 : timeB) - (isNaN(timeA) ? 0 : timeA);
   });
 
@@ -80,7 +111,8 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
   const groupOrdersByDate = () => {
     const groups: { [key: string]: Atendimento[] } = {};
     sorted.forEach(a => {
-      const entryDateStr = a.entryDate || new Date().toISOString();
+      if (!a) return;
+      const entryDateStr = getEntryDateStr(a.entryDate);
       const dateStr = entryDateStr.includes("T") ? entryDateStr.split("T")[0] : entryDateStr;
       if (!groups[dateStr]) {
         groups[dateStr] = [];
@@ -93,8 +125,41 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
   const grouped = groupOrdersByDate();
 
   const formatDateHeader = (dateStr: string) => {
-    const d = new Date(`${dateStr}T12:00:00`);
-    return d.toLocaleDateString("pt-BR", { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+    if (!dateStr) return "Data não informada";
+    
+    // Try parsing as YYYY-MM-DD
+    let d = new Date(`${dateStr}T12:00:00`);
+    if (isNaN(d.getTime())) {
+      d = new Date(dateStr);
+    }
+    
+    if (isNaN(d.getTime())) {
+      const parts = dateStr.split(/[-/]/);
+      if (parts.length === 3) {
+        if (parts[0].length === 4) {
+          d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        } else if (parts[2].length === 4) {
+          d = new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+        }
+      }
+    }
+
+    if (isNaN(d.getTime())) {
+      return dateStr;
+    }
+
+    try {
+      const formatted = d.toLocaleDateString("pt-BR", { 
+        weekday: 'long', 
+        day: 'numeric', 
+        month: 'long', 
+        year: 'numeric' 
+      });
+      return formatted.charAt(0).toUpperCase() + formatted.slice(1);
+    } catch (err) {
+      console.error("Error formatting date header", err);
+      return dateStr;
+    }
   };
 
   return (
@@ -185,22 +250,22 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
                         <div className="space-y-1">
                           <p className="text-xs font-mono font-bold text-slate-600">{a.controlNumber}</p>
                           <h4 className="text-sm font-bold text-slate-800 leading-tight">
-                            {a.item} {a.brand} {a.model}
+                            {a.item || ""} {a.brand || ""} {a.model || ""}
                           </h4>
-                          <p className="text-xs font-semibold text-slate-700">Dono: {client.name}</p>
+                          <p className="text-xs font-semibold text-slate-700">Dono: {client?.name || "Cliente Desconhecido"}</p>
                         </div>
                       </div>
 
                       {/* Client Quick Phone Contact */}
                       <div className="flex items-center gap-2 text-[11px] text-slate-500 font-medium">
                         <Phone className="w-3.5 h-3.5 text-blue-500" />
-                        <span>{client.phone}</span>
+                        <span>{client?.phone || "N/A"}</span>
                         <Clock className="w-3.5 h-3.5 text-slate-400 ml-2" />
                         <span>
                           Entrada:{" "}
                           {(() => {
-                            if (!a.entryDate) return "N/A";
-                            const d = new Date(a.entryDate);
+                            const dateStr = getEntryDateStr(a.entryDate);
+                            const d = new Date(dateStr);
                             return isNaN(d.getTime())
                               ? "N/A"
                               : d.toLocaleTimeString("pt-BR", {
