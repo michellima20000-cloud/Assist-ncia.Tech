@@ -452,32 +452,19 @@ async function startServer() {
       const pagamentos = await getCollection<Pagamento>("pagamentos");
       const despesas = await getCollection<Despesa>("despesas");
       
-      const naAssistenciaCount = atendimentos.filter(a => a && a.status === "na_assistencia").length;
-      const entregaCount = atendimentos.filter(a => a && a.status === "entrega").length;
+      const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
+      const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
 
       // Get target date (default to server's local YYYY-MM-DD)
       const todayQuery = req.query.today as string;
       const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
       const offsetQuery = req.query.offset ? Number(req.query.offset) : null;
 
-      const getLocalDateStr = (isoString: any) => {
+      const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
-        let str = "";
-        if (typeof isoString === "string") {
-          str = isoString;
-        } else if (isoString instanceof Date) {
-          str = isoString.toISOString();
-        } else if (isoString && typeof isoString.toDate === "function") {
-          str = isoString.toDate().toISOString();
-        } else if (isoString && isoString.seconds !== undefined) {
-          str = new Date(isoString.seconds * 1000).toISOString();
-        } else {
-          str = String(isoString);
-        }
-
-        if (offsetQuery === null) return str.substring(0, 10);
-        const date = new Date(str);
-        if (isNaN(date.getTime())) return str.substring(0, 10);
+        if (offsetQuery === null) return isoString.substring(0, 10);
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString.substring(0, 10);
         const localTime = new Date(date.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
       };
@@ -487,25 +474,23 @@ async function startServer() {
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p && p.date && getLocalDateStr(p.date) === todayStr);
+      const todayPagamentos = pagamentos.filter(p => p.date && getLocalDateStr(p.date) === todayStr);
 
       todayPagamentos.forEach(p => {
-        if (!p) return;
-        const amount = Number(p.totalAmount) || 0;
         if (p.method === "cash") {
-          cash += amount;
+          cash += p.totalAmount;
         } else {
-          card += amount; // Debit/Credit grouped into Card
+          card += p.totalAmount; // Debit/Credit grouped into Card
         }
-        totalCollected += amount;
+        totalCollected += p.totalAmount;
       });
 
       const pending = atendimentos
-        .filter(a => a && a.status !== "finalizado")
-        .reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0);
+        .filter(a => a.status !== "finalizado")
+        .reduce((acc, a) => acc + (a.totalAmount || 0), 0);
 
-      const todayDespesas = despesas.filter(d => d && d.date && getLocalDateStr(d.date) === todayStr);
-      const expenses = todayDespesas.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
+      const todayDespesas = despesas.filter(d => d.date && getLocalDateStr(d.date) === todayStr);
+      const expenses = todayDespesas.reduce((acc, d) => acc + (d.amount || 0), 0);
 
       res.json({
         naAssistenciaCount,
@@ -1315,29 +1300,14 @@ async function startServer() {
 
       const productCostMap = new Map<string, number>();
       produtos.forEach(p => {
-        if (p && p.id) {
-          productCostMap.set(p.id, Number(p.cost) || 0);
-        }
+        productCostMap.set(p.id, p.cost || 0);
       });
 
-      const getLocalDateStr = (isoString: any) => {
+      const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
-        let str = "";
-        if (typeof isoString === "string") {
-          str = isoString;
-        } else if (isoString instanceof Date) {
-          str = isoString.toISOString();
-        } else if (isoString && typeof isoString.toDate === "function") {
-          str = isoString.toDate().toISOString();
-        } else if (isoString && isoString.seconds !== undefined) {
-          str = new Date(isoString.seconds * 1000).toISOString();
-        } else {
-          str = String(isoString);
-        }
-
-        if (offsetQuery === null) return str.substring(0, 10);
-        const date = new Date(str);
-        if (isNaN(date.getTime())) return str.substring(0, 10);
+        if (offsetQuery === null) return isoString.substring(0, 10);
+        const date = new Date(isoString);
+        if (isNaN(date.getTime())) return isoString.substring(0, 10);
         const localTime = new Date(date.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
       };
@@ -1357,28 +1327,28 @@ async function startServer() {
 
       // Filter payments in the range
       filteredPayments = pagamentos.filter(p => {
-        if (!p || !p.date) return false;
+        if (!p.date) return false;
         const localDate = getLocalDateStr(p.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Filter expenses in the range
       const filteredExpenses = despesas.filter(d => {
-        if (!d || !d.date) return false;
+        if (!d.date) return false;
         const localDate = getLocalDateStr(d.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Detailed service orders closed in this range
       const closedOrders = atendimentos.filter(a => {
-        if (!a || a.status !== "finalizado" || !a.exitDate) return false;
+        if (a.status !== "finalizado" || !a.exitDate) return false;
         const localDate = getLocalDateStr(a.exitDate);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       // Filter direct sales in the range
       const filteredVendas = vendas.filter(v => {
-        if (!v || !v.date) return false;
+        if (!v.date) return false;
         const localDate = getLocalDateStr(v.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
@@ -1387,16 +1357,14 @@ async function startServer() {
       let directSalesRevenue = 0;
       let directSalesCost = 0;
       filteredVendas.forEach(v => {
-        if (!v) return;
         const items = v.items || [];
         items.forEach(item => {
-          if (!item) return;
-          const qty = Number(item.quantity) || 1;
-          const price = Number(item.price) || 0;
-          const cost = item.cost !== undefined ? Number(item.cost) : Number(item.productId ? productCostMap.get(item.productId) : 0) || 0;
+          const qty = item.quantity || 1;
+          const price = item.price || 0;
+          const cost = item.cost !== undefined ? item.cost : (productCostMap.get(item.productId) || 0);
           
           directSalesRevenue += price * qty;
-          directSalesCost += (isNaN(cost) ? 0 : cost) * qty;
+          directSalesCost += cost * qty;
         });
       });
 
@@ -1404,13 +1372,11 @@ async function startServer() {
       let serviceProductsRevenue = 0;
       let serviceProductsCost = 0;
       closedOrders.forEach(a => {
-        if (!a) return;
         const productsUsed = a.products || [];
         productsUsed.forEach(p => {
-          if (!p) return;
-          const qty = Number(p.quantity) || 1;
-          const price = Number(p.price) || 0;
-          const cost = Number(p.productId ? productCostMap.get(p.productId) : 0) || 0;
+          const qty = p.quantity || 1;
+          const price = p.price || 0;
+          const cost = productCostMap.get(p.productId) || 0;
 
           serviceProductsRevenue += price * qty;
           serviceProductsCost += cost * qty;
@@ -1425,20 +1391,19 @@ async function startServer() {
       let totalCash = 0;
       let totalCard = 0;
       filteredPayments.forEach(p => {
-        if (!p) return;
-        const amount = Number(p.totalAmount) || 0;
-        if (p.method === "cash") totalCash += amount;
-        else totalCard += amount;
+        if (p.method === "cash") totalCash += p.totalAmount;
+        else totalCard += p.totalAmount;
       });
 
       const totalRevenue = totalCash + totalCard;
-      const totalExpense = filteredExpenses.reduce((acc, d) => acc + (d ? (Number(d.amount) || 0) : 0), 0);
+      const totalExpense = filteredExpenses.reduce((acc, d) => acc + d.amount, 0);
       const balance = totalRevenue - totalExpense;
 
       res.json({
         payments: filteredPayments,
         expenses: filteredExpenses,
         closedOrders,
+        vendas: filteredVendas,
         summary: {
           cash: totalCash,
           card: totalCard,

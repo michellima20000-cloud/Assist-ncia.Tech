@@ -156,49 +156,11 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
         const res = await fetch(`/api/clientes`);
         if (res.ok) {
           const list: Cliente[] = await res.json();
-          const found = list.find(c => c && (c.id === atendimento.clienteId || String(c.id) === String(atendimento.clienteId)));
-          if (found) {
-            setClient(found);
-          } else {
-            const at = atendimento as any;
-            const embeddedName = at.clientName || at.client?.name || "Cliente Desconhecido";
-            const embeddedPhone = at.clientPhone || at.client?.phone || "N/A";
-            const embeddedCpf = at.clientCpf || at.client?.cpf || "";
-            const embeddedEmail = at.clientEmail || at.client?.email || "";
-            const embeddedAddress = at.clientAddress || at.client?.address || "";
-            
-            setClient({
-              id: atendimento.clienteId || "unknown",
-              name: embeddedName,
-              phone: embeddedPhone,
-              cpf: embeddedCpf,
-              email: embeddedEmail,
-              address: embeddedAddress
-            } as Cliente);
-          }
-        } else {
-          // If the fetch fails, set fallback
-          const at = atendimento as any;
-          setClient({
-            id: atendimento.clienteId || "unknown",
-            name: at.clientName || at.client?.name || "Cliente Desconhecido",
-            phone: at.clientPhone || at.client?.phone || "N/A",
-            cpf: at.clientCpf || at.client?.cpf || "",
-            email: at.clientEmail || at.client?.email || "",
-            address: at.clientAddress || at.client?.address || ""
-          } as Cliente);
+          const found = list.find(c => c.id === atendimento.clienteId);
+          if (found) setClient(found);
         }
       } catch (err) {
         console.error(err);
-        const at = atendimento as any;
-        setClient({
-          id: atendimento.clienteId || "unknown",
-          name: at.clientName || at.client?.name || "Cliente Desconhecido",
-          phone: at.clientPhone || at.client?.phone || "N/A",
-          cpf: at.clientCpf || at.client?.cpf || "",
-          email: at.clientEmail || at.client?.email || "",
-          address: at.clientAddress || at.client?.address || ""
-        } as Cliente);
       }
     };
     
@@ -650,11 +612,6 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
               <p className="text-xs font-extrabold text-slate-800">
                 {client?.name || (atendimento as any).clientName || (atendimento as any).client?.name || "Cliente Desconhecido"}
               </p>
-              {(client?.phone || (atendimento as any).clientPhone || (atendimento as any).client?.phone) && (
-                <span className="text-[10px] text-slate-600 font-bold block mt-0.5">
-                  Celular: {client?.phone || (atendimento as any).clientPhone || (atendimento as any).client?.phone}
-                </span>
-              )}
               {(client?.cpf || (atendimento as any).clientCpf || (atendimento as any).client?.cpf) && (
                 <span className="text-[10px] text-slate-400 block mt-0.5">
                   CPF: {client?.cpf || (atendimento as any).clientCpf || (atendimento as any).client?.cpf}
@@ -676,18 +633,8 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
         {/* Equipment row */}
         <div className="p-3 bg-slate-50/50 border border-slate-100 rounded-xl flex justify-between items-center">
           <div>
-            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Aparelho / Celular</span>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Aparelho</span>
             <p className="text-xs font-extrabold text-slate-800">{atendimento.item} {atendimento.brand} {atendimento.model}</p>
-            {atendimento.imei && (
-              <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">
-                IMEI: <span className="font-mono font-bold text-slate-700">{atendimento.imei}</span>
-              </span>
-            )}
-            {atendimento.numeroSerie && (
-              <span className="text-[10px] text-slate-500 block mt-0.5 font-medium">
-                Série: <span className="font-mono font-bold text-slate-700">{atendimento.numeroSerie}</span>
-              </span>
-            )}
           </div>
           <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider bg-slate-200 px-2 py-1 rounded-lg">
             {atendimento.status === "entrega" ? "Pronto p/ Entrega" : atendimento.status === "finalizado" ? "Finalizado" : "Em manutenção"}

@@ -191,7 +191,8 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
       const res = await fetch(`/api/reports?type=daily&date=${todayStr}&offset=${offset}`);
       if (res.ok) {
         const data = await res.json();
-        const { summary, closedOrders } = data;
+        const { summary, closedOrders, vendas } = data;
+        const listVendas = vendas || [];
 
         const summaryText = `FECHAMENTO DO DIA (TÉRMICO)
 DATA: ${new Date().toLocaleDateString("pt-BR")}
@@ -199,6 +200,9 @@ HORA: ${new Date().toLocaleTimeString("pt-BR")}
 ------------------------
 ORDENS ENTREGUES HOJE:
 ${closedOrders.length === 0 ? "Nenhuma OS encerrada hoje." : closedOrders.map((o: any) => `- ${o.controlNumber}: R$ ${o.totalAmount.toFixed(2)}`).join("\n")}
+------------------------
+VENDAS DE BALCÃO HOJE:
+${listVendas.length === 0 ? "Nenhuma venda de balcão hoje." : listVendas.map((v: any) => `- ${v.clienteName || "Consumidor"}: R$ ${v.totalAmount.toFixed(2)}`).join("\n")}
 ------------------------
 RESUMO DO CAIXA:
 (+) EM ESPÉCIE: R$ ${summary.cash.toFixed(2)}

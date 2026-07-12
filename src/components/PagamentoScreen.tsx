@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, CreditCard, DollarSign, RefreshCw, Printer, ShieldCheck, Sparkles } from "lucide-react";
+import { ArrowLeft, CreditCard, DollarSign, RefreshCw, Printer, ShieldCheck } from "lucide-react";
 import { Atendimento, Cliente } from "../types";
 
 interface PagamentoScreenProps {
@@ -14,7 +14,7 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
 
   // Cash register states
   const [receivedAmount, setReceivedAmount] = useState(atendimento.totalAmount.toString());
-  const [method, setMethod] = useState<'cash' | 'debit' | 'credit' | 'pix'>('cash');
+  const [method, setMethod] = useState<'cash' | 'debit' | 'credit'>('cash');
   const [printReceipt, setPrintReceipt] = useState(true);
 
   useEffect(() => {
@@ -32,13 +32,6 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
     };
     fetchClient();
   }, [atendimento]);
-
-  // Sync receivedAmount for card or pix methods to avoid manual calculation by user
-  useEffect(() => {
-    if (method !== 'cash') {
-      setReceivedAmount(atendimento.totalAmount.toString());
-    }
-  }, [method, atendimento.totalAmount]);
 
   // Calculate change automatically
   const totalAmount = atendimento.totalAmount;
@@ -89,7 +82,7 @@ ${notesFin || "Aparelho entregue em perfeito funcionamento."}
 TOTAL GERAL: R$ ${totalAmount.toFixed(2)}
 RECEBIDO: R$ ${receivedNum.toFixed(2)}
 TROCO: R$ ${change.toFixed(2)}
-FORMA PAGAMENTO: ${method === "cash" ? "Em espécie" : method === "pix" ? "Pix" : method === "debit" ? "Debito" : "Credito"}
+FORMA PAGAMENTO: ${method === "cash" ? "Em espécie" : method === "debit" ? "Debito" : "Credito"}
 ------------------------
 GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
 
@@ -130,7 +123,7 @@ GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
           <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider">
             Forma de Pagamento
           </label>
-          <div className="grid grid-cols-4 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             <button
               onClick={() => setMethod('cash')}
               className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition ${
@@ -141,17 +134,6 @@ GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
             >
               <DollarSign className="w-5 h-5" />
               <span className="text-[10px]">Espécie</span>
-            </button>
-            <button
-              onClick={() => setMethod('pix')}
-              className={`p-3 rounded-xl border flex flex-col items-center justify-center gap-1 transition ${
-                method === 'pix'
-                  ? "border-[#1E88E5] bg-blue-50/50 text-[#1E88E5] font-bold"
-                  : "border-slate-100 bg-slate-50 text-slate-600 font-semibold"
-              }`}
-            >
-              <Sparkles className="w-5 h-5 text-indigo-500 animate-pulse" />
-              <span className="text-[10px]">Pix</span>
             </button>
             <button
               onClick={() => setMethod('debit')}
