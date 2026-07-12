@@ -35,31 +35,6 @@ type ActiveTab =
   | "vendas"
   | "feedback";
 
-const getSafeDate = (dt: any): Date => {
-  if (!dt) return new Date();
-  if (dt instanceof Date) return dt;
-  if (typeof dt === "string") {
-    const parsed = new Date(dt);
-    return isNaN(parsed.getTime()) ? new Date() : parsed;
-  }
-  if (dt && typeof dt.toDate === "function") {
-    try {
-      return dt.toDate();
-    } catch (e) {}
-  }
-  if (dt && typeof dt._seconds === "number") {
-    return new Date(dt._seconds * 1000);
-  }
-  if (dt && typeof dt.seconds === "number") {
-    return new Date(dt.seconds * 1000);
-  }
-  const parsedTime = Number(dt);
-  if (!isNaN(parsedTime) && parsedTime > 0) {
-    return new Date(parsedTime);
-  }
-  return new Date();
-};
-
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
@@ -92,24 +67,37 @@ export default function App() {
     const osParam = params.get("os") || params.get("control");
     if (osParam) {
       setPublicOSLoading(true);
-      fetch(`/api/atendimentos`)
-        .then(res => res.json())
-        .then(data => {
-          if (Array.isArray(data)) {
-            const found = data.find((a: any) => a.controlNumber === osParam || a.id === osParam);
+      Promise.all([
+        fetch("/api/atendimentos").then(res => res.json()).catch(() => []),
+        fetch("/api/clientes").then(res => res.json()).catch(() => [])
+      ])
+        .then(([ats, cls]) => {
+          if (Array.isArray(ats)) {
+            const found = ats.find((a: any) => a.controlNumber === osParam || a.id === osParam);
             if (found) {
+              const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+              const target = cleanId(found.clienteId);
+              const clientObj = Array.isArray(cls) ? cls.find((c: any) => c && cleanId(c.id) === target) : null;
+              const clientName = clientObj ? clientObj.name : "Consumidor Final";
+              const clientPhone = clientObj ? clientObj.phone : "";
+
               const recStr = `ORDEM DE SERVIÇO
 CONTROLE: ${found.controlNumber}
-CLIENTE: ${found.clientName || found.client?.name || "Consumidor Final"}
-FONE: ${found.clientPhone || found.client?.phone || ""}
+CLIENTE: ${clientName}
+FONE: ${clientPhone}
 APARELHO: ${found.item} ${found.brand} ${found.model}
 DEFEITO: ${found.defeito || "Avaliação técnica"}
-DATA: ${getSafeDate(found.entryDate).toLocaleString("pt-BR")}
+DATA: ${new Date(found.entryDate).toLocaleString("pt-BR")}
 SERVICOS REALIZADOS:
 ${(found.services || []).map((s: any) => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
 TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
 
-              triggerReceiptPreview("Acompanhamento de Ordem de Serviço", recStr, found.clientPhone || found.client?.phone || "", found.clientName || found.client?.name || "");
+              triggerReceiptPreview(
+                "Acompanhamento de Ordem de Serviço",
+                recStr,
+                clientPhone,
+                clientName
+              );
             } else {
               alert("Ordem de serviço não encontrada.");
             }
@@ -117,7 +105,7 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
           setPublicOSLoading(false);
         })
         .catch(err => {
-          console.error(err);
+          console.error("Error in public tracking lookup:", err);
           setPublicOSLoading(false);
         });
     }
@@ -191,8 +179,7 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
       const res = await fetch(`/api/reports?type=daily&date=${todayStr}&offset=${offset}`);
       if (res.ok) {
         const data = await res.json();
-        const { summary, closedOrders, vendas } = data;
-        const listVendas = vendas || [];
+        const { summary, closedOrders } = data;
 
         const summaryText = `FECHAMENTO DO DIA (TÉRMICO)
 DATA: ${new Date().toLocaleDateString("pt-BR")}
@@ -200,9 +187,6 @@ HORA: ${new Date().toLocaleTimeString("pt-BR")}
 ------------------------
 ORDENS ENTREGUES HOJE:
 ${closedOrders.length === 0 ? "Nenhuma OS encerrada hoje." : closedOrders.map((o: any) => `- ${o.controlNumber}: R$ ${o.totalAmount.toFixed(2)}`).join("\n")}
-------------------------
-VENDAS DE BALCÃO HOJE:
-${listVendas.length === 0 ? "Nenhuma venda de balcão hoje." : listVendas.map((v: any) => `- ${v.clienteName || "Consumidor"}: R$ ${v.totalAmount.toFixed(2)}`).join("\n")}
 ------------------------
 RESUMO DO CAIXA:
 (+) EM ESPÉCIE: R$ ${summary.cash.toFixed(2)}
@@ -620,7 +604,7 @@ ________________________`;
             onPrintIntakeReceipt={(at, hideValues, client?: any) => {
               const recStr = `${hideValues ? "2A VIA RECIBO ENTRADA (SEM VALOR)" : "2A VIA RECIBO ENTRADA"}
 CONTROLE: ${at.controlNumber}
-DATA: ${getSafeDate(at.entryDate).toLocaleString("pt-BR")}
+DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${client ? client.name : "Consumidor Final"}
 FONE: ${client ? client.phone : ""}
 CPF: ${client ? client.cpf || "" : ""}

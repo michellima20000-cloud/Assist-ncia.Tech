@@ -16,31 +16,6 @@ interface AdminPanelProps {
 }
 
 export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) {
-  const getSafeDate = (dt: any): Date => {
-    if (!dt) return new Date();
-    if (dt instanceof Date) return dt;
-    if (typeof dt === "string") {
-      const parsed = new Date(dt);
-      return isNaN(parsed.getTime()) ? new Date() : parsed;
-    }
-    if (dt && typeof dt.toDate === "function") {
-      try {
-        return dt.toDate();
-      } catch (e) {}
-    }
-    if (dt && typeof dt._seconds === "number") {
-      return new Date(dt._seconds * 1000);
-    }
-    if (dt && typeof dt.seconds === "number") {
-      return new Date(dt.seconds * 1000);
-    }
-    const parsedTime = Number(dt);
-    if (!isNaN(parsedTime) && parsedTime > 0) {
-      return new Date(parsedTime);
-    }
-    return new Date();
-  };
-
   const [activeMenu, setActiveMenu] = useState<'main' | 'reports' | 'history' | 'services' | 'products' | 'expenses' | 'users' | 'auxiliary'>('main');
 
   // Relatórios States
@@ -184,8 +159,7 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   // Export Table Reports CSV
   const handleExportCSV = () => {
     if (!reportResult) return;
-    const { closedOrders, summary, vendas } = reportResult;
-    const listVendas = vendas || [];
+    const { closedOrders, summary } = reportResult;
     
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "Ordem de Servico;Aparelho;Total;Status;Data de Entrada;Data de Saida\n";
@@ -194,13 +168,7 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
       csvContent += `${o.controlNumber};${o.item} ${o.brand} ${o.model};${o.totalAmount};${o.status};${o.entryDate};${o.exitDate}\n`;
     });
 
-    csvContent += `\n\nVENDAS DIRETAS (AVULSOS)\n`;
-    csvContent += `ID;Cliente;Total;Metodo;Data\n`;
-    listVendas.forEach((v: any) => {
-      csvContent += `${v.id || ""};${v.clienteName || "Consumidor Final"};${v.totalAmount || 0};${v.method || ""};${v.date || ""}\n`;
-    });
-
-    csvContent += `\n\nRESUMO FINANCEIRO\n`;
+    csvContent += `\nRESUMO FINANCEIRO\n`;
     csvContent += `Especie;Cartao;Total Arrecadado;Despesas;Saldo\n`;
     csvContent += `${summary.cash};${summary.card};${summary.revenue};${summary.expense};${summary.balance}\n`;
 
@@ -215,21 +183,17 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
 
   const handlePrintReport = () => {
     if (!reportResult) return;
-    const { summary, closedOrders, expenses, vendas } = reportResult;
-    const listVendas = vendas || [];
+    const { summary, closedOrders, expenses } = reportResult;
 
     const printableStr = `RELATORIO DE MOVIMENTACAO
 GERADO: ${new Date().toLocaleString("pt-BR")}
 PERIODO: ${reportType === "daily" ? reportDate : `${reportStartDate} a ${reportEndDate}`}
 ------------------------
-RECEITAS (ENTREGAS DE OS):
-${closedOrders.length === 0 ? "Nenhuma entrega." : closedOrders.map((o: any) => `- ${o.controlNumber}: ${o.model} (R$ ${o.totalAmount.toFixed(2)})`).join("\n")}
-------------------------
-VENDAS DIRETAS (AVULSOS):
-${listVendas.length === 0 ? "Nenhuma venda direta." : listVendas.map((v: any) => `- ${v.clienteName || "Consumidor"}: R$ ${v.totalAmount.toFixed(2)} (Ref: ${v.id})`).join("\n")}
+RECEITAS (ENTREGAS):
+${closedOrders.map((o: any) => `- ${o.controlNumber}: ${o.model} (R$ ${o.totalAmount.toFixed(2)})`).join("\n")}
 ------------------------
 DESPESAS NO PERIODO:
-${expenses.length === 0 ? "Nenhuma despesa." : expenses.map((e: any) => `- ${e.description}: R$ ${e.amount.toFixed(2)}`).join("\n")}
+${expenses.map((e: any) => `- ${e.description}: R$ ${e.amount.toFixed(2)}`).join("\n")}
 ------------------------
 RESUMO DO CAIXA:
 (+) ESPÉCIE: R$ ${summary.cash.toFixed(2)}
@@ -244,7 +208,9 @@ SALDO FINAL: R$ ${summary.balance.toFixed(2)}`;
 
   // Re-imprimir recibo de saída de histórico
   const handleReprintExitHistory = (at: Atendimento) => {
-    const cli = allClients.find(c => c.id === at.clienteId) || { name: "Desconhecido" };
+    const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+    const target = cleanId(at.clienteId);
+    const cli = allClients.find(c => c && cleanId(c.id) === target) || { name: "Desconhecido" };
     const recStr = `REIMPRESSÃO CUPOM SAIDA
 CONTROLE: ${at.controlNumber}
 FINALIZADO: ${at.exitDate ? new Date(at.exitDate).toLocaleString("pt-BR") : "N/A"}
@@ -784,85 +750,15 @@ GARANTIA DE 90 DIAS.`;
                 reportEndDate={reportEndDate}
               />
 
-              {/* Detailed Lists Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
-                {/* Deliveries detailed */}
+              {/* Deliveries detailed */}
+              {reportResult.closedOrders.length > 0 && (
                 <div className="space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Ordens de Serviço Finalizadas (Sistema)</p>
-                  <div className="bg-white rounded-xl border border-slate-100 divide-y divide-slate-50 max-h-[220px] overflow-y-auto shadow-sm">
-                    {reportResult.closedOrders && reportResult.closedOrders.length > 0 ? (
-                      reportResult.closedOrders.map((o: any) => (
-                        <div key={o.id} className="p-2.5 flex justify-between items-start text-xs hover:bg-slate-50 transition">
-                          <div>
-                            <span className="font-black text-slate-700 font-mono block">{o.controlNumber}</span>
-                            <span className="text-[10px] text-slate-500">{o.item} {o.brand} {o.model}</span>
-                          </div>
-                          <span className="font-black text-emerald-600 font-mono text-right shrink-0">R$ {o.totalAmount.toFixed(2)}</span>
-                        </div>
-                      ))
-                    ) : (
-                      <p className="p-4 text-center text-slate-400 text-[11px] font-medium">Nenhuma OS entregue neste período.</p>
-                    )}
-                  </div>
-                </div>
-
-                {/* Direct sales detailed */}
-                <div className="space-y-1.5">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Vendas de Balcão (Avulsos / Diretas)</p>
-                  <div className="bg-white rounded-xl border border-slate-100 divide-y divide-slate-50 max-h-[220px] overflow-y-auto shadow-sm">
-                    {reportResult.vendas && reportResult.vendas.length > 0 ? (
-                      reportResult.vendas.map((v: any) => (
-                        <div key={v.id} className="p-2.5 flex flex-col gap-1 hover:bg-slate-50 transition text-xs">
-                          <div className="flex justify-between items-start">
-                            <div>
-                              <span className="font-bold text-slate-800 block truncate max-w-[180px]">{v.clienteName || "Consumidor Final"}</span>
-                              <span className="text-[9px] text-slate-400 font-mono uppercase font-bold bg-slate-50 border border-slate-100 px-1 py-0.2 rounded inline-block mt-0.5">
-                                pgto: {v.method === "cash" ? "Dinheiro" : v.method === "pix" ? "PIX" : v.method === "debit" ? "Débito" : "Crédito"}
-                              </span>
-                            </div>
-                            <span className="font-black text-emerald-600 font-mono text-right shrink-0">R$ {v.totalAmount.toFixed(2)}</span>
-                          </div>
-                          {v.items && v.items.length > 0 && (
-                            <div className="text-[10px] text-slate-500 font-medium pl-1.5 border-l-2 border-slate-200 mt-1">
-                              {v.items.map((it: any) => `${it.name} (x${it.quantity})`).join(", ")}
-                            </div>
-                          )}
-                        </div>
-                      ))
-                    ) : (
-                      <p className="p-4 text-center text-slate-400 text-[11px] font-medium">Nenhuma venda direta realizada neste período.</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Caixa / Lançamentos de Entrada */}
-              {reportResult.payments && reportResult.payments.length > 0 && (
-                <div className="space-y-1.5 mt-4">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entradas de Caixa Detalhadas</p>
-                  <div className="bg-white rounded-xl border border-slate-100 divide-y divide-slate-50 max-h-[220px] overflow-y-auto shadow-sm">
-                    {reportResult.payments.map((p: any) => (
-                      <div key={p.id} className="p-2.5 flex justify-between items-center text-xs hover:bg-slate-50 transition">
-                        <div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="font-bold text-slate-700">
-                              {p.isVendaDirecta ? "Venda Direta" : "Ordem de Serviço"}
-                            </span>
-                            <span className={`text-[9px] px-1.5 py-0.5 rounded font-black font-mono uppercase ${
-                              p.method === "cash" ? "bg-emerald-50 text-emerald-700 border border-emerald-100" :
-                              p.method === "pix" ? "bg-indigo-50 text-indigo-700 border border-indigo-100" :
-                              "bg-blue-50 text-blue-700 border border-blue-100"
-                            }`}>
-                              {p.method === "cash" ? "Dinheiro" : p.method === "pix" ? "PIX" : p.method === "debit" ? "Débito" : "Crédito"}
-                            </span>
-                          </div>
-                          <p className="text-[9px] text-slate-400 mt-0.5 font-mono">
-                            Ref: {p.vendaId || p.atendimentoId || p.id}
-                          </p>
-                        </div>
-                        <span className="font-black text-emerald-600 font-mono">
-                          + R$ {p.totalAmount.toFixed(2)}
-                        </span>
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Entregas no Período</p>
+                  <div className="bg-white rounded-xl border border-slate-100 divide-y divide-slate-50 max-h-[160px] overflow-y-auto">
+                    {reportResult.closedOrders.map((o: any) => (
+                      <div key={o.id} className="p-2.5 flex justify-between text-xs">
+                        <span>{o.controlNumber} - {o.model}</span>
+                        <span className="font-bold text-slate-800">R$ {o.totalAmount.toFixed(2)}</span>
                       </div>
                     ))}
                   </div>
@@ -900,7 +796,9 @@ GARANTIA DE 90 DIAS.`;
                 .filter(o => {
                   if (!o) return false;
                   const searchLower = (historySearch || "").toLowerCase();
-                  const client = Array.isArray(allClients) ? allClients.find(c => c.id === o.clienteId) : undefined;
+                  const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+                  const target = cleanId(o.clienteId);
+                  const client = Array.isArray(allClients) ? allClients.find(c => c && cleanId(c.id) === target) : undefined;
                   return (
                     (o.controlNumber || "").toLowerCase().includes(searchLower) ||
                     (o.item || "").toLowerCase().includes(searchLower) ||
@@ -911,7 +809,9 @@ GARANTIA DE 90 DIAS.`;
                 })
                 .map((o) => {
                   if (!o) return null;
-                  const client = (Array.isArray(allClients) ? allClients.find(c => c.id === o.clienteId) : undefined) || { name: "Cliente Desconhecido" };
+                  const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+                  const target = cleanId(o.clienteId);
+                  const client = (Array.isArray(allClients) ? allClients.find(c => c && cleanId(c.id) === target) : undefined) || { name: "Cliente Desconhecido" };
                   return (
                     <div key={o.id} className="p-3 border border-slate-100 hover:border-blue-100 rounded-xl text-xs flex justify-between items-center gap-4 bg-slate-50/20">
                       <div>
@@ -930,7 +830,7 @@ GARANTIA DE 90 DIAS.`;
                       <div className="text-right flex items-center gap-3">
                         <div>
                           <p className="font-mono font-bold text-slate-800">R$ {(o.totalAmount || 0).toFixed(2)}</p>
-                          <p className="text-[10px] text-slate-400">Entrada: {o.entryDate ? getSafeDate(o.entryDate).toLocaleDateString() : "N/A"}</p>
+                          <p className="text-[10px] text-slate-400">Entrada: {o.entryDate ? new Date(o.entryDate).toLocaleDateString() : "N/A"}</p>
                         </div>
 
                         {o.status === "finalizado" && (

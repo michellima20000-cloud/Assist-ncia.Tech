@@ -23,30 +23,6 @@ interface ClienteHistoricoProps {
 }
 
 export default function ClienteHistorico({ onPrintReceipt }: ClienteHistoricoProps) {
-  const getSafeDate = (dt: any): Date => {
-    if (!dt) return new Date();
-    if (dt instanceof Date) return dt;
-    if (typeof dt === "string") {
-      const parsed = new Date(dt);
-      return isNaN(parsed.getTime()) ? new Date() : parsed;
-    }
-    if (dt && typeof dt.toDate === "function") {
-      try {
-        return dt.toDate();
-      } catch (e) {}
-    }
-    if (dt && typeof dt._seconds === "number") {
-      return new Date(dt._seconds * 1000);
-    }
-    if (dt && typeof dt.seconds === "number") {
-      return new Date(dt.seconds * 1000);
-    }
-    const parsedTime = Number(dt);
-    if (!isNaN(parsedTime) && parsedTime > 0) {
-      return new Date(parsedTime);
-    }
-    return new Date();
-  };
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
   const [vendas, setVendas] = useState<Venda[]>([]);
@@ -128,7 +104,7 @@ GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
     } else {
       const recStr = `2A VIA RECIBO ENTRADA
 CONTROLE: ${at.controlNumber}
-DATA: ${getSafeDate(at.entryDate).toLocaleString("pt-BR")}
+DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${client.name}
 FONE: ${finalClientPhone}
 CPF: ${finalClientCpf}

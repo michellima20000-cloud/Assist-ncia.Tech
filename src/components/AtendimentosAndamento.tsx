@@ -15,10 +15,14 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
 
   const fetchData = async () => {
     try {
-      const [ats, cls] = await Promise.all([
-        fetch("/api/atendimentos").then(r => r.json()),
-        fetch("/api/clientes").then(r => r.json())
-      ]);
+      const ats = await fetch("/api/atendimentos").then(r => r.json()).catch(err => {
+        console.error("Error fetching atendimentos", err);
+        return [];
+      });
+      const cls = await fetch("/api/clientes").then(r => r.json()).catch(err => {
+        console.error("Error fetching clientes", err);
+        return [];
+      });
       setAtendimentos(Array.isArray(ats) ? ats : []);
       setClientes(Array.isArray(cls) ? cls : []);
     } catch (err) {
@@ -33,7 +37,9 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
   }, []);
 
   const getCliente = (id: string) => {
-    return (clientes || []).find(c => c && c.id === id) || { name: "Cliente Desconhecido", phone: "N/A" };
+    const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+    const target = cleanId(id);
+    return (clientes || []).find(c => c && cleanId(c.id) === target) || { name: "Cliente Desconhecido", phone: "N/A" };
   };
 
   const handleDelete = async (id: string, e: React.MouseEvent) => {

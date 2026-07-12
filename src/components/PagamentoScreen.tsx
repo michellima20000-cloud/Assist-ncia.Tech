@@ -20,14 +20,17 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
   useEffect(() => {
     const fetchClient = async () => {
       try {
+        setClient(null); // Reset client before fetching
         const res = await fetch(`/api/clientes`);
         if (res.ok) {
           const list: Cliente[] = await res.json();
-          const found = list.find(c => c.id === atendimento.clienteId);
+          const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+          const target = cleanId(atendimento?.clienteId);
+          const found = list.find(c => c && cleanId(c.id) === target);
           if (found) setClient(found);
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching client in PagamentoScreen:", err);
       }
     };
     fetchClient();

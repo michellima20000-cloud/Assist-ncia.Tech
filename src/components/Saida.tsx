@@ -153,14 +153,21 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
   useEffect(() => {
     const fetchClient = async () => {
       try {
+        setClient(null); // Reset client before fetching
         const res = await fetch(`/api/clientes`);
         if (res.ok) {
           const list: Cliente[] = await res.json();
-          const found = list.find(c => c.id === atendimento.clienteId);
-          if (found) setClient(found);
+          const cleanId = (val: any) => String(val || "").trim().toLowerCase();
+          const target = cleanId(atendimento?.clienteId);
+          const found = list.find(c => c && cleanId(c.id) === target);
+          if (found) {
+            setClient(found);
+          } else {
+            console.warn("Client not found in Saida for ID:", atendimento?.clienteId);
+          }
         }
       } catch (err) {
-        console.error(err);
+        console.error("Error fetching client in Saida:", err);
       }
     };
     
@@ -225,33 +232,8 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
     );
   }, [atendimento]);
 
-  const getSafeDate = (dt: any): Date => {
-    if (!dt) return new Date();
-    if (dt instanceof Date) return dt;
-    if (typeof dt === "string") {
-      const parsed = new Date(dt);
-      return isNaN(parsed.getTime()) ? new Date() : parsed;
-    }
-    if (dt && typeof dt.toDate === "function") {
-      try {
-        return dt.toDate();
-      } catch (e) {}
-    }
-    if (dt && typeof dt._seconds === "number") {
-      return new Date(dt._seconds * 1000);
-    }
-    if (dt && typeof dt.seconds === "number") {
-      return new Date(dt.seconds * 1000);
-    }
-    const parsedTime = Number(dt);
-    if (!isNaN(parsedTime) && parsedTime > 0) {
-      return new Date(parsedTime);
-    }
-    return new Date();
-  };
-
   // Calculate permanência (elapsed time)
-  const entryDate = getSafeDate(atendimento.entryDate);
+  const entryDate = new Date(atendimento.entryDate);
   const now = new Date();
   const diffMs = now.getTime() - entryDate.getTime();
   const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
@@ -271,13 +253,13 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
   const entryDateStr = entryDate.toLocaleDateString("pt-BR");
   const entryTimeStr = entryDate.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  const exitDateObj = getSafeDate(atendimento.exitDate || now);
+  const exitDateObj = atendimento.exitDate ? new Date(atendimento.exitDate) : now;
   const exitDateStr = exitDateObj.toLocaleDateString("pt-BR");
   const exitTimeStr = exitDateObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
   const getFormattedMessage = (type: "entry" | "ready" | "feedback", customTemplate?: string, customAtendimento?: Atendimento) => {
+    if (!client) return "";
     const activeAt = customAtendimento || atendimento;
-    const clientName = client?.name || (activeAt as any).clientName || (activeAt as any).client?.name || "Cliente";
     
     let template = customTemplate;
     if (!template) {
@@ -291,7 +273,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
     }
     
     return template
-      .replace(/{cliente}/g, clientName)
+      .replace(/{cliente}/g, client.name || "Cliente")
       .replace(/{aparelho}/g, activeAt.item || "aparelho")
       .replace(/{marca}/g, activeAt.brand || "")
       .replace(/{modelo}/g, activeAt.model || "")
@@ -300,9 +282,8 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
   };
 
   const handleSendWhatsApp = (type: "entry" | "ready" | "feedback" = "ready", customText?: string) => {
-    const clientPhone = client?.phone || (atendimento as any).clientPhone || (atendimento as any).client?.phone;
-    if (!clientPhone) return;
-    const cleanPhone = clientPhone.replace(/\D/g, "");
+    if (!client) return;
+    const cleanPhone = client.phone.replace(/\D/g, "");
     const text = customText || getFormattedMessage(type);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const baseUrl = isMobile ? "https://api.whatsapp.com/send" : "https://web.whatsapp.com/send";
@@ -605,28 +586,19 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
         </div>
 
         {/* Client Row (With call button) */}
-        {(client || (atendimento as any).clientName || (atendimento as any).client?.name) && (
+        {client && (
           <div className="flex items-center justify-between p-3 bg-slate-50 border border-slate-100 rounded-xl">
             <div>
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Cliente</span>
-              <p className="text-xs font-extrabold text-slate-800">
-                {client?.name || (atendimento as any).clientName || (atendimento as any).client?.name || "Cliente Desconhecido"}
-              </p>
-              {(client?.cpf || (atendimento as any).clientCpf || (atendimento as any).client?.cpf) && (
-                <span className="text-[10px] text-slate-400 block mt-0.5">
-                  CPF: {client?.cpf || (atendimento as any).clientCpf || (atendimento as any).client?.cpf}
-                </span>
-              )}
+              <p className="text-xs font-extrabold text-slate-800">{client.name}</p>
             </div>
-            {(client?.phone || (atendimento as any).clientPhone || (atendimento as any).client?.phone) && (
-              <a 
-                href={`tel:${client?.phone || (atendimento as any).clientPhone || (atendimento as any).client?.phone}`}
-                className="p-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition flex items-center justify-center shadow-md shadow-emerald-500/10"
-                title="Ligar para cliente"
-              >
-                <Phone className="w-4 h-4" />
-              </a>
-            )}
+            <a 
+              href={`tel:${client.phone}`}
+              className="p-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl transition flex items-center justify-center shadow-md shadow-emerald-500/10"
+              title="Ligar para cliente"
+            >
+              <Phone className="w-4 h-4" />
+            </a>
           </div>
         )}
 
