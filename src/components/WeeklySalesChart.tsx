@@ -77,17 +77,28 @@ export default function WeeklySalesChart() {
 
   // Build the chart data series
   const chartData = useMemo(() => {
+    const safeGetDateStr = (dateVal: any): string => {
+      if (!dateVal) return "";
+      if (typeof dateVal === "string") return dateVal.substring(0, 10);
+      if (dateVal instanceof Date) return dateVal.toISOString().substring(0, 10);
+      if (typeof dateVal === "object") {
+        if (dateVal.seconds) return new Date(dateVal.seconds * 1000).toISOString().substring(0, 10);
+        if (dateVal._seconds) return new Date(dateVal._seconds * 1000).toISOString().substring(0, 10);
+      }
+      return String(dateVal).substring(0, 10);
+    };
+
     return past7Days.map(({ dateStr, label }) => {
       // Direct sales
-      const dayVendas = vendas.filter(v => v.date && v.date.substring(0, 10) === dateStr);
+      const dayVendas = vendas.filter(v => v && v.date && safeGetDateStr(v.date) === dateStr);
       const vendasTotal = dayVendas.reduce((sum, v) => sum + (Number(v.totalAmount) || 0), 0);
 
       // Total billing payments (Direct sales + OS payments)
-      const dayPayments = payments.filter(p => p.date && p.date.substring(0, 10) === dateStr);
+      const dayPayments = payments.filter(p => p && p.date && safeGetDateStr(p.date) === dateStr);
       const totalFaturamento = dayPayments.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0);
 
       // OS finalized order payments
-      const osPayments = dayPayments.filter(p => !p.isVendaDirecta);
+      const osPayments = dayPayments.filter(p => p && !p.isVendaDirecta);
       const osTotal = osPayments.reduce((sum, p) => sum + (Number(p.totalAmount) || 0), 0);
 
       return {
