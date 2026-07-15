@@ -3,6 +3,7 @@ import { ArrowLeft, Save, Search, UserPlus, FileText, Camera, CheckSquare, Squar
 import { Cliente, Servico, Produto, AtendimentoServico, AtendimentoProduto, Marca, Item } from "../types";
 import Clientes from "./Clientes";
 import ProductScanner from "./ProductScanner";
+import { compressImage } from "../lib/imageCompressor";
 
 interface EntradaProps {
   onBack: () => void;
@@ -92,17 +93,15 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
       }
 
       const promises = filesArr.map((file: File) => {
-        return new Promise<string>((resolve) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            resolve(reader.result as string);
-          };
-          reader.readAsDataURL(file);
+        return compressImage(file).catch(err => {
+          console.error("Error compressing equipment image:", err);
+          return "";
         });
       });
 
       Promise.all(promises).then(results => {
-        const updated = [...photoUrls, ...results].slice(0, 6);
+        const validResults = results.filter(r => r !== "");
+        const updated = [...photoUrls, ...validResults].slice(0, 6);
         setPhotoUrls(updated);
         if (updated.length > 0) {
           setPhotoUrl(updated[0]); // fallback for single-photo legacy fields

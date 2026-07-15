@@ -9,6 +9,7 @@ import {
 import {
   Servico, Produto, Despesa, Convenio, Marca, Item, User, Atendimento, Cliente
 } from "../types";
+import { compressImage } from "../lib/imageCompressor";
 
 interface AdminPanelProps {
   onBack: () => void;
@@ -257,15 +258,16 @@ GARANTIA DE 90 DIAS.`;
   };
 
   // Handle Product Photo Upload / Camera Capture
-  const handleProductPhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleProductPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
       const file = files[0];
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setProductForm(prev => ({ ...prev, imageUrl: reader.result as string }));
-      };
-      reader.readAsDataURL(file);
+      try {
+        const compressedBase64 = await compressImage(file);
+        setProductForm(prev => ({ ...prev, imageUrl: compressedBase64 }));
+      } catch (err) {
+        console.error("Error compressing product photo:", err);
+      }
     }
   };
 
