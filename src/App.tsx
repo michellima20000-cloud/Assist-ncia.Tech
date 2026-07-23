@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
   Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode,
-  ShoppingBag, MessageSquare
+  ShoppingBag, MessageSquare, Eye, EyeOff
 } from "lucide-react";
 import { User, Atendimento, DashboardStats } from "./types";
 
@@ -40,6 +40,14 @@ export default function App() {
   const [token, setToken] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
   const [atendimentoFlowMode, setAtendimentoFlowMode] = useState<"atendimento" | "saida">("atendimento");
+  const [hideValues, setHideValues] = useState<boolean>(() => {
+    return localStorage.getItem("hideValues") === "true";
+  });
+
+  useEffect(() => {
+    localStorage.setItem("hideValues", String(hideValues));
+  }, [hideValues]);
+
   const [stats, setStats] = useState<DashboardStats>({
     naAssistenciaCount: 0,
     entregaCount: 0,
@@ -230,7 +238,7 @@ ________________________`;
             <div className="w-12 h-12 bg-blue-500/10 text-blue-400 rounded-2xl flex items-center justify-center mx-auto">
               <QrCode className="w-6 h-6 animate-pulse" />
             </div>
-            <h1 className="text-lg font-black tracking-tight text-white">Minha Assistência</h1>
+            <h1 className="text-lg font-black tracking-tight text-white">Minha Assistência.Tech</h1>
             <p className="text-xs text-slate-400">Portal do Cliente • Acompanhamento Online</p>
             <div className="py-2">
               <p className="text-xs text-[#1E88E5] font-bold">Carregando Ordem de Serviço Nº {params.get("os") || params.get("control")}</p>
@@ -274,7 +282,7 @@ ________________________`;
               M
             </div>
             <div>
-              <h1 className="text-base font-extrabold tracking-tight">Minha Assistência</h1>
+              <h1 className="text-base font-extrabold tracking-tight">Minha Assistência.Tech</h1>
               <p className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">Módulos Conectados</p>
             </div>
           </div>
@@ -288,6 +296,18 @@ ________________________`;
             </div>
 
             <div className="flex items-center gap-1">
+              <button
+                onClick={() => setHideValues(prev => !prev)}
+                className={`p-2 rounded-xl text-white transition flex items-center justify-center gap-1.5 ${
+                  hideValues ? "bg-amber-400/25 text-amber-200 border border-amber-300/40" : "hover:bg-white/10 active:bg-white/15"
+                }`}
+                title={hideValues ? "Exibir valores no balcão" : "Ocultar valores do balcão (Modo Privacidade)"}
+              >
+                {hideValues ? <EyeOff className="w-5 h-5 text-amber-300" /> : <Eye className="w-5 h-5 text-slate-100" />}
+                <span className="text-xs font-extrabold hidden lg:inline">
+                  {hideValues ? "VALORES OCULTOS" : "OCULTAR VALORES"}
+                </span>
+              </button>
               <button
                 onClick={() => setGlobalScannerOpen(true)}
                 className="p-2 hover:bg-white/10 active:bg-white/15 rounded-xl text-white transition flex items-center justify-center gap-1.5"
@@ -350,7 +370,9 @@ ________________________`;
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento Diário</p>
-                      <p className="text-lg font-black text-emerald-600 font-mono">R$ {(stats?.financials?.totalCollected ?? 0).toFixed(2)}</p>
+                      <p className="text-lg font-black text-emerald-600 font-mono">
+                        {hideValues ? "R$ ••••" : `R$ ${(stats?.financials?.totalCollected ?? 0).toFixed(2)}`}
+                      </p>
                     </div>
                   </div>
 
@@ -360,7 +382,9 @@ ________________________`;
                     </div>
                     <div>
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Despesas Diárias</p>
-                      <p className="text-lg font-black text-red-600 font-mono">R$ {(stats?.financials?.expenses ?? 0).toFixed(2)}</p>
+                      <p className="text-lg font-black text-red-600 font-mono">
+                        {hideValues ? "R$ ••••" : `R$ ${(stats?.financials?.expenses ?? 0).toFixed(2)}`}
+                      </p>
                     </div>
                   </div>
                 </>
@@ -705,7 +729,7 @@ TERMO: Autorizo o diagnóstico.`;
 
       {/* FOOTER METADATA */}
       <footer className="bg-white border-t border-slate-100 py-4 text-center text-[10px] text-slate-400 font-sans mt-10">
-        <p>Minha Assistência v1.2.0 • Sistema Completo para Celulares e Eletrônicos</p>
+        <p>Minha Assistência.Tech v1.2.0 • Sistema Completo para Celulares e Eletrônicos</p>
         <p className="mt-1 text-slate-300">Terminal de Vendas Conectado • Cloud Sync Ativo</p>
       </footer>
 

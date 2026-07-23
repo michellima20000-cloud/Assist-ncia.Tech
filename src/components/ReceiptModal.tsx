@@ -91,6 +91,7 @@ interface ParsedReceipt {
   imei: string;
   defeito: string;
   observations: string;
+  garantia: string;
   items: ParsedItem[];
   totalAmount: number;
   receivedAmount: number;
@@ -141,6 +142,7 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
   let imei = "";
   let defeito = "";
   let observations = "";
+  let garantia = "";
   let items: ParsedItem[] = [];
   let totalAmount = 0;
   let receivedAmount = 0;
@@ -174,6 +176,10 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
       defeito = line.replace(/DEFEITO:\s*/i, "").trim();
     } else if (upper.startsWith("ESTADO / OBS:") || upper.startsWith("ESTADO/OBS:") || upper.startsWith("LAUDO / OBSERVACOES SAIDA:") || upper.startsWith("LAUDO/OBSERVAÇÕES SAÍDA:")) {
       observations = line.substring(line.indexOf(":") + 1).trim();
+    } else if (upper.startsWith("GARANTIA:") || upper.startsWith("GARANTIA DE:") || upper.startsWith("TERMO DE GARANTIA:") || upper.startsWith("PRAZO DE GARANTIA:")) {
+      garantia = line.substring(line.indexOf(":") + 1).trim();
+    } else if (upper.includes("GARANTIA DE ") || upper.includes("GARANTIA LEGAL")) {
+      garantia = line.trim();
     } else if (upper.startsWith("TOTAL ESTIMADO:") || upper.startsWith("TOTAL GERAL:") || upper.startsWith("TOTAL:")) {
       const match = line.match(/R\$\s*([\d.,]+)/i);
       if (match) {
@@ -296,6 +302,7 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
     imei,
     defeito: defeito || "Avaliação de hardware/bateria",
     observations: observations || "Aparelho sob responsabilidade técnica",
+    garantia: garantia || "Garantia de 90 dias (3 meses)",
     items,
     totalAmount: totalAmount || items.reduce((sum, it) => sum + (it.price * it.quantity), 0),
     receivedAmount,
@@ -693,10 +700,21 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                 </table>
               </div>
 
+              <!-- Garantia -->
+              <div class="section-block" style="border: 1px solid #cbd5e1; background: #f8fafc; padding: 6px; border-radius: 4px; margin-bottom: 6px;">
+                <h3 class="section-title" style="color: #0284c7; font-size: 10px; font-weight: 800; margin: 0 0 2px 0;">GARANTIA APLICADA</h3>
+                <div class="section-content" style="font-weight: 800; color: #0f172a; font-size: 11px; margin-bottom: 2px;">
+                  ${parsed.garantia || "Garantia de 90 dias (3 meses)"}
+                </div>
+                <div style="font-size: 8px; color: #64748b; line-height: 1.2;">
+                  Garantia legal contra defeitos de fabricação ou execução do serviço. Excluem-se quedas, mau uso ou danos líquidos.
+                </div>
+              </div>
+
               <!-- Observações -->
               <div class="section-block">
-                <h3 class="section-title">${parsed.isServiceOrder ? 'Observações' : 'Garantia / Observações'}</h3>
-                <div class="section-content">${parsed.observations || (parsed.isServiceOrder ? 'Nenhuma observação cadastrada' : 'Garantia de acordo com os termos descritos.')}</div>
+                <h3 class="section-title">Observações Técnicas / Estado</h3>
+                <div class="section-content">${parsed.observations || 'Nenhuma observação cadastrada.'}</div>
               </div>
 
               <!-- Total -->
@@ -1403,13 +1421,26 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                 </div>
               </div>
 
+              {/* Garantia Section */}
+              <div className="mb-4 bg-sky-50/70 p-3 rounded-xl border border-sky-100">
+                <h5 className="font-extrabold text-[#1E88E5] text-[11px] uppercase tracking-wider mb-1 flex items-center gap-1">
+                  <span>🛡️</span> Garantia do Equipamento / Serviço
+                </h5>
+                <p className="text-slate-900 font-extrabold text-xs">
+                  {parsed.garantia || "Garantia de 90 dias (3 meses)"}
+                </p>
+                <p className="text-[10px] text-slate-500 mt-1 leading-tight">
+                  Garantia legal contra defeitos de fabricação ou mão de obra. Não cobre quedas ou danos causados por líquidos.
+                </p>
+              </div>
+
               {/* Observações Section */}
               <div className="mb-4">
                 <h5 className="font-bold text-slate-900 border-b border-slate-200 pb-1 text-[11px] uppercase tracking-wider mb-1.5">
-                  {parsed.isServiceOrder ? "Observações" : "Garantia / Observações"}
+                  Observações Técnicas / Estado
                 </h5>
                 <p className="text-slate-700 font-medium whitespace-pre-wrap pl-1">
-                  {parsed.observations || (parsed.isServiceOrder ? "Nenhuma observação técnica registrada." : "Garantia de acordo com os termos descritos.")}
+                  {parsed.observations || "Nenhuma observação técnica registrada."}
                 </p>
               </div>
 

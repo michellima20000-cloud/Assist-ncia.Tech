@@ -18,7 +18,8 @@ import {
   Grid3X3, 
   Clock, 
   Activity, 
-  QrCode 
+  QrCode,
+  ShieldCheck 
 } from "lucide-react";
 import { Atendimento, Cliente, Servico, Produto, AtendimentoServico, AtendimentoProduto } from "../types";
 import ProductScanner from "./ProductScanner";
@@ -82,6 +83,9 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
 
   const [isEditingNotesFin, setIsEditingNotesFin] = useState(false);
   const [notesFinVal, setNotesFinVal] = useState(atendimento.notesFin || "");
+
+  const [isEditingGarantia, setIsEditingGarantia] = useState(false);
+  const [garantiaVal, setGarantiaVal] = useState(atendimento.garantia || "Garantia de 90 dias (3 meses)");
 
   const [isEditingSenha, setIsEditingSenha] = useState(false);
   const [senhaVal, setSenhaVal] = useState(atendimento.senhaDesbloqueio || "");
@@ -224,6 +228,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
     setDefectVal(atendimento.defeito || "");
     setSerialVal(atendimento.numeroSerie || "");
     setNotesFinVal(atendimento.notesFin || "");
+    setGarantiaVal(atendimento.garantia || "Garantia de 90 dias (3 meses)");
     setSenhaVal(atendimento.senhaDesbloqueio || "");
     setInicioServico(atendimento.inicioServico || "");
     setFimServico(atendimento.fimServico || "");
@@ -1082,8 +1087,70 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
             />
           ) : (
             <p className="text-xs font-medium text-slate-700 p-3 bg-slate-50 border border-slate-100 rounded-xl min-h-[46px] whitespace-pre-line">
-              {atendimento.notesFin || "Clique no lápis para descrever as soluções técnicas, garantias aplicadas ou laudo de saída."}
+              {atendimento.notesFin || "Clique no lápis para descrever as soluções técnicas ou laudo de saída."}
             </p>
+          )}
+        </div>
+
+        {/* Garantia do Serviço / Peça / Aparelho */}
+        <div className="space-y-1">
+          <div className="flex justify-between items-center">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide flex items-center gap-1">
+              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+              <span>Garantia Aplicada / Prazo</span>
+            </span>
+            <button 
+              onClick={() => {
+                if (isEditingGarantia) {
+                  saveField("garantia", garantiaVal);
+                }
+                setIsEditingGarantia(!isEditingGarantia);
+              }}
+              className="p-1 text-[#1E88E5] hover:bg-blue-50 rounded"
+            >
+              {isEditingGarantia ? <Check className="w-3.5 h-3.5" /> : <Pencil className="w-3.5 h-3.5" />}
+            </button>
+          </div>
+          {isEditingGarantia ? (
+            <div className="space-y-2 bg-slate-50 p-3 rounded-xl border border-blue-200">
+              <input
+                type="text"
+                value={garantiaVal}
+                onChange={(e) => setGarantiaVal(e.target.value)}
+                className="w-full p-2.5 border border-blue-300 bg-white rounded-xl text-xs font-bold text-slate-800 outline-none"
+                placeholder="Informe o prazo de garantia..."
+              />
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {[
+                  "Garantia de 90 dias (3 meses)",
+                  "Garantia de 30 dias",
+                  "Garantia de 6 meses",
+                  "Garantia de 1 ano",
+                  "Sem garantia"
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setGarantiaVal(preset)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                      garantiaVal === preset
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="p-3 bg-emerald-50/60 border border-emerald-100/80 rounded-xl flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span className="text-xs font-bold text-emerald-900">{atendimento.garantia || garantiaVal || "Garantia de 90 dias (3 meses)"}</span>
+              </div>
+              <span className="text-[10px] text-emerald-600 font-semibold bg-emerald-100/80 px-2 py-0.5 rounded-full">Ativa</span>
+            </div>
           )}
         </div>
 

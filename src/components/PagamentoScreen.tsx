@@ -87,7 +87,7 @@ RECEBIDO: R$ ${receivedNum.toFixed(2)}
 TROCO: R$ ${change.toFixed(2)}
 FORMA PAGAMENTO: ${method === "cash" ? "Em espécie" : method === "debit" ? "Debito" : "Credito"}
 ------------------------
-GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
+GARANTIA: ${atendimento.garantia || "Garantia de 90 dias (3 meses)"}`;
 
         onPaymentSuccess(printReceipt ? receiptStr : "", client ? client.phone : "", client ? client.name : "");
       } else {

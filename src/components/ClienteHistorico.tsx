@@ -96,7 +96,7 @@ TOTAL GERAL: R$ ${at.totalAmount.toFixed(2)}
 RECEBIDO: R$ ${at.totalAmount.toFixed(2)}
 TROCO: R$ 0,00
 ------------------------
-GARANTIA DE 90 DIAS PARA MAO DE OBRA E PECAS SUBSTITUIDAS.`;
+GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
 
       if (onPrintReceipt) {
         onPrintReceipt("Recibo de Saída / Garantia", recStr, finalClientPhone, client.name);
@@ -116,6 +116,7 @@ ${at.numeroSerie ? `SÉRIE: ${at.numeroSerie}` : ""}
 ------------------------
 DEFEITO: ${at.defeito || "Não informado"}
 ESTADO / OBS: ${at.observations || "Nenhuma"}
+GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}
 ------------------------
 SERVICOS ESTIMADOS:
 ${(at.services || []).map(s => `- ${s.name}: R$ ${Number(s.price).toFixed(2)}`).join("\n")}

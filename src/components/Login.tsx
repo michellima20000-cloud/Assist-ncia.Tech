@@ -135,7 +135,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
           <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mx-auto mb-4 backdrop-blur-sm">
             <LogIn className="w-8 h-8 text-white" />
           </div>
-          <h1 className="text-2xl font-bold font-sans tracking-tight">Minha Assistência</h1>
+          <h1 className="text-2xl font-bold font-sans tracking-tight">Minha Assistência.Tech</h1>
           <p className="text-blue-100 text-sm mt-1">Gestão de Assistências Técnicas & Eletrônicos</p>
         </div>
 

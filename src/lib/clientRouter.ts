@@ -211,6 +211,17 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const atendimentosSnap = await getDocs(collection(db, "atendimentos"));
       const atendimentos = getDocsData(atendimentosSnap);
 
+      const vendasSnap = await getDocs(collection(db, "vendas"));
+      const vendas = getDocsData(vendasSnap);
+
+      const produtosSnap = await getDocs(collection(db, "produtos"));
+      const produtos = getDocsData(produtosSnap);
+
+      const productCostMap = new Map<string, number>();
+      produtos.forEach((p: any) => {
+        productCostMap.set(p.id, Number(p.cost) || 0);
+      });
+
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
         if (offsetQuery === null) return isoString.substring(0, 10);
@@ -251,6 +262,42 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
+      const filteredVendas = vendas.filter((v: any) => {
+        if (!v.date) return false;
+        const localDate = getLocalDateStr(v.date);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
+      });
+
+      let directSalesRevenue = 0;
+      let directSalesCost = 0;
+      filteredVendas.forEach((v: any) => {
+        const items = v.items || [];
+        items.forEach((item: any) => {
+          const qty = Number(item.quantity) || 1;
+          const price = Number(item.price) || 0;
+          const cost = item.cost !== undefined && item.cost !== null ? Number(item.cost) : (productCostMap.get(item.productId) || 0);
+          directSalesRevenue += price * qty;
+          directSalesCost += cost * qty;
+        });
+      });
+
+      let serviceProductsRevenue = 0;
+      let serviceProductsCost = 0;
+      closedOrders.forEach((a: any) => {
+        const productsUsed = a.products || [];
+        productsUsed.forEach((p: any) => {
+          const qty = Number(p.quantity) || 1;
+          const price = Number(p.price) || 0;
+          const cost = p.cost !== undefined && p.cost !== null ? Number(p.cost) : (productCostMap.get(p.productId) || 0);
+          serviceProductsRevenue += price * qty;
+          serviceProductsCost += cost * qty;
+        });
+      });
+
+      const productRevenue = directSalesRevenue + serviceProductsRevenue;
+      const productCost = directSalesCost + serviceProductsCost;
+      const productGrossProfit = productRevenue - productCost;
+
       let totalCash = 0;
       let totalCard = 0;
       filteredPayments.forEach(p => {
@@ -261,18 +308,26 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
       const totalRevenue = totalCash + totalCard;
       const totalExpense = filteredExpenses.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
-      const balance = totalRevenue - totalExpense;
+      const grossProfit = totalRevenue - productCost;
+      const netProfit = totalRevenue - productCost - totalExpense;
+      const balance = netProfit;
 
       return new Response(JSON.stringify({
         payments: filteredPayments,
         expenses: filteredExpenses,
         closedOrders,
+        vendas: filteredVendas,
         summary: {
           cash: totalCash,
           card: totalCard,
           revenue: totalRevenue,
           expense: totalExpense,
-          balance
+          balance: netProfit,
+          productRevenue,
+          productCost,
+          productGrossProfit,
+          grossProfit,
+          netProfit
         }
       }), {
         status: 200,

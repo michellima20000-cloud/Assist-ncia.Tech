@@ -161,6 +161,9 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   const handleExportCSV = () => {
     if (!reportResult) return;
     const { closedOrders, summary } = reportResult;
+    const pCost = summary.productCost || 0;
+    const grossP = summary.grossProfit ?? (summary.revenue - pCost);
+    const netP = summary.netProfit ?? (grossP - summary.expense);
     
     let csvContent = "data:text/csv;charset=utf-8,";
     csvContent += "Ordem de Servico;Aparelho;Total;Status;Data de Entrada;Data de Saida\n";
@@ -169,9 +172,9 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
       csvContent += `${o.controlNumber};${o.item} ${o.brand} ${o.model};${o.totalAmount};${o.status};${o.entryDate};${o.exitDate}\n`;
     });
 
-    csvContent += `\nRESUMO FINANCEIRO\n`;
-    csvContent += `Especie;Cartao;Total Arrecadado;Despesas;Saldo\n`;
-    csvContent += `${summary.cash};${summary.card};${summary.revenue};${summary.expense};${summary.balance}\n`;
+    csvContent += `\nRESUMO FINANCEIRO CONSOLIDADO\n`;
+    csvContent += `Especie;Cartao/Pix;Faturamento Bruto;Custo Mercadorias;Lucro Bruto;Despesas Operacionais;Lucro Liquido Real\n`;
+    csvContent += `${summary.cash};${summary.card};${summary.revenue};${pCost};${grossP};${summary.expense};${netP}\n`;
 
     const encodedUri = encodeURI(csvContent);
     const link = document.createElement("a");
@@ -185,24 +188,30 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   const handlePrintReport = () => {
     if (!reportResult) return;
     const { summary, closedOrders, expenses } = reportResult;
+    const pCost = summary.productCost || 0;
+    const grossP = summary.grossProfit ?? (summary.revenue - pCost);
+    const netP = summary.netProfit ?? (grossP - summary.expense);
 
-    const printableStr = `RELATORIO DE MOVIMENTACAO
+    const printableStr = `RELATORIO FINANCEIRO DE MOVIMENTACAO
 GERADO: ${new Date().toLocaleString("pt-BR")}
 PERIODO: ${reportType === "daily" ? reportDate : `${reportStartDate} a ${reportEndDate}`}
-------------------------
-RECEITAS (ENTREGAS):
+--------------------------------
+RECEITAS (ENTREGAS E VENDAS):
 ${closedOrders.map((o: any) => `- ${o.controlNumber}: ${o.model} (R$ ${o.totalAmount.toFixed(2)})`).join("\n")}
-------------------------
+--------------------------------
 DESPESAS NO PERIODO:
 ${expenses.map((e: any) => `- ${e.description}: R$ ${e.amount.toFixed(2)}`).join("\n")}
-------------------------
-RESUMO DO CAIXA:
+--------------------------------
+RESUMO DE APURAÇÃO DO CAIXA:
 (+) ESPÉCIE: R$ ${summary.cash.toFixed(2)}
-(+) CARTÕES: R$ ${summary.card.toFixed(2)}
-(=) FATURAMENTO: R$ ${summary.revenue.toFixed(2)}
-(-) DESPESAS: R$ ${summary.expense.toFixed(2)}
-------------------------
-SALDO FINAL: R$ ${summary.balance.toFixed(2)}`;
+(+) CARTÕES/PIX: R$ ${summary.card.toFixed(2)}
+--------------------------------
+(=) FATURAMENTO BRUTO: R$ ${summary.revenue.toFixed(2)}
+(-) CUSTO MERCADORIAS/PEÇAS: R$ ${pCost.toFixed(2)}
+(=) LUCRO BRUTO DA OPERAÇÃO: R$ ${grossP.toFixed(2)}
+(-) DESPESAS OPERACIONAIS: R$ ${summary.expense.toFixed(2)}
+--------------------------------
+(=) LUCRO LÍQUIDO REAL: R$ ${netP.toFixed(2)}`;
 
     onPrintReceipt(printableStr);
   };
@@ -709,39 +718,54 @@ GARANTIA DE 90 DIAS.`;
                 </div>
               </div>
 
-              {/* Stats Row */}
-              <div className="grid grid-cols-3 gap-3 text-center">
-                <div className="bg-white p-3 border border-slate-100 rounded-xl">
-                  <p className="text-[10px] text-slate-500 font-semibold uppercase">Faturamento</p>
-                  <p className="text-sm font-bold text-emerald-600 font-mono">R$ {reportResult.summary.revenue.toFixed(2)}</p>
-                </div>
-                <div className="bg-white p-3 border border-slate-100 rounded-xl">
-                  <p className="text-[10px] text-slate-500 font-semibold uppercase">Despesas</p>
-                  <p className="text-sm font-bold text-red-600 font-mono">R$ {reportResult.summary.expense.toFixed(2)}</p>
-                </div>
-                <div className="bg-white p-3 border border-slate-100 rounded-xl">
-                  <p className="text-[10px] text-slate-500 font-semibold uppercase">Líquido</p>
-                  <p className="text-sm font-bold text-[#1E88E5] font-mono">R$ {reportResult.summary.balance.toFixed(2)}</p>
-                </div>
-              </div>
+              {/* Consolidated Financial Summary Grid */}
+              {(() => {
+                const rev = reportResult.summary.revenue || 0;
+                const pCost = reportResult.summary.productCost || 0;
+                const grossP = reportResult.summary.grossProfit ?? (rev - pCost);
+                const exp = reportResult.summary.expense || 0;
+                const netP = reportResult.summary.netProfit ?? (grossP - exp);
 
-              {/* Product Gross Profit Stats Row */}
-              {reportResult.summary.productRevenue !== undefined && (
-                <div className="grid grid-cols-3 gap-3 text-center border-t border-dashed border-slate-200 pt-3">
-                  <div className="bg-[#F8FAF6] p-2.5 border border-emerald-50 rounded-xl">
-                    <p className="text-[9px] text-emerald-700 font-bold uppercase">Venda Produtos</p>
-                    <p className="text-xs font-mono font-bold text-emerald-600">R$ {reportResult.summary.productRevenue.toFixed(2)}</p>
+                return (
+                  <div className="space-y-3">
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2.5 text-center">
+                      <div className="bg-emerald-50/60 p-3 border border-emerald-100 rounded-2xl shadow-2xs">
+                        <p className="text-[9px] text-emerald-800 font-extrabold uppercase tracking-wide">1. Faturamento Bruto</p>
+                        <p className="text-sm font-black text-emerald-700 font-mono mt-0.5">R$ {rev.toFixed(2)}</p>
+                      </div>
+
+                      <div className="bg-amber-50/60 p-3 border border-amber-100 rounded-2xl shadow-2xs">
+                        <p className="text-[9px] text-amber-800 font-extrabold uppercase tracking-wide">2. Custo Mercadorias</p>
+                        <p className="text-sm font-black text-amber-700 font-mono mt-0.5">R$ {pCost.toFixed(2)}</p>
+                      </div>
+
+                      <div className="bg-sky-50/60 p-3 border border-sky-100 rounded-2xl shadow-2xs">
+                        <p className="text-[9px] text-sky-800 font-extrabold uppercase tracking-wide">3. Lucro Bruto</p>
+                        <p className="text-sm font-black text-sky-700 font-mono mt-0.5">R$ {grossP.toFixed(2)}</p>
+                      </div>
+
+                      <div className="bg-red-50/60 p-3 border border-red-100 rounded-2xl shadow-2xs">
+                        <p className="text-[9px] text-red-800 font-extrabold uppercase tracking-wide">4. Despesas Loja</p>
+                        <p className="text-sm font-black text-red-700 font-mono mt-0.5">R$ {exp.toFixed(2)}</p>
+                      </div>
+
+                      <div className="col-span-2 md:col-span-1 bg-gradient-to-br from-blue-600 to-indigo-700 p-3 rounded-2xl text-white shadow-md">
+                        <p className="text-[9px] text-blue-100 font-extrabold uppercase tracking-wide">5. Lucro Líquido Real</p>
+                        <p className="text-base font-black font-mono mt-0.5 text-white">R$ {netP.toFixed(2)}</p>
+                      </div>
+                    </div>
+
+                    <div className="bg-white border border-slate-200/80 rounded-xl p-3 text-xs text-slate-700 flex items-center justify-between gap-2 shadow-2xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" />
+                        <span className="text-[11px] font-medium text-slate-600">
+                          <strong>Apuração Real do Período:</strong> Faturamento <span className="text-emerald-700 font-mono font-bold">(R$ {rev.toFixed(2)})</span> - Custo Mercadorias <span className="text-amber-700 font-mono font-bold">(R$ {pCost.toFixed(2)})</span> - Despesas <span className="text-red-700 font-mono font-bold">(R$ {exp.toFixed(2)})</span> = <strong className="text-blue-700 font-mono">Lucro Líquido R$ {netP.toFixed(2)}</strong>
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="bg-[#FAF8F8] p-2.5 border border-red-50 rounded-xl">
-                    <p className="text-[9px] text-red-700 font-bold uppercase">Custo Produtos</p>
-                    <p className="text-xs font-mono font-bold text-red-500">R$ {reportResult.summary.productCost.toFixed(2)}</p>
-                  </div>
-                  <div className="bg-[#F6FAFE] p-2.5 border border-blue-50 rounded-xl">
-                    <p className="text-[9px] text-blue-700 font-bold uppercase">Lucro de Vendas</p>
-                    <p className="text-xs font-mono font-bold text-blue-600">R$ {reportResult.summary.productGrossProfit.toFixed(2)}</p>
-                  </div>
-                </div>
-              )}
+                );
+              })()}
 
               {/* Financial Performance Graphics Chart */}
               <FinancialChart

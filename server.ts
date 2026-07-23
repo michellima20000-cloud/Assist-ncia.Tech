@@ -1373,7 +1373,7 @@ async function startServer() {
         productsUsed.forEach(p => {
           const qty = p.quantity || 1;
           const price = p.price || 0;
-          const cost = productCostMap.get(p.productId) || 0;
+          const cost = p.cost !== undefined && p.cost !== null ? p.cost : (productCostMap.get(p.productId) || 0);
 
           serviceProductsRevenue += price * qty;
           serviceProductsCost += cost * qty;
@@ -1394,7 +1394,9 @@ async function startServer() {
 
       const totalRevenue = totalCash + totalCard;
       const totalExpense = filteredExpenses.reduce((acc, d) => acc + d.amount, 0);
-      const balance = totalRevenue - totalExpense;
+      const grossProfit = totalRevenue - productCost;
+      const netProfit = totalRevenue - productCost - totalExpense;
+      const balance = netProfit;
 
       res.json({
         payments: filteredPayments,
@@ -1405,10 +1407,12 @@ async function startServer() {
           card: totalCard,
           revenue: totalRevenue,
           expense: totalExpense,
-          balance,
+          balance: netProfit,
           productRevenue,
           productCost,
-          productGrossProfit
+          productGrossProfit,
+          grossProfit,
+          netProfit
         }
       });
     } catch (error: any) {

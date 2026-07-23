@@ -28,6 +28,7 @@ export interface AtendimentoProduto {
   name: string;
   price: number;
   quantity: number;
+  cost?: number;
 }
 
 export type AtendimentoStatus = 'na_assistencia' | 'entrega' | 'finalizado';
@@ -58,6 +59,7 @@ export interface Atendimento {
   fimServico?: string;
   numeroSerie?: string;
   detailedStatus?: string;
+  garantia?: string;
 }
 
 export interface Servico {

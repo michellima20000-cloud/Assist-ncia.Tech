@@ -16,7 +16,7 @@ export default function PrinterConfig({ onBack }: PrinterConfigProps) {
   const [devices, setDevices] = useState<PrinterDevice[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<PrinterDevice | null>(null);
   const [bluetoothSupported, setBluetoothSupported] = useState(true);
-  const [testMessage, setTestMessage] = useState("Minha Assistência\nImpressão Bluetooth Ativa!\nOS-0001 - OK");
+  const [testMessage, setTestMessage] = useState("Minha Assistência.Tech\nImpressão Bluetooth Ativa!\nOS-0001 - OK");
 
   useEffect(() => {
     // Check Web Bluetooth support

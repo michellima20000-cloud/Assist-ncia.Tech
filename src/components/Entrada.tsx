@@ -28,6 +28,7 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
   const [imei, setImei] = useState("");
   const [defeito, setDefeito] = useState("");
   const [observations, setObservations] = useState("");
+  const [garantia, setGarantia] = useState("Garantia de 90 dias (3 meses)");
   const [photoUrl, setPhotoUrl] = useState("");
   const [photoUrls, setPhotoUrls] = useState<string[]>([]);
   const [printTicket, setPrintTicket] = useState(true);
@@ -290,6 +291,7 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
       imei,
       defeito,
       observations,
+      garantia: garantia || "Garantia de 90 dias (3 meses)",
       photoUrl,
       photoUrls,
       services: servicesToSend,
@@ -320,6 +322,7 @@ ${result.imei ? `IMEI: ${result.imei}` : ""}
 ------------------------
 DEFEITO: ${result.defeito || "Não informado"}
 ESTADO / OBS: ${result.observations || "Nenhuma"}
+GARANTIA: ${garantia || "Garantia de 90 dias (3 meses)"}
 ------------------------
 SERVICOS ADICIONADOS:
 ${servicesToSend.map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
@@ -543,6 +546,43 @@ TERMO: Autorizo o diagnóstico.`;
                 rows={2}
                 className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
               />
+            </div>
+
+            {/* Garantia do Serviço / Equipamento */}
+            <div className="p-3 bg-blue-50/50 rounded-xl border border-blue-100 space-y-2">
+              <label className="block text-xs font-bold text-[#1E88E5] flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600" />
+                <span>Garantia do Serviço / Acessório</span>
+              </label>
+              <input
+                type="text"
+                value={garantia}
+                onChange={(e) => setGarantia(e.target.value)}
+                placeholder="Ex: Garantia de 90 dias (3 meses)..."
+                className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+              />
+              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                {[
+                  "Garantia de 90 dias (3 meses)",
+                  "Garantia de 30 dias",
+                  "Garantia de 6 meses",
+                  "Garantia de 1 ano",
+                  "Sem garantia"
+                ].map((preset) => (
+                  <button
+                    key={preset}
+                    type="button"
+                    onClick={() => setGarantia(preset)}
+                    className={`px-2 py-1 rounded-lg text-[10px] font-bold border transition ${
+                      garantia === preset
+                        ? "bg-emerald-600 text-white border-emerald-600 shadow-sm"
+                        : "bg-white text-slate-600 border-slate-200 hover:bg-slate-100"
+                    }`}
+                  >
+                    {preset}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Simulated Photo Capture / Upload */}

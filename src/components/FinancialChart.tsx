@@ -16,6 +16,11 @@ interface FinancialChartProps {
       revenue: number;
       expense: number;
       balance: number;
+      productRevenue?: number;
+      productCost?: number;
+      productGrossProfit?: number;
+      grossProfit?: number;
+      netProfit?: number;
     };
   };
   reportType: "daily" | "range" | "annual";
@@ -510,7 +515,7 @@ export default function FinancialChart({
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {/* Section 1: Cash flow comparison */}
           <div className="space-y-4">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Fluxo de Caixa (Entradas vs Despesas)</p>
+            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Demonstrativo da Operação</p>
             
             <div className="space-y-3">
               {/* Revenue Progress Bar */}
@@ -518,15 +523,34 @@ export default function FinancialChart({
                 <div className="flex justify-between text-xs">
                   <span className="flex items-center gap-1.5 font-medium text-slate-600">
                     <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
-                    Faturamento total (Receitas)
+                    Faturamento Bruto
                   </span>
                   <span className="font-bold text-slate-800">{formatBRL(totalRev)}</span>
                 </div>
-                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                   <motion.div
-                    className="bg-emerald-50 h-full rounded-full"
+                    className="bg-emerald-500 h-full rounded-full"
                     initial={{ width: 0 }}
                     animate={{ width: `${(totalRev / maxBarValue) * 100}%` }}
+                    transition={{ duration: 0.8, ease: "easeOut" }}
+                  />
+                </div>
+              </div>
+
+              {/* Product Cost Progress Bar */}
+              <div className="space-y-1">
+                <div className="flex justify-between text-xs">
+                  <span className="flex items-center gap-1.5 font-medium text-slate-600">
+                    <span className="w-2.5 h-2.5 rounded-full bg-amber-500 inline-block" />
+                    Custo de Mercadorias / Peças
+                  </span>
+                  <span className="font-bold text-slate-800">{formatBRL(summary.productCost || 0)}</span>
+                </div>
+                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
+                  <motion.div
+                    className="bg-amber-500 h-full rounded-full"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${((summary.productCost || 0) / maxBarValue) * 100}%` }}
                     transition={{ duration: 0.8, ease: "easeOut" }}
                   />
                 </div>
@@ -537,11 +561,11 @@ export default function FinancialChart({
                 <div className="flex justify-between text-xs">
                   <span className="flex items-center gap-1.5 font-medium text-slate-600">
                     <span className="w-2.5 h-2.5 rounded-full bg-red-500 inline-block" />
-                    Despesas do período
+                    Despesas Operacionais
                   </span>
                   <span className="font-bold text-slate-800">{formatBRL(totalExp)}</span>
                 </div>
-                <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
                   <motion.div
                     className="bg-red-500 h-full rounded-full"
                     initial={{ width: 0 }}
@@ -552,22 +576,29 @@ export default function FinancialChart({
               </div>
 
               {/* Balance Conversion Stat */}
-              <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center justify-between mt-1">
-                <div className="flex items-center gap-2">
-                  <div className={`p-1.5 rounded-lg ${marginPct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
-                    <Percent className="w-4 h-4" />
+              {(() => {
+                const netProfit = summary.netProfit ?? (totalRev - (summary.productCost || 0) - totalExp);
+                const realMarginPct = totalRev > 0 ? (netProfit / totalRev) * 100 : 0;
+
+                return (
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex items-center justify-between mt-1">
+                    <div className="flex items-center gap-2">
+                      <div className={`p-1.5 rounded-lg ${realMarginPct >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700'}`}>
+                        <Percent className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-400 block uppercase">Margem Líquida Real</span>
+                        <span className="text-xs text-slate-600 font-medium">Lucro real pós custos e despesas</span>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <span className={`text-sm font-black font-mono ${realMarginPct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
+                        {realMarginPct.toFixed(1)}%
+                      </span>
+                    </div>
                   </div>
-                  <div>
-                    <span className="text-[10px] font-bold text-slate-400 block uppercase">Conversão Líquida</span>
-                    <span className="text-xs text-slate-600 font-medium">Margem de aproveitamento</span>
-                  </div>
-                </div>
-                <div className="text-right">
-                  <span className={`text-sm font-black font-mono ${marginPct >= 0 ? 'text-emerald-600' : 'text-red-500'}`}>
-                    {marginPct.toFixed(1)}%
-                  </span>
-                </div>
-              </div>
+                );
+              })()}
             </div>
           </div>
 

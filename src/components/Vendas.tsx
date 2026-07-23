@@ -52,8 +52,9 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
   const [customClientPhone, setCustomClientPhone] = useState("");
   const [customClientCpf, setCustomClientCpf] = useState("");
 
-  // Observations
+  // Observations & Guarantee
   const [observations, setObservations] = useState("");
+  const [garantia, setGarantia] = useState("Garantia de 90 dias (3 meses)");
   
   // Cart & Sale State
   const [cart, setCart] = useState<CartItem[]>([]);
@@ -305,6 +306,8 @@ FORMA DE PGTO:  ${
         }
 VALOR RECEBIDO: R$ ${finalVenda.receivedAmount.toFixed(2)}
 TROCO REGISTRADO: R$ ${finalVenda.change.toFixed(2)}
+--------------------------------
+GARANTIA: ${garantia || "Garantia de 90 dias (3 meses)"}
 ================================
 ${finalVenda.observations ? `OBS: ${finalVenda.observations}
 ================================` : ""}
