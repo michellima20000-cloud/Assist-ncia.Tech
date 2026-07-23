@@ -6,35 +6,35 @@ import { handleClientRoute } from './lib/clientRouter.ts';
 
 // Silence benign dev-only Vite HMR WebSocket connection errors from triggering popups or noise
 if (typeof window !== 'undefined') {
-  const isViteWSWarning = (msg: string): boolean => {
-    if (!msg) return false;
-    const lower = msg.toLowerCase();
+  const isViteWSWarning = (err: unknown): boolean => {
+    if (!err) return false;
+    const str = typeof err === 'string' ? err : (err as any)?.message || (err as any)?.stack || String(err);
+    if (typeof str !== 'string') return false;
+    const lower = str.toLowerCase();
     return (
       lower.includes("websocket") ||
       lower.includes("vite") ||
       lower.includes("hmr") ||
       lower.includes("ws://") ||
       lower.includes("wss://") ||
-      lower.includes("closed without opened")
+      lower.includes("closed without") ||
+      lower.includes("closed before")
     );
   };
 
   window.addEventListener('unhandledrejection', (event) => {
-    const reason = event.reason;
-    const msg = reason?.message || String(reason || "");
-    if (isViteWSWarning(msg)) {
+    if (isViteWSWarning(event.reason)) {
       event.preventDefault();
       event.stopPropagation();
     }
-  });
+  }, true);
 
   window.addEventListener('error', (event) => {
-    const msg = event.message || "";
-    if (isViteWSWarning(msg)) {
+    if (isViteWSWarning(event.message) || isViteWSWarning(event.error) || isViteWSWarning(event.filename)) {
       event.preventDefault();
       event.stopPropagation();
     }
-  });
+  }, true);
 }
 
 // Intercept all fetch requests to route /api to the Cloud Run backend when running on external domains like Vercel

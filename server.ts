@@ -1398,10 +1398,105 @@ async function startServer() {
       const netProfit = totalRevenue - productCost - totalExpense;
       const balance = netProfit;
 
+      // Calculate Top Sold Products
+      const productSalesMap = new Map<string, {
+        productId: string;
+        name: string;
+        quantitySold: number;
+        totalRevenue: number;
+        totalCost: number;
+        profit: number;
+      }>();
+
+      filteredVendas.forEach(v => {
+        (v.items || []).forEach(item => {
+          const key = item.productId || item.name;
+          const qty = Number(item.quantity) || 1;
+          const price = Number(item.price) || 0;
+          const cost = item.cost !== undefined && item.cost !== null ? Number(item.cost) : (productCostMap.get(item.productId) || 0);
+          const rev = price * qty;
+          const cst = cost * qty;
+
+          const existing = productSalesMap.get(key) || {
+            productId: item.productId || "",
+            name: item.name || "Produto",
+            quantitySold: 0,
+            totalRevenue: 0,
+            totalCost: 0,
+            profit: 0
+          };
+
+          existing.quantitySold += qty;
+          existing.totalRevenue += rev;
+          existing.totalCost += cst;
+          existing.profit += (rev - cst);
+          productSalesMap.set(key, existing);
+        });
+      });
+
+      closedOrders.forEach(a => {
+        (a.products || []).forEach(p => {
+          const key = p.productId || p.name;
+          const qty = Number(p.quantity) || 1;
+          const price = Number(p.price) || 0;
+          const cost = p.cost !== undefined && p.cost !== null ? Number(p.cost) : (productCostMap.get(p.productId) || 0);
+          const rev = price * qty;
+          const cst = cost * qty;
+
+          const existing = productSalesMap.get(key) || {
+            productId: p.productId || "",
+            name: p.name || "Peça / Produto",
+            quantitySold: 0,
+            totalRevenue: 0,
+            totalCost: 0,
+            profit: 0
+          };
+
+          existing.quantitySold += qty;
+          existing.totalRevenue += rev;
+          existing.totalCost += cst;
+          existing.profit += (rev - cst);
+          productSalesMap.set(key, existing);
+        });
+      });
+
+      const topSoldProducts = Array.from(productSalesMap.values()).sort((a, b) => b.quantitySold - a.quantitySold);
+
+      // Calculate Inventory Summary
+      let totalStockUnits = 0;
+      let totalStockValueCost = 0;
+      let totalStockValuePrice = 0;
+      let lowStockCount = 0;
+
+      produtos.forEach(p => {
+        const stock = Number(p.stock) || 0;
+        const cost = Number(p.cost) || 0;
+        const price = Number(p.price) || 0;
+        const minStock = (p.minStockAlert !== undefined && p.minStockAlert !== null) ? Number(p.minStockAlert) : 5;
+
+        totalStockUnits += stock;
+        totalStockValueCost += stock * cost;
+        totalStockValuePrice += stock * price;
+        if (stock <= minStock) {
+          lowStockCount++;
+        }
+      });
+
+      const inventorySummary = {
+        totalProductsCount: produtos.length,
+        totalStockUnits,
+        totalStockValueCost,
+        totalStockValuePrice,
+        potentialStockProfit: totalStockValuePrice - totalStockValueCost,
+        lowStockCount
+      };
+
       res.json({
         payments: filteredPayments,
         expenses: filteredExpenses,
         closedOrders,
+        topSoldProducts,
+        inventorySummary,
         summary: {
           cash: totalCash,
           card: totalCard,
