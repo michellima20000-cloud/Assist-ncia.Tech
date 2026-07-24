@@ -343,7 +343,7 @@ ${(at.products || []).length > 0 ? `PECAS TROCADAS:\n${(at.products || []).map(p
 ------------------------
 TOTAL GERAL: R$ ${at.totalAmount.toFixed(2)}
 ------------------------
-GARANTIA DE 90 DIAS.`;
+GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
     onPrintReceipt(recStr);
   };
 

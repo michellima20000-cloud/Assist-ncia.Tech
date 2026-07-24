@@ -177,8 +177,11 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
     } else if (upper.startsWith("ESTADO / OBS:") || upper.startsWith("ESTADO/OBS:") || upper.startsWith("LAUDO / OBSERVACOES SAIDA:") || upper.startsWith("LAUDO/OBSERVAÇÕES SAÍDA:")) {
       observations = line.substring(line.indexOf(":") + 1).trim();
     } else if (upper.startsWith("GARANTIA:") || upper.startsWith("GARANTIA DE:") || upper.startsWith("TERMO DE GARANTIA:") || upper.startsWith("PRAZO DE GARANTIA:")) {
-      garantia = line.substring(line.indexOf(":") + 1).trim();
-    } else if (upper.includes("GARANTIA DE ") || upper.includes("GARANTIA LEGAL")) {
+      const extracted = line.substring(line.indexOf(":") + 1).trim();
+      if (extracted) {
+        garantia = extracted;
+      }
+    } else if (!garantia && (upper.startsWith("GARANTIA ") || upper.startsWith("PRAZO GARANTIA"))) {
       garantia = line.trim();
     } else if (upper.startsWith("TOTAL ESTIMADO:") || upper.startsWith("TOTAL GERAL:") || upper.startsWith("TOTAL:")) {
       const match = line.match(/R\$\s*([\d.,]+)/i);
@@ -302,7 +305,14 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
     imei,
     defeito: defeito || "Avaliação de hardware/bateria",
     observations: observations || "Aparelho sob responsabilidade técnica",
-    garantia: garantia || "Garantia de 90 dias (3 meses)",
+    garantia: (() => {
+      if (!garantia) return "Garantia de 90 dias (3 meses)";
+      const trimmed = garantia.trim();
+      if (/^\d+$/.test(trimmed)) {
+        return `Garantia de ${trimmed} dias`;
+      }
+      return trimmed;
+    })(),
     items,
     totalAmount: totalAmount || items.reduce((sum, it) => sum + (it.price * it.quantity), 0),
     receivedAmount,
@@ -1171,7 +1181,8 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
       `📅 *Data:* ${parsed.date}\n` +
       `🔢 *Nº de Controle:* ${parsed.controlNumber}\n` +
       `💰 *Valor Total:* R$ ${parsed.totalAmount.toFixed(2).replace('.', ',')}\n` +
-      `🛡️ *Garantia / Obs:* ${obsText}\n\n` +
+      `🛡️ *Garantia:* ${parsed.garantia}\n` +
+      `📝 *Obs:* ${parsed.observations || "Nenhuma"}\n\n` +
       `_Por favor, se desejar, anexe o arquivo PDF que acabou de ser baixado nesta conversa para guardá-lo com você!_\n\n` +
       `Agradecemos imensamente a preferência e a confiança na *${businessSettings.name}*! Qualquer dúvida, estamos à disposição. 🤝📱`;
 

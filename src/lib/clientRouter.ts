@@ -79,6 +79,147 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       });
     }
 
+    // 1.1 Config Feedback route
+    if (path === "/api/config/feedback") {
+      if (method === "GET") {
+        const docRef = doc(db, "config", "feedback");
+        const docSnap = await getDoc(docRef);
+        let config = docSnap.exists() ? docSnap.data() : null;
+        if (!config) {
+          config = {
+            enabled: true,
+            delayHours: 3,
+            messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
+            readyMessageTemplate: "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
+            entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+          };
+        } else {
+          if (!config.readyMessageTemplate) {
+            config.readyMessageTemplate = "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!";
+          }
+          if (!config.entryMessageTemplate) {
+            config.entryMessageTemplate = "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!";
+          }
+        }
+        return new Response(JSON.stringify(config), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (method === "POST") {
+        const config = {
+          enabled: body.enabled !== undefined ? !!body.enabled : true,
+          delayHours: Number(body.delayHours) || 3,
+          messageTemplate: body.messageTemplate || "",
+          readyMessageTemplate: body.readyMessageTemplate || "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
+          entryMessageTemplate: body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+        };
+        await setDoc(doc(db, "config", "feedback"), config);
+        return new Response(JSON.stringify(config), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // 1.2 Config Status route
+    if (path === "/api/config/status") {
+      const defaultStatuses = [
+        "Aguardando técnico",
+        "Em avaliação",
+        "Aguardando aprovação do cliente",
+        "Aprovado pelo cliente",
+        "Reprovado pelo cliente",
+        "Em manutenção",
+        "Pronto para entrega",
+        "Aguardando peça(s)",
+        "Peça(s) na assistência",
+        "Aguardando pagamento",
+        "Sem conserto",
+        "Não reclamado/Abandonado"
+      ];
+
+      if (method === "GET") {
+        const docSnap = await getDoc(doc(db, "config", "status"));
+        let docData = docSnap.exists() ? docSnap.data() : null;
+        if (!docData || !docData.list) {
+          docData = { list: defaultStatuses };
+          await setDoc(doc(db, "config", "status"), docData);
+        }
+        return new Response(JSON.stringify(docData.list), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (method === "POST") {
+        const newStatus = body.status;
+        if (!newStatus || typeof newStatus !== "string" || !newStatus.trim()) {
+          return new Response(JSON.stringify({ error: "Status inválido" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        const docSnap = await getDoc(doc(db, "config", "status"));
+        let docData = docSnap.exists() ? docSnap.data() : null;
+        let list = docData && docData.list ? docData.list : [...defaultStatuses];
+        const trimmed = newStatus.trim();
+        if (!list.includes(trimmed)) {
+          list.push(trimmed);
+          await setDoc(doc(db, "config", "status"), { list });
+        }
+        return new Response(JSON.stringify(list), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (method === "DELETE") {
+        const statusToDelete = body.status;
+        if (!statusToDelete || typeof statusToDelete !== "string") {
+          return new Response(JSON.stringify({ error: "Status inválido" }), {
+            status: 400,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        const docSnap = await getDoc(doc(db, "config", "status"));
+        let docData = docSnap.exists() ? docSnap.data() : null;
+        if (!docData || !docData.list) {
+          return new Response(JSON.stringify({ error: "Configuração não encontrada" }), {
+            status: 404,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+        const updatedList = docData.list.filter((s: string) => s !== statusToDelete);
+        await setDoc(doc(db, "config", "status"), { list: updatedList });
+        return new Response(JSON.stringify(updatedList), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+    }
+
+    // 1.3 Clear test data route
+    if (path === "/api/admin/clear-test-data" && method === "POST") {
+      const collectionsToClear = ["atendimentos", "pagamentos", "despesas", "vendas", "agendamentos", "feedbacks"];
+      for (const colName of collectionsToClear) {
+        const snap = await getDocs(collection(db, colName));
+        for (const d of snap.docs) {
+          await deleteDoc(d.ref);
+        }
+      }
+      await setDoc(doc(db, "config", "main"), {
+        nextControlNumber: 1,
+        updatedAt: new Date().toISOString()
+      }, { merge: true });
+
+      return new Response(JSON.stringify({ success: true, message: "Todos os dados de teste foram zerados com sucesso." }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     // 2. Firebase Auth Login & Sync route
     if (path === "/api/auth/firebase-login" && method === "POST") {
       const { email, name, uid } = body;

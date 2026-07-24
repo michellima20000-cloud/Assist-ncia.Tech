@@ -273,43 +273,62 @@ TERMO: Autorizo o diagnóstico.`;
     return historyList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
   };
 
-  // Helper to compute warranty status for 90 days standard OS warranty
-  const getWarrantyInfo = (dateString: string, type: "atendimento" | "venda", observations?: string) => {
+  // Helper to compute warranty status dynamically from customer warranty text
+  const getWarrantyInfo = (dateString: string, type: "atendimento" | "venda", customWarrantyStr?: string) => {
     const baseDate = new Date(dateString);
+    if (isNaN(baseDate.getTime())) return null;
+
     const expirationDate = new Date(baseDate);
-    
-    // Default 90 days for service orders
-    const daysOfWarranty = 90;
+    let daysOfWarranty = 90;
+    const wLower = (customWarrantyStr || "").toLowerCase().trim();
+
+    if (wLower.includes("sem garantia") || wLower === "0") {
+      return {
+        status: "none",
+        text: "Sem garantia",
+        daysLeft: 0,
+        expDate: null
+      };
+    }
+
+    if (wLower.includes("1 ano") || wLower.includes("12 meses") || wLower.includes("365")) {
+      daysOfWarranty = 365;
+    } else if (wLower.includes("6 meses") || wLower.includes("180")) {
+      daysOfWarranty = 180;
+    } else if (wLower.includes("3 meses") || wLower.includes("90")) {
+      daysOfWarranty = 90;
+    } else if (wLower.includes("60")) {
+      daysOfWarranty = 60;
+    } else if (wLower.includes("30")) {
+      daysOfWarranty = 30;
+    } else if (wLower.includes("15")) {
+      daysOfWarranty = 15;
+    } else {
+      const match = wLower.match(/(\d+)/);
+      if (match) {
+        daysOfWarranty = parseInt(match[1], 10);
+      }
+    }
+
     expirationDate.setDate(expirationDate.getDate() + daysOfWarranty);
-    
-    const now = new Date("2026-07-10T16:54:20-07:00"); // Standard mock reference current time
+
+    const now = new Date();
     const diffTime = expirationDate.getTime() - now.getTime();
     const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 
-    if (type === "venda") {
-      // For sales, we rely heavily on manual observations/text.
-      if (observations) {
-        return {
-          status: "custom",
-          text: observations,
-          daysLeft: null,
-          expDate: null
-        };
-      }
-      return null;
-    }
+    const displayTitle = customWarrantyStr && customWarrantyStr.trim() ? customWarrantyStr : `Garantia de ${daysOfWarranty} dias`;
 
     if (diffDays > 0) {
       return {
         status: "active",
-        text: `Garantia Ativa (restam ${diffDays} dias)`,
+        text: `${displayTitle} (restam ${diffDays} dias)`,
         daysLeft: diffDays,
         expDate: expirationDate.toLocaleDateString("pt-BR")
       };
     } else {
       return {
         status: "expired",
-        text: `Garantia Expirada em ${expirationDate.toLocaleDateString("pt-BR")}`,
+        text: `${displayTitle} (Expirou em ${expirationDate.toLocaleDateString("pt-BR")})`,
         daysLeft: diffDays,
         expDate: expirationDate.toLocaleDateString("pt-BR")
       };
@@ -477,7 +496,7 @@ TERMO: Autorizo o diagnóstico.`;
                     const isService = item.type === "atendimento";
                     
                     // Compute warranty info
-                    const warranty = getWarrantyInfo(item.date, item.type, item.raw.observations);
+                    const warranty = getWarrantyInfo(item.date, item.type, item.raw.garantia || item.raw.warranty || item.raw.observations);
 
                     return (
                       <div key={item.id} className="relative">

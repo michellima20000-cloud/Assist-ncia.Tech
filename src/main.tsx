@@ -37,38 +37,55 @@ if (typeof window !== 'undefined') {
   }, true);
 }
 
-// Intercept all fetch requests to route /api to the Cloud Run backend when running on external domains like Vercel
+// Intercept fetch requests to handle /api routes cleanly with failover to client router
 const originalFetch = window.fetch;
+const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
+  let urlStr = "";
+  if (typeof input === "string") {
+    urlStr = input;
+  } else if (input instanceof URL) {
+    urlStr = input.toString();
+  } else if (input && typeof (input as any).url === "string") {
+    urlStr = (input as any).url;
+  }
+
+  let pathname = "";
+  try {
+    pathname = urlStr.startsWith("http") ? new URL(urlStr).pathname : urlStr;
+  } catch (e) {
+    pathname = urlStr;
+  }
+
+  if (pathname.startsWith("/api/")) {
+    const isExternalDomain =
+      window.location.hostname !== "localhost" &&
+      !window.location.hostname.includes("us-east1.run.app") &&
+      !window.location.hostname.includes("127.0.0.1") &&
+      !window.location.hostname.includes("0.0.0.0");
+
+    if (isExternalDomain) {
+      return handleClientRoute(urlStr, init);
+    }
+
+    return originalFetch(input, init).catch((err) => {
+      console.warn("Backend API fetch failed, falling back to client router:", err);
+      return handleClientRoute(urlStr, init);
+    });
+  }
+
+  return originalFetch(input, init);
+};
+
 try {
-  Object.defineProperty(window, 'fetch', {
-    value: function (input: RequestInfo | URL, init?: RequestInit) {
-      if (typeof input === 'string' && input.startsWith('/api/')) {
-        const isExternalDomain = window.location.hostname !== 'localhost' && 
-                                 !window.location.hostname.includes('us-east1.run.app');
-        if (isExternalDomain) {
-          // Talk directly to Firestore on the client side to avoid CORS, cold start, and fetch errors on Vercel
-          return handleClientRoute(input, init);
-        }
-      }
-      return originalFetch(input, init);
-    },
+  Object.defineProperty(window, "fetch", {
+    value: interceptFetch,
     configurable: true,
     writable: true,
-    enumerable: true
+    enumerable: true,
   });
 } catch (e) {
-  console.warn("Could not override window.fetch with Object.defineProperty, trying direct assignment:", e);
   try {
-    (window as any).fetch = function (input: any, init: any) {
-      if (typeof input === 'string' && input.startsWith('/api/')) {
-        const isExternalDomain = window.location.hostname !== 'localhost' && 
-                                 !window.location.hostname.includes('us-east1.run.app');
-        if (isExternalDomain) {
-          return handleClientRoute(input, init);
-        }
-      }
-      return originalFetch(input, init);
-    };
+    (window as any).fetch = interceptFetch;
   } catch (err) {
     console.error("Failed to proxy window.fetch:", err);
   }

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   ShoppingBag, Search, Plus, Minus, Trash2, X, CreditCard, DollarSign,
   User, CheckCircle, AlertTriangle, QrCode, ArrowLeft, RefreshCw, Sparkles, Receipt,
-  Package
+  Package, ShieldCheck
 } from "lucide-react";
 import { Produto, Cliente, VendaItem } from "../types";
 import ProductScanner from "./ProductScanner";
@@ -133,8 +133,11 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
       return;
     }
 
-    if (product.warranty && !observations) {
-      setObservations(product.warranty);
+    if (product.warranty) {
+      setGarantia(product.warranty);
+      if (!observations) {
+        setObservations(product.warranty);
+      }
     }
 
     setCart(prevCart => {
@@ -254,7 +257,8 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
       method,
       sellerId: currentUser?.id || null,
       sellerName: currentUser?.name || "Balcão",
-      observations: observations
+      observations: observations,
+      garantia: garantia || "Garantia de 90 dias (3 meses)"
     };
 
     try {
@@ -684,34 +688,72 @@ Volte sempre!`;
               )}
             </div>
 
-            {/* OBSERVATIONS MANUALS */}
+            {/* GARANTIA & OBSERVAÇÕES */}
             {cart.length > 0 && (
-              <div className="border-t border-slate-100 mt-4 pt-4">
-                <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1.5">Observações da Venda (Opcional)</label>
-                <textarea
-                  rows={2}
-                  placeholder="Garantia, termos de troca ou observações gerais..."
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition"
-                  value={observations}
-                  onChange={(e) => setObservations(e.target.value)}
-                />
-                <div className="flex flex-wrap gap-1.5 mt-2">
-                  {[
-                    "Garantia de 3 meses",
-                    "Garantia de 30 dias",
-                    "Garantia de 90 dias",
-                    "Sem garantia",
-                    "Película de vidro - Garantia de 3 meses"
-                  ].map((preset) => (
-                    <button
-                      key={preset}
-                      type="button"
-                      onClick={() => setObservations(preset)}
-                      className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 text-[10px] text-slate-600 hover:text-[#1E88E5] rounded-lg font-bold border border-slate-200/60 transition cursor-pointer"
-                    >
-                      + {preset}
-                    </button>
-                  ))}
+              <div className="border-t border-slate-100 mt-4 pt-4 space-y-3">
+                {/* Garantia do Produto / Venda */}
+                <div>
+                  <label className="text-[10px] font-extrabold text-[#1E88E5] uppercase tracking-wide block mb-1 flex items-center gap-1">
+                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                    <span>Garantia do Produto / Venda</span>
+                  </label>
+                  <input
+                    type="text"
+                    value={garantia}
+                    onChange={(e) => setGarantia(e.target.value)}
+                    placeholder="Ex: Garantia de 30 dias..."
+                    className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:ring-1 focus:ring-blue-500"
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {[
+                      "Garantia de 90 dias (3 meses)",
+                      "Garantia de 30 dias",
+                      "Garantia de 6 meses",
+                      "Garantia de 1 ano",
+                      "Sem garantia"
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setGarantia(preset)}
+                        className={`px-2.5 py-1 text-[10px] rounded-lg font-bold border transition cursor-pointer ${
+                          garantia === preset
+                            ? "bg-emerald-600 text-white border-emerald-600 shadow-xs"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700 border-slate-200"
+                        }`}
+                      >
+                        {preset}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Observações da Venda */}
+                <div>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">Observações da Venda (Opcional)</label>
+                  <textarea
+                    rows={2}
+                    placeholder="Termos de troca ou observações gerais..."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition"
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                  />
+                  <div className="flex flex-wrap gap-1.5 mt-1.5">
+                    {[
+                      "Sem direito a troca por mau uso",
+                      "Troca somente com nota fiscal",
+                      "Película de vidro sem garantia de queda"
+                    ].map((preset) => (
+                      <button
+                        key={preset}
+                        type="button"
+                        onClick={() => setObservations(prev => prev ? `${prev} - ${preset}` : preset)}
+                        className="px-2.5 py-1 bg-slate-100 hover:bg-blue-50 text-[10px] text-slate-600 hover:text-[#1E88E5] rounded-lg font-bold border border-slate-200/60 transition cursor-pointer"
+                      >
+                        + {preset}
+                      </button>
+                    ))}
+                  </div>
                 </div>
               </div>
             )}
