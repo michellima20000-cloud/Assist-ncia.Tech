@@ -176,6 +176,47 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
     });
   };
 
+  const handleSetExactQuantity = (productId: string, exactQty: number) => {
+    setError(null);
+    setCart(prevCart => {
+      return prevCart.map(item => {
+        if (item.product.id === productId) {
+          if (exactQty <= 0) return null;
+          if (exactQty > item.product.stock) {
+            setError(`Estoque máximo atingido! Disponível: ${item.product.stock}`);
+            return { ...item, quantity: item.product.stock };
+          }
+          return { ...item, quantity: exactQty };
+        }
+        return item;
+      }).filter(Boolean) as CartItem[];
+    });
+  };
+
+  const handlePlusClick = (productId: string, currentQty: number, productName: string, maxStock: number) => {
+    setError(null);
+    const input = prompt(`Digite a quantidade desejada para "${productName}":`, (currentQty + 1).toString());
+    if (input === null) return; // User cancelled prompt
+
+    const trimmed = input.trim();
+    if (trimmed === "") {
+      handleUpdateQuantity(productId, 1);
+      return;
+    }
+
+    const parsed = parseInt(trimmed, 10);
+    if (!isNaN(parsed) && parsed > 0) {
+      if (parsed > maxStock) {
+        setError(`Estoque máximo atingido! Disponível: ${maxStock}`);
+        handleSetExactQuantity(productId, maxStock);
+      } else {
+        handleSetExactQuantity(productId, parsed);
+      }
+    } else {
+      setError("Quantidade inválida informada.");
+    }
+  };
+
   const handleRemoveItem = (productId: string) => {
     setCart(prevCart => prevCart.filter(item => item.product.id !== productId));
   };
@@ -655,19 +696,46 @@ Volte sempre!`;
                     </div>
 
                     {/* Quantity Controls */}
-                    <div className="flex items-center gap-1 bg-white border border-slate-150 rounded-lg p-0.5">
+                    <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg p-0.5 shadow-2xs">
                       <button
+                        type="button"
                         onClick={() => handleUpdateQuantity(item.product.id, -1)}
-                        className="p-1 hover:bg-slate-50 rounded text-slate-500 transition"
+                        className="p-1 hover:bg-slate-100 active:bg-slate-200 rounded text-slate-600 transition cursor-pointer"
+                        title="Diminuir 1"
                       >
                         <Minus className="w-3.5 h-3.5" />
                       </button>
-                      <span className="w-6 text-center font-bold text-slate-800 text-xs font-mono">
-                        {item.quantity}
-                      </span>
+
+                      <input
+                        type="number"
+                        min={1}
+                        max={item.product.stock}
+                        value={item.quantity === 0 ? "" : item.quantity}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          if (val === "") {
+                            handleSetExactQuantity(item.product.id, 0);
+                            return;
+                          }
+                          const parsed = parseInt(val, 10);
+                          if (!isNaN(parsed)) {
+                            handleSetExactQuantity(item.product.id, parsed);
+                          }
+                        }}
+                        onBlur={() => {
+                          if (!item.quantity || item.quantity <= 0) {
+                            handleSetExactQuantity(item.product.id, 1);
+                          }
+                        }}
+                        className="w-12 text-center font-black text-slate-800 text-xs font-mono bg-slate-50 border border-slate-200 rounded py-0.5 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:bg-white [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                        title="Clique para digitar a quantidade desejada"
+                      />
+
                       <button
-                        onClick={() => handleUpdateQuantity(item.product.id, 1)}
-                        className="p-1 hover:bg-slate-50 rounded text-slate-500 transition"
+                        type="button"
+                        onClick={() => handlePlusClick(item.product.id, item.quantity, item.product.name, item.product.stock)}
+                        className="p-1 hover:bg-slate-100 active:bg-slate-200 rounded text-slate-600 transition cursor-pointer"
+                        title="Adicionar / Digitar quantidade via prompt"
                       >
                         <Plus className="w-3.5 h-3.5" />
                       </button>

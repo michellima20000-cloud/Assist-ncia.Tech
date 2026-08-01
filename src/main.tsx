@@ -26,6 +26,9 @@ if (typeof window !== 'undefined') {
     if (isViteWSWarning(event.reason)) {
       event.preventDefault();
       event.stopPropagation();
+      if (typeof (event as any).stopImmediatePropagation === 'function') {
+        (event as any).stopImmediatePropagation();
+      }
     }
   }, true);
 
@@ -33,6 +36,9 @@ if (typeof window !== 'undefined') {
     if (isViteWSWarning(event.message) || isViteWSWarning(event.error) || isViteWSWarning(event.filename)) {
       event.preventDefault();
       event.stopPropagation();
+      if (typeof (event as any).stopImmediatePropagation === 'function') {
+        (event as any).stopImmediatePropagation();
+      }
     }
   }, true);
 }
