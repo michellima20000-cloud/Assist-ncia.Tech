@@ -14,6 +14,8 @@ export interface Cliente {
   email: string;
   phone: string;
   cpf: string;
+  cnpj?: string;
+  documentType?: 'cpf' | 'cnpj';
   address: string;
 }
 

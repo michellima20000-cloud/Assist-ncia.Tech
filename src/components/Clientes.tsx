@@ -19,12 +19,22 @@ const formatPhoneNumber = (value: string) => {
 };
 
 const formatCpf = (value: string) => {
-  const cleaned = value.replace(/\D/g, "");
+  const cleaned = value.replace(/\D/g, "").slice(0, 11);
   if (cleaned.length === 0) return "";
   if (cleaned.length <= 3) return cleaned;
   if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}.${cleaned.slice(3)}`;
   if (cleaned.length <= 9) return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6)}`;
   return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
+};
+
+const formatCnpj = (value: string) => {
+  const cleaned = value.replace(/\D/g, "").slice(0, 14);
+  if (cleaned.length === 0) return "";
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.length <= 5) return `${cleaned.slice(0, 2)}.${cleaned.slice(2)}`;
+  if (cleaned.length <= 8) return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5)}`;
+  if (cleaned.length <= 12) return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/${cleaned.slice(8)}`;
+  return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/${cleaned.slice(8, 12)}-${cleaned.slice(12, 14)}`;
 };
 
 export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }: ClientesProps) {
@@ -35,10 +45,12 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
   const [activeSubTab, setActiveSubTab] = useState<"cadastro" | "historico">("cadastro");
 
   // Form State
+  const [docType, setDocType] = useState<"cpf" | "cnpj">("cpf");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [cpf, setCpf] = useState("");
+  const [cnpj, setCnpj] = useState("");
   const [address, setAddress] = useState("");
 
   const fetchClientes = async () => {
@@ -62,6 +74,8 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
     setEmail("");
     setPhone("");
     setCpf("");
+    setCnpj("");
+    setDocType("cpf");
     setAddress("");
     setEditingId(null);
     setShowForm(false);
@@ -69,12 +83,30 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
 
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name || !phone || !cpf) {
-      alert("Nome, Telefone e CPF são obrigatórios!");
+    if (!name || !phone) {
+      alert("Nome e Telefone são obrigatórios!");
       return;
     }
 
-    const payload = { name, email, phone, cpf, address };
+    if (docType === "cpf" && !cpf) {
+      alert("O CPF é obrigatório para Pessoa Física!");
+      return;
+    }
+
+    if (docType === "cnpj" && !cnpj) {
+      alert("O CNPJ é obrigatório para Estabelecimento / Empresa!");
+      return;
+    }
+
+    const payload = {
+      name,
+      email,
+      phone,
+      cpf: docType === "cpf" ? cpf : (cpf || ""),
+      cnpj: docType === "cnpj" ? cnpj : (cnpj || ""),
+      documentType: docType,
+      address
+    };
 
     try {
       const url = editingId ? `/api/clientes/${editingId}` : "/api/clientes";
@@ -105,10 +137,16 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
   const handleEdit = (c: Cliente) => {
     setEditingId(c.id);
     setName(c.name);
-    setEmail(c.email);
-    setPhone(c.phone);
-    setCpf(c.cpf);
-    setAddress(c.address);
+    setEmail(c.email || "");
+    setPhone(c.phone || "");
+    setCpf(c.cpf || "");
+    setCnpj(c.cnpj || "");
+    setAddress(c.address || "");
+    if (c.cnpj && (!c.cpf || c.documentType === "cnpj")) {
+      setDocType("cnpj");
+    } else {
+      setDocType("cpf");
+    }
     setShowForm(true);
   };
 
@@ -127,7 +165,8 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
   const filtered = clientes.filter(c =>
     c.name.toLowerCase().includes(search.toLowerCase()) ||
     c.phone.includes(search) ||
-    c.cpf.includes(search)
+    (c.cpf && c.cpf.includes(search)) ||
+    (c.cnpj && c.cnpj.includes(search))
   );
 
   return (
@@ -198,16 +237,44 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
                 </button>
               </div>
 
+              {/* Document Type Selector Tabs */}
+              <div className="flex bg-slate-100 p-1 rounded-xl gap-1 max-w-md">
+                <button
+                  type="button"
+                  onClick={() => setDocType("cpf")}
+                  className={`flex-1 py-1.5 px-3 text-xs font-bold rounded-lg transition ${
+                    docType === "cpf"
+                      ? "bg-white text-[#1E88E5] shadow-xs"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Pessoa Física (CPF)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDocType("cnpj")}
+                  className={`flex-1 py-1.5 px-3 text-xs font-bold rounded-lg transition ${
+                    docType === "cnpj"
+                      ? "bg-white text-[#1E88E5] shadow-xs"
+                      : "text-slate-500 hover:text-slate-800"
+                  }`}
+                >
+                  Estabelecimento / Empresa (CNPJ)
+                </button>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">Nome Completo *</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">
+                    {docType === "cnpj" ? "Nome do Estabelecimento / Razão Social *" : "Nome Completo *"}
+                  </label>
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={(e) => setName(e.target.value)}
-                    placeholder="Ex: Maria dos Santos"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                    placeholder={docType === "cnpj" ? "Ex: Padaria Bom Sabor / Alfa Tech" : "Ex: Maria dos Santos"}
+                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-medium"
                   />
                 </div>
                 <div>
@@ -221,24 +288,40 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
                   />
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-500 mb-1">CPF *</label>
-                  <input
-                    type="text"
-                    required
-                    value={cpf}
-                    onChange={(e) => setCpf(formatCpf(e.target.value))}
-                    placeholder="123.456.789-00"
-                    className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
-                  />
-                </div>
+
+                {docType === "cpf" ? (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">CPF *</label>
+                    <input
+                      type="text"
+                      required
+                      value={cpf}
+                      onChange={(e) => setCpf(formatCpf(e.target.value))}
+                      placeholder="000.000.000-00"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">CNPJ do Estabelecimento *</label>
+                    <input
+                      type="text"
+                      required
+                      value={cnpj}
+                      onChange={(e) => setCnpj(formatCnpj(e.target.value))}
+                      placeholder="00.000.000/0000-00"
+                      className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+                    />
+                  </div>
+                )}
+
                 <div>
                   <label className="block text-xs font-semibold text-slate-500 mb-1">E-mail</label>
                   <input
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    placeholder="Ex: cliente@email.com"
+                    placeholder="Ex: contato@empresa.com"
                     className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                   />
                 </div>
@@ -281,7 +364,7 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              placeholder="Buscar por Nome, Telefone ou CPF..."
+              placeholder="Buscar por Nome, Telefone, CPF ou CNPJ..."
               className="w-full pl-9 pr-4 py-2.5 bg-white border border-slate-100 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-1 focus:ring-blue-500 shadow-sm"
             />
           </div>
@@ -300,13 +383,17 @@ export default function Clientes({ onSelect, isPicker = false, onPrintReceipt }:
                     className="p-3.5 flex items-center justify-between hover:bg-slate-50 transition gap-4"
                   >
                     <div className="flex-1 space-y-1">
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-bold text-slate-800 text-xs">{c.name}</span>
-                        {c.cpf && (
-                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">
+                        {c.cnpj ? (
+                          <span className="text-[10px] bg-blue-50 text-blue-700 border border-blue-200 px-1.5 py-0.5 rounded font-mono font-bold">
+                            CNPJ: {c.cnpj}
+                          </span>
+                        ) : c.cpf ? (
+                          <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono font-medium">
                             CPF: {c.cpf}
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-slate-500 font-medium">
                         <span className="flex items-center gap-1">

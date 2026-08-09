@@ -12,6 +12,7 @@ interface CombinedClient {
   name: string;
   phone: string;
   cpf?: string;
+  cnpj?: string;
   isRegistered: boolean;
   atendimentosCount: number;
   vendasCount: number;
@@ -34,7 +35,7 @@ export default function ClienteHistorico({ onPrintReceipt }: ClienteHistoricoPro
 
   const handlePrintVenda = (v: Venda, client: CombinedClient) => {
     const finalClientPhone = client.phone || "";
-    const finalClientCpf = client.cpf || "";
+    const clientDocLine = client.cnpj ? `CNPJ: ${client.cnpj}` : (client.cpf ? `CPF: ${client.cpf}` : "");
     
     const recStr = `CUPOM DE VENDA DIRETA
 ================================
@@ -46,7 +47,7 @@ VENDA: ${v.id}
 VENDEDOR: ${v.sellerName || "Balcão"}
 CLIENTE: ${client.name}
 ${finalClientPhone ? `FONE: ${finalClientPhone}` : ""}
-${finalClientCpf ? `CPF: ${finalClientCpf}` : ""}
+${clientDocLine ? `${clientDocLine}` : ""}
 --------------------------------
 ITENS VENDIDOS:
 ${(v.items || []).map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
@@ -71,7 +72,7 @@ Volte sempre!`;
 
   const handlePrintAtendimento = (at: Atendimento, client: CombinedClient) => {
     const finalClientPhone = client.phone || "";
-    const finalClientCpf = client.cpf || "";
+    const clientDocLine = client.cnpj ? `CNPJ: ${client.cnpj}` : (client.cpf ? `CPF: ${client.cpf}` : "");
     
     if (at.status === "finalizado") {
       const recStr = `CUPOM DE SAIDA
@@ -79,7 +80,7 @@ CONTROLE: ${at.controlNumber}
 FINALIZADO: ${at.exitDate ? new Date(at.exitDate).toLocaleString("pt-BR") : new Date().toLocaleString("pt-BR")}
 CLIENTE: ${client.name}
 ${finalClientPhone ? `FONE: ${finalClientPhone}` : ""}
-${finalClientCpf ? `CPF: ${finalClientCpf}` : ""}
+${clientDocLine ? `${clientDocLine}` : ""}
 ------------------------
 APARELHO:
 ${at.item} ${at.brand} ${at.model}
@@ -107,7 +108,7 @@ CONTROLE: ${at.controlNumber}
 DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${client.name}
 FONE: ${finalClientPhone}
-CPF: ${finalClientCpf}
+${clientDocLine ? `${clientDocLine}` : ""}
 ------------------------
 EQUIPAMENTO:
 ${at.item} ${at.brand} ${at.model}
@@ -173,6 +174,7 @@ TERMO: Autorizo o diagnóstico.`;
         name: c.name,
         phone: c.phone || "",
         cpf: c.cpf,
+        cnpj: c.cnpj,
         isRegistered: true,
         atendimentosCount: 0,
         vendasCount: 0,
@@ -224,7 +226,8 @@ TERMO: Autorizo o diagnóstico.`;
   const filtered = combined.filter(c =>
     c.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.phone.includes(searchQuery) ||
-    (c.cpf && c.cpf.includes(searchQuery))
+    (c.cpf && c.cpf.includes(searchQuery)) ||
+    (c.cnpj && c.cnpj.includes(searchQuery))
   );
 
   const selectedClient = combined.find(c => c.id === selectedClientId);
@@ -451,9 +454,11 @@ TERMO: Autorizo o diagnóstico.`;
                     {selectedClient.phone && (
                       <p className="text-[10px] text-slate-400 font-bold mt-0.5">{selectedClient.phone}</p>
                     )}
-                    {selectedClient.cpf && (
+                    {selectedClient.cnpj ? (
+                      <p className="text-[9px] text-blue-700 font-mono font-bold mt-0.5">CNPJ: {selectedClient.cnpj}</p>
+                    ) : selectedClient.cpf ? (
                       <p className="text-[9px] text-slate-400 font-mono mt-0.5">CPF: {selectedClient.cpf}</p>
-                    )}
+                    ) : null}
                   </div>
                 </div>
 

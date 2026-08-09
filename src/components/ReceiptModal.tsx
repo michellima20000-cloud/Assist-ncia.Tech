@@ -87,6 +87,7 @@ interface ParsedReceipt {
   clientName: string;
   clientPhone: string;
   clientCpf: string;
+  clientCnpj?: string;
   equipmentName: string;
   imei: string;
   defeito: string;
@@ -138,6 +139,7 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
   let clientName = defaultClientName;
   let clientPhone = defaultPhone;
   let clientCpf = "";
+  let clientCnpj = "";
   let equipmentName = "";
   let imei = "";
   let defeito = "";
@@ -172,6 +174,8 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
       clientPhone = line.substring(line.indexOf(":") + 1).trim();
     } else if (upper.startsWith("CPF:")) {
       clientCpf = line.replace(/CPF:\s*/i, "").trim();
+    } else if (upper.startsWith("CNPJ:")) {
+      clientCnpj = line.replace(/CNPJ:\s*/i, "").trim();
     } else if (upper.startsWith("DEFEITO:")) {
       defeito = line.replace(/DEFEITO:\s*/i, "").trim();
     } else if (upper.startsWith("ESTADO / OBS:") || upper.startsWith("ESTADO/OBS:") || upper.startsWith("LAUDO / OBSERVACOES SAIDA:") || upper.startsWith("LAUDO/OBSERVAÇÕES SAÍDA:")) {
@@ -301,6 +305,7 @@ function parseReceipt(content: string, defaultClientName: string = "", defaultPh
     clientName,
     clientPhone,
     clientCpf,
+    clientCnpj,
     equipmentName,
     imei,
     defeito: defeito || "Avaliação de hardware/bateria",
@@ -660,7 +665,12 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                   <span class="grid-item-label">${parsed.isServiceOrder ? 'Data/Hora Entrada' : 'Data/Hora da Venda'}</span>
                   <span class="grid-item-value">${parsed.date}</span>
                 </div>
-                ${parsed.clientCpf ? `
+                ${parsed.clientCnpj ? `
+                <div class="grid-item">
+                  <span class="grid-item-label">CNPJ (Cliente)</span>
+                  <span class="grid-item-value">${parsed.clientCnpj}</span>
+                </div>
+                ` : parsed.clientCpf ? `
                 <div class="grid-item">
                   <span class="grid-item-label">CPF</span>
                   <span class="grid-item-value">${parsed.clientCpf}</span>
@@ -966,7 +976,9 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
     doc.setTextColor(71, 85, 105); // slate-600
     doc.text(`Telefone: ${parsed.clientPhone || "Não cadastrado"}`, 20, 71);
     
-    if (parsed.clientCpf) {
+    if (parsed.clientCnpj) {
+      doc.text(`CNPJ: ${parsed.clientCnpj}`, 110, 65);
+    } else if (parsed.clientCpf) {
       doc.text(`CPF: ${parsed.clientCpf}`, 110, 65);
     }
     doc.text(`Data: ${parsed.date}`, 110, 71);
@@ -1383,12 +1395,17 @@ export default function ReceiptModal({ isOpen, onClose, title, content, phone, c
                   </span>
                   <span className="font-bold text-slate-800">{parsed.date}</span>
                 </div>
-                {parsed.clientCpf && (
+                {parsed.clientCnpj ? (
+                  <div className="flex flex-col border-b border-slate-100 pb-1.5">
+                    <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">CNPJ</span>
+                    <span className="font-mono font-bold text-slate-800">{parsed.clientCnpj}</span>
+                  </div>
+                ) : parsed.clientCpf ? (
                   <div className="flex flex-col border-b border-slate-100 pb-1.5">
                     <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">CPF</span>
                     <span className="font-mono font-bold text-slate-800">{parsed.clientCpf}</span>
                   </div>
-                )}
+                ) : null}
                 {parsed.imei && (
                   <div className="flex flex-col border-b border-slate-100 pb-1.5">
                     <span className="text-[9px] font-black text-sky-700 uppercase tracking-wider mb-0.5">

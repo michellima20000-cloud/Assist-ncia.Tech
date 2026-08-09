@@ -27,12 +27,30 @@ const formatPhoneNumber = (value: string) => {
 };
 
 const formatCpf = (value: string) => {
-  const cleaned = value.replace(/\D/g, "");
+  const cleaned = value.replace(/\D/g, "").slice(0, 11);
   if (cleaned.length === 0) return "";
   if (cleaned.length <= 3) return cleaned;
   if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}.${cleaned.slice(3)}`;
   if (cleaned.length <= 9) return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6)}`;
   return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
+};
+
+const formatCnpj = (value: string) => {
+  const cleaned = value.replace(/\D/g, "").slice(0, 14);
+  if (cleaned.length === 0) return "";
+  if (cleaned.length <= 2) return cleaned;
+  if (cleaned.length <= 5) return `${cleaned.slice(0, 2)}.${cleaned.slice(2)}`;
+  if (cleaned.length <= 8) return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5)}`;
+  if (cleaned.length <= 12) return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/${cleaned.slice(8)}`;
+  return `${cleaned.slice(0, 2)}.${cleaned.slice(2, 5)}.${cleaned.slice(5, 8)}/${cleaned.slice(8, 12)}-${cleaned.slice(12, 14)}`;
+};
+
+const formatDoc = (value: string) => {
+  const cleaned = value.replace(/\D/g, "");
+  if (cleaned.length > 11) {
+    return formatCnpj(cleaned);
+  }
+  return formatCpf(cleaned);
 };
 
 export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
@@ -120,7 +138,8 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
       const filtered = clientes.filter(
         c => c.name.toLowerCase().includes(query) || 
              c.phone.includes(query) || 
-             c.cpf?.includes(query)
+             c.cpf?.includes(query) ||
+             c.cnpj?.includes(query)
       );
       setFilteredClientes(filtered);
     }
@@ -286,7 +305,9 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
 
     const finalClientName = selectedCliente?.name || customClientName || "Consumidor Final";
     const finalClientPhone = selectedCliente?.phone || customClientPhone || "";
-    const finalClientCpf = selectedCliente?.cpf || customClientCpf || "";
+    const cleanDoc = (customClientCpf || "").replace(/\D/g, "");
+    const finalClientCpf = selectedCliente?.cpf || (cleanDoc.length <= 11 ? customClientCpf : "");
+    const finalClientCnpj = selectedCliente?.cnpj || (cleanDoc.length > 11 ? customClientCpf : "");
 
     const payload = {
       clienteId: selectedCliente?.id || null,
@@ -325,6 +346,8 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
           observations: venda.observations || payload.observations || ""
         };
 
+        const clientDocLine = finalClientCnpj ? `CNPJ: ${finalClientCnpj}` : (finalClientCpf ? `CPF: ${finalClientCpf}` : "");
+
         // Generate ESC/POS Thermal Receipt Layout
         const receiptText = `CUPOM DE VENDA DIRETA
 ================================
@@ -336,7 +359,7 @@ VENDA: ${finalVenda.id}
 VENDEDOR: ${finalVenda.sellerName}
 CLIENTE: ${finalVenda.clienteName}
 ${finalClientPhone ? `FONE: ${finalClientPhone}` : ""}
-${finalClientCpf ? `CPF: ${finalClientCpf}` : ""}
+${clientDocLine ? `${clientDocLine}` : ""}
 --------------------------------
 ITENS VENDIDOS:
 ${finalVenda.items.map((it: any) => `${it.name.substring(0, 20).padEnd(20)} x${it.quantity} R$ ${(it.price * it.quantity).toFixed(2)}`).join("\n")}
@@ -457,7 +480,14 @@ Volte sempre!`;
                   </div>
                   <div>
                     <p className="text-xs font-bold text-slate-800">{selectedCliente.name}</p>
-                    <p className="text-[10px] text-slate-500 font-semibold font-mono">{selectedCliente.phone}</p>
+                    <div className="flex items-center gap-2">
+                      <p className="text-[10px] text-slate-500 font-semibold font-mono">{selectedCliente.phone}</p>
+                      {selectedCliente.cnpj ? (
+                        <span className="text-[9px] text-blue-700 font-bold font-mono bg-blue-100/60 px-1.5 py-0.2 rounded">CNPJ: {selectedCliente.cnpj}</span>
+                      ) : selectedCliente.cpf ? (
+                        <span className="text-[9px] text-slate-500 font-mono">CPF: {selectedCliente.cpf}</span>
+                      ) : null}
+                    </div>
                   </div>
                 </div>
                 <button
@@ -477,7 +507,7 @@ Volte sempre!`;
                   <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">Nome do Cliente (Opcional)</label>
                   <input
                     type="text"
-                    placeholder="Ex: Michel"
+                    placeholder="Ex: Michel / Empresa Ltda"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition"
                     value={customClientName}
                     onChange={(e) => setCustomClientName(e.target.value)}
@@ -494,13 +524,13 @@ Volte sempre!`;
                   />
                 </div>
                 <div>
-                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">CPF do Cliente (Opcional)</label>
+                  <label className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wide block mb-1">CPF ou CNPJ (Opcional)</label>
                   <input
                     type="text"
-                    placeholder="000.000.000-00"
+                    placeholder="CPF ou CNPJ"
                     className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-[#1E88E5] transition font-mono"
                     value={customClientCpf}
-                    onChange={(e) => setCustomClientCpf(formatCpf(e.target.value))}
+                    onChange={(e) => setCustomClientCpf(formatDoc(e.target.value))}
                   />
                 </div>
               </div>
@@ -511,7 +541,7 @@ Volte sempre!`;
                 </div>
                 <input
                   type="text"
-                  placeholder="Buscar cliente por nome, telefone ou CPF..."
+                  placeholder="Buscar cliente por nome, telefone, CPF ou CNPJ..."
                   className="w-full pl-9 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:ring-2 focus:ring-blue-500/20 focus:border-[#1E88E5] transition font-medium"
                   value={clienteSearch}
                   onChange={(e) => {
@@ -536,7 +566,14 @@ Volte sempre!`;
                       >
                         <div>
                           <p className="font-extrabold text-slate-800">{c.name}</p>
-                          <p className="text-[10px] text-slate-500 font-mono">{c.phone}</p>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[10px] text-slate-500 font-mono">{c.phone}</span>
+                            {c.cnpj ? (
+                              <span className="text-[9px] text-blue-700 font-bold font-mono">CNPJ: {c.cnpj}</span>
+                            ) : c.cpf ? (
+                              <span className="text-[9px] text-slate-400 font-mono">CPF: {c.cpf}</span>
+                            ) : null}
+                          </div>
                         </div>
                         <span className="text-[10px] bg-blue-50 text-[#1E88E5] px-1.5 py-0.5 rounded-full font-bold">Selecionar</span>
                       </button>

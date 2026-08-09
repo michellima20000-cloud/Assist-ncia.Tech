@@ -525,6 +525,8 @@ async function startServer() {
         email: req.body.email || "",
         phone: req.body.phone || "",
         cpf: req.body.cpf || "",
+        cnpj: req.body.cnpj || "",
+        documentType: req.body.documentType || (req.body.cnpj ? "cnpj" : "cpf"),
         address: req.body.address || ""
       };
       await setDocument("clientes", id, newCliente);
@@ -546,6 +548,8 @@ async function startServer() {
         email: req.body.email ?? existing.email,
         phone: req.body.phone ?? existing.phone,
         cpf: req.body.cpf ?? existing.cpf,
+        cnpj: req.body.cnpj ?? (existing as any).cnpj ?? "",
+        documentType: req.body.documentType ?? (existing as any).documentType ?? "cpf",
         address: req.body.address ?? existing.address
       };
       await setDocument("clientes", id, updated);

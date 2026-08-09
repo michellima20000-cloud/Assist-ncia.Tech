@@ -93,6 +93,7 @@ export default function App() {
 CONTROLE: ${found.controlNumber}
 CLIENTE: ${clientName}
 FONE: ${clientPhone}
+${clientObj?.cnpj ? `CNPJ: ${clientObj.cnpj}` : (clientObj?.cpf ? `CPF: ${clientObj.cpf}` : "")}
 APARELHO: ${found.item} ${found.brand} ${found.model}
 DEFEITO: ${found.defeito || "Avaliação técnica"}
 DATA: ${new Date(found.entryDate).toLocaleString("pt-BR")}
@@ -631,7 +632,7 @@ CONTROLE: ${at.controlNumber}
 DATA: ${new Date(at.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${client ? client.name : "Consumidor Final"}
 FONE: ${client ? client.phone : ""}
-CPF: ${client ? client.cpf || "" : ""}
+${client?.cnpj ? `CNPJ: ${client.cnpj}` : (client?.cpf ? `CPF: ${client.cpf}` : "")}
 ------------------------
 EQUIPAMENTO:
 ${at.item} ${at.brand} ${at.model}

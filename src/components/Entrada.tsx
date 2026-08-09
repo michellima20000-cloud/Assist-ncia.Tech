@@ -314,7 +314,7 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
 DATA: ${new Date(result.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${selectedCliente.name}
 FONE: ${selectedCliente.phone}
-CPF: ${selectedCliente.cpf || ""}
+${selectedCliente.cnpj ? `CNPJ: ${selectedCliente.cnpj}` : (selectedCliente.cpf ? `CPF: ${selectedCliente.cpf}` : "")}
 ------------------------
 EQUIPAMENTO:
 ${result.item} ${result.brand} ${result.model}
@@ -392,9 +392,13 @@ TERMO: Autorizo o diagnóstico.`;
               <div className="p-4 bg-emerald-50/50 border border-emerald-100 rounded-xl flex justify-between items-center text-xs">
                 <div>
                   <p className="font-bold text-emerald-900 text-sm">{selectedCliente.name}</p>
-                  <div className="flex flex-wrap gap-x-4 mt-1 text-slate-600 font-medium">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-slate-600 font-medium">
                     <span>Fone: {selectedCliente.phone}</span>
-                    {selectedCliente.cpf && <span>CPF: {selectedCliente.cpf}</span>}
+                    {selectedCliente.cnpj ? (
+                      <span className="text-blue-700 font-bold font-mono">CNPJ: {selectedCliente.cnpj}</span>
+                    ) : selectedCliente.cpf ? (
+                      <span className="font-mono">CPF: {selectedCliente.cpf}</span>
+                    ) : null}
                   </div>
                 </div>
                 <button

@@ -71,6 +71,8 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
 CONTROLE: ${atendimento.controlNumber}
 FINALIZADO: ${new Date().toLocaleString("pt-BR")}
 CLIENTE: ${client ? client.name : "Desconhecido"}
+${client?.phone ? `FONE: ${client.phone}` : ""}
+${client?.cnpj ? `CNPJ: ${client.cnpj}` : (client?.cpf ? `CPF: ${client.cpf}` : "")}
 ------------------------
 APARELHO:
 ${atendimento.item} ${atendimento.brand} ${atendimento.model}
