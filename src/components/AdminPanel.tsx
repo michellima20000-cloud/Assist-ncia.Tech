@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from "react";
 import FinancialChart from "./FinancialChart";
 import WeeklySalesChart from "./WeeklySalesChart";
+import ExtratoVendasReport from "./ExtratoVendasReport";
 import {
   FileText, History, Settings, ShieldAlert, Award, ArrowLeft, Plus, Trash2, Edit, Save,
   Users, DollarSign, Tag, ListPlus, FileSpreadsheet, Printer, Search, RefreshCw, Barcode, Eye, QrCode, X,
-  Camera, Image, TrendingUp, AlertTriangle, Package, PackageCheck, PackageX, Flame, ShoppingBag
+  Camera, Image, TrendingUp, AlertTriangle, Package, PackageCheck, PackageX, Flame, ShoppingBag, Clock, Receipt
 } from "lucide-react";
 import {
   Servico, Produto, Despesa, Convenio, Marca, Item, User, Atendimento, Cliente
@@ -27,7 +28,7 @@ export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) 
   const [reportEndDate, setReportEndDate] = useState(new Date().toISOString().split("T")[0]);
   const [reportDetailed, setReportDetailed] = useState(true);
   const [reportResult, setReportResult] = useState<any>(null);
-  const [reportViewTab, setReportViewTab] = useState<'finance' | 'top_sellers' | 'inventory'>('finance');
+  const [reportViewTab, setReportViewTab] = useState<'finance' | 'sales_extract' | 'top_sellers' | 'inventory'>('finance');
   const [topSellersSearch, setTopSellersSearch] = useState("");
 
   // Histórico States
@@ -722,10 +723,10 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
           </div>
 
           {/* Report Sub-Tabs */}
-          <div className="flex p-1 bg-slate-100/80 rounded-2xl gap-1">
+          <div className="flex p-1 bg-slate-100/80 rounded-2xl gap-1 overflow-x-auto">
             <button
               onClick={() => setReportViewTab('finance')}
-              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 reportViewTab === 'finance' ? "bg-white text-blue-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -734,8 +735,23 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
             </button>
 
             <button
+              onClick={() => setReportViewTab('sales_extract')}
+              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
+                reportViewTab === 'sales_extract' ? "bg-white text-[#162a5b] shadow-sm ring-1 ring-blue-200" : "text-slate-600 hover:text-slate-900"
+              }`}
+            >
+              <Clock className="w-4 h-4 text-[#1E88E5]" />
+              <span>Extrato de Vendas (Minuto a Minuto)</span>
+              {reportResult?.vendas?.length > 0 && (
+                <span className="bg-blue-600 text-white text-[9px] px-1.5 py-0.2 rounded-full font-black">
+                  {reportResult.vendas.length}
+                </span>
+              )}
+            </button>
+
+            <button
               onClick={() => setReportViewTab('top_sellers')}
-              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 reportViewTab === 'top_sellers' ? "bg-white text-amber-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -745,7 +761,7 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
 
             <button
               onClick={() => setReportViewTab('inventory')}
-              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 ${
+              className={`flex-1 py-2 px-2 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
                 reportViewTab === 'inventory' ? "bg-white text-purple-600 shadow-sm" : "text-slate-600 hover:text-slate-900"
               }`}
             >
@@ -942,6 +958,21 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
                 </div>
               )}
             </div>
+          )}
+
+          {/* VIEW TAB: SALES EXTRACT MINUTE BY MINUTE */}
+          {reportViewTab === 'sales_extract' && (
+            <ExtratoVendasReport
+              vendas={reportResult?.vendas || []}
+              closedOrders={reportResult?.closedOrders || []}
+              reportType={reportType}
+              reportDate={reportDate}
+              reportStartDate={reportStartDate}
+              reportEndDate={reportEndDate}
+              reportYear={reportYear}
+              onPrintReceipt={onPrintReceipt}
+              onRefresh={handleGenerateReport}
+            />
           )}
 
           {/* VIEW TAB 2: TOP SELLING PRODUCTS */}
@@ -1862,35 +1893,81 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
         </div>
       )}
 
-      {/* DESPESAS */}
+      {/* DESPESAS E SAÍDAS / SANGRIAS / ESTORNOS */}
       {activeMenu === 'expenses' && (
         <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm space-y-4">
           <div className="flex justify-between items-center border-b border-slate-150 pb-3">
-            <h3 className="font-bold text-sm text-slate-800">Lançamento de Despesas</h3>
+            <div>
+              <h3 className="font-bold text-sm text-slate-800">Lançamento de Despesas & Saídas / Sangrias do Caixa</h3>
+              <p className="text-[11px] text-slate-400">Registre custos operacionais, retiradas ou estornos manuais para fechamento do caixa</p>
+            </div>
             <button onClick={() => setActiveMenu('main')} className="text-xs text-[#1E88E5] font-bold">Voltar</button>
+          </div>
+
+          <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
+            <span className="text-base">💡</span>
+            <div>
+              <p className="font-bold text-blue-950">Procedimento de Estorno de Venda & Sangria:</p>
+              <p className="text-[11px] text-blue-800 mt-0.5">
+                Para estornar uma venda antiga ou registrar uma devolução avulsa, faça um lançamento de saída com a justificativa <strong>"Devolução de Fone"</strong> (ou utilize os atalhos rápidos abaixo). Isso garante que o saldo em dinheiro bata com 100% de exatidão no final do dia.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Atalhos Rápidos:</span>
+            <button
+              type="button"
+              onClick={() => setExpenseForm({ ...expenseForm, description: "Devolução de Fone (Estorno de Venda)", date: new Date().toISOString().substring(0, 10) })}
+              className="px-2.5 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
+            >
+              🔄 Devolução de Fone (Estorno)
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpenseForm({ ...expenseForm, description: "Devolução de Acessório/Produto", date: new Date().toISOString().substring(0, 10) })}
+              className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
+            >
+              📦 Devolução de Mercadoria
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpenseForm({ ...expenseForm, description: "Sangria de Caixa - Retirada", date: new Date().toISOString().substring(0, 10) })}
+              className="px-2.5 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg text-[10px] font-bold transition cursor-pointer"
+            >
+              💸 Sangria de Caixa
+            </button>
+            <button
+              type="button"
+              onClick={() => setExpenseForm({ ...expenseForm, description: "Compra de Peças / Insumos", date: new Date().toISOString().substring(0, 10) })}
+              className="px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-[10px] font-bold transition cursor-pointer"
+            >
+              🛠️ Peças / Insumos
+            </button>
           </div>
 
           <form onSubmit={handleSaveExpense} className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-xs bg-slate-50 p-4 rounded-2xl border border-slate-100">
             <div>
-              <label className="block text-slate-500 mb-1">Descrição do Custo</label>
+              <label className="block text-slate-500 mb-1">Descrição do Custo / Justificativa</label>
               <input
                 type="text"
                 required
                 value={expenseForm.description}
                 onChange={(e) => setExpenseForm({ ...expenseForm, description: e.target.value })}
-                placeholder="Ex: Conta de luz"
+                placeholder="Ex: Devolução de Fone / Conta de luz"
                 className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
               />
             </div>
             <div>
-              <label className="block text-slate-500 mb-1">Valor do Custo (R$)</label>
+              <label className="block text-slate-500 mb-1">Valor da Saída (R$)</label>
               <input
                 type="number"
+                step="0.01"
                 required
                 value={expenseForm.amount}
                 onChange={(e) => setExpenseForm({ ...expenseForm, amount: e.target.value })}
-                placeholder="150"
-                className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
+                placeholder="35.00"
+                className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none font-mono"
               />
             </div>
             <div className="flex gap-2 items-end">
@@ -1903,8 +1980,8 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
                   className="w-full p-2 bg-white border border-slate-200 rounded-lg outline-none"
                 />
               </div>
-              <button type="submit" className="py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition uppercase tracking-wider text-[10px]">
-                Adicionar
+              <button type="submit" className="py-2.5 px-4 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition uppercase tracking-wider text-[10px] shrink-0 cursor-pointer shadow-xs">
+                Lançar Saída
               </button>
             </div>
           </form>

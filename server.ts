@@ -1326,33 +1326,29 @@ async function startServer() {
         endLimitStr = (endDate as string) || new Date().toISOString().substring(0, 10);
       }
 
+      const matchDateRange = (isoString: string) => {
+        if (!isoString) return false;
+        if (type === "all") return true;
+        const localDate = getLocalDateStr(isoString);
+        const rawDate = typeof isoString === "string" ? isoString.substring(0, 10) : "";
+        return (localDate >= startLimitStr && localDate <= endLimitStr) ||
+               (rawDate >= startLimitStr && rawDate <= endLimitStr);
+      };
+
       // Filter payments in the range
-      filteredPayments = pagamentos.filter(p => {
-        if (!p.date) return false;
-        const localDate = getLocalDateStr(p.date);
-        return localDate >= startLimitStr && localDate <= endLimitStr;
-      });
+      filteredPayments = pagamentos.filter(p => matchDateRange(p.date));
 
       // Filter expenses in the range
-      const filteredExpenses = despesas.filter(d => {
-        if (!d.date) return false;
-        const localDate = getLocalDateStr(d.date);
-        return localDate >= startLimitStr && localDate <= endLimitStr;
-      });
+      const filteredExpenses = despesas.filter(d => matchDateRange(d.date));
 
       // Detailed service orders closed in this range
       const closedOrders = atendimentos.filter(a => {
         if (a.status !== "finalizado" || !a.exitDate) return false;
-        const localDate = getLocalDateStr(a.exitDate);
-        return localDate >= startLimitStr && localDate <= endLimitStr;
+        return matchDateRange(a.exitDate);
       });
 
       // Filter direct sales in the range
-      const filteredVendas = vendas.filter(v => {
-        if (!v.date) return false;
-        const localDate = getLocalDateStr(v.date);
-        return localDate >= startLimitStr && localDate <= endLimitStr;
-      });
+      const filteredVendas = vendas.filter(v => matchDateRange(v.date));
 
       // Direct sales product financials
       let directSalesRevenue = 0;
@@ -1499,6 +1495,7 @@ async function startServer() {
         payments: filteredPayments,
         expenses: filteredExpenses,
         closedOrders,
+        vendas: filteredVendas,
         topSoldProducts,
         inventorySummary,
         summary: {
@@ -1575,7 +1572,8 @@ async function startServer() {
         sellerId: sellerId || null,
         sellerName: sellerName || "Balcão",
         observations: observations || "",
-        garantia: garantia || "Garantia de 90 dias (3 meses)"
+        garantia: garantia || "Garantia de 90 dias (3 meses)",
+        status: "finalizada"
       };
 
       // Save venda document
@@ -1614,6 +1612,88 @@ async function startServer() {
       };
       await setDocument("vendas", id, updated);
       res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Estorno / Devolução de Venda
+  app.post("/api/vendas/:id/estorno", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const { reason = "Devolução de Mercadoria", returnStock = true, createSangria = true } = req.body;
+      const venda = await getDocument<Venda>("vendas", id);
+      if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
+
+      if (venda.status === "estornada") {
+        return res.status(400).json({ error: "Esta venda já foi estornada anteriormente." });
+      }
+
+      // 1. Return stock if requested
+      if (returnStock && venda.items && venda.items.length > 0) {
+        for (const item of venda.items) {
+          if (item.productId) {
+            const p = await getDocument<Produto>("produtos", item.productId);
+            if (p) {
+              p.stock = (Number(p.stock) || 0) + (Number(item.quantity) || 1);
+              await setDocument("produtos", p.id, p);
+            }
+          }
+        }
+      }
+
+      // 2. Mark venda as estornada
+      venda.status = "estornada";
+      venda.estornoReason = reason;
+      venda.estornoDate = new Date().toISOString();
+      await setDocument("vendas", id, venda);
+
+      // 3. Create cash outflow / sangria / despesa if requested so cash balance matches
+      let createdDespesa: Despesa | null = null;
+      if (createSangria) {
+        const despId = "d-estorno-" + Date.now();
+        createdDespesa = {
+          id: despId,
+          description: `Estorno/Devolução: ${reason} (Venda #${id})`,
+          amount: Number(venda.totalAmount) || 0,
+          date: new Date().toISOString()
+        };
+        await setDocument("despesas", despId, createdDespesa);
+      }
+
+      res.json({
+        success: true,
+        message: "Venda estornada com sucesso!",
+        venda,
+        despesa: createdDespesa
+      });
+    } catch (error: any) {
+      console.error("Error refunding sale:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Delete Venda (Hard delete with stock restoration if needed)
+  app.delete("/api/vendas/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const { returnStock = true } = req.body || {};
+      const venda = await getDocument<Venda>("vendas", id);
+      
+      if (venda && returnStock && venda.status !== "estornada" && venda.items) {
+        for (const item of venda.items) {
+          if (item.productId) {
+            const p = await getDocument<Produto>("produtos", item.productId);
+            if (p) {
+              p.stock = (Number(p.stock) || 0) + (Number(item.quantity) || 1);
+              await setDocument("produtos", p.id, p);
+            }
+          }
+        }
+      }
+
+      await deleteDocument("vendas", id);
+      res.json({ success: true, message: "Venda removida com sucesso!" });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }

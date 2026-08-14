@@ -143,6 +143,9 @@ export interface Venda {
   sellerName?: string;
   observations?: string;
   garantia?: string;
+  status?: 'finalizada' | 'estornada' | 'aberta';
+  estornoReason?: string;
+  estornoDate?: string;
 }
 
 export interface Marca {

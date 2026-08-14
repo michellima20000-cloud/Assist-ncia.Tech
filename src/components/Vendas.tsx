@@ -2,10 +2,11 @@ import React, { useState, useEffect } from "react";
 import {
   ShoppingBag, Search, Plus, Minus, Trash2, X, CreditCard, DollarSign,
   User, CheckCircle, AlertTriangle, QrCode, ArrowLeft, RefreshCw, Sparkles, Receipt,
-  Package, ShieldCheck
+  Package, ShieldCheck, Clock, FileText
 } from "lucide-react";
-import { Produto, Cliente, VendaItem } from "../types";
+import { Produto, Cliente, VendaItem, Venda } from "../types";
 import ProductScanner from "./ProductScanner";
+import ExtratoVendasReport from "./ExtratoVendasReport";
 
 interface VendasProps {
   onBack: () => void;
@@ -85,6 +86,31 @@ export default function Vendas({ onBack, onSaleSuccess }: VendasProps) {
 
   // Scanner Modal
   const [scannerOpen, setScannerOpen] = useState(false);
+
+  // Extrato de Vendas Modal
+  const [extratoOpen, setExtratoOpen] = useState(false);
+  const [vendasList, setVendasList] = useState<Venda[]>([]);
+  const [loadingVendas, setLoadingVendas] = useState(false);
+
+  const fetchVendas = async () => {
+    setLoadingVendas(true);
+    try {
+      const res = await fetch("/api/vendas");
+      if (res.ok) {
+        const data = await res.json();
+        setVendasList(Array.isArray(data) ? data : []);
+      }
+    } catch (err) {
+      console.error("Erro ao buscar vendas:", err);
+    } finally {
+      setLoadingVendas(false);
+    }
+  };
+
+  const handleOpenExtrato = () => {
+    fetchVendas();
+    setExtratoOpen(true);
+  };
 
   // Load products and clients
   useEffect(() => {
@@ -421,13 +447,26 @@ Volte sempre!`;
           </div>
         </div>
 
-        <button
-          onClick={() => setScannerOpen(true)}
-          className="w-full sm:w-auto px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs tracking-wider rounded-xl transition flex items-center justify-center gap-2 shadow-sm"
-        >
-          <QrCode className="w-4 h-4" />
-          ESCANEAR CÓDIGO DE BARRAS
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleOpenExtrato}
+            className="flex-1 sm:flex-none px-3.5 py-2.5 bg-blue-50 hover:bg-blue-100 text-[#162a5b] border border-blue-200 font-extrabold text-xs tracking-wider rounded-xl transition flex items-center justify-center gap-2 shadow-2xs cursor-pointer"
+            title="Ver Extrato Detalhado de Vendas"
+          >
+            <Clock className="w-4 h-4 text-[#1E88E5]" />
+            <span>EXTRATO DE VENDAS</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setScannerOpen(true)}
+            className="flex-1 sm:flex-none px-4 py-2.5 bg-amber-500 hover:bg-amber-600 text-white font-extrabold text-xs tracking-wider rounded-xl transition flex items-center justify-center gap-2 shadow-sm cursor-pointer"
+          >
+            <QrCode className="w-4 h-4" />
+            <span>CÓDIGO DE BARRAS</span>
+          </button>
+        </div>
       </div>
 
       {error && (
@@ -1084,6 +1123,57 @@ Volte sempre!`;
               mode="select"
               onProductScanned={handleProductScanned}
             />
+          </div>
+        </div>
+      )}
+
+      {/* EXTRATO DE VENDAS MODAL OVERLAY */}
+      {extratoOpen && (
+        <div className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 animate-fade-in">
+          <div className="bg-slate-50 w-full max-w-5xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
+            {/* Modal Header */}
+            <div className="p-4 bg-white border-b border-slate-200 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-blue-50 text-[#1E88E5] rounded-xl">
+                  <Clock className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-black text-slate-800 text-sm sm:text-base">Extrato Detalhado de Vendas</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">Linhas cronológicas com horário exato, itens, pagamentos e totais</p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={fetchVendas}
+                  disabled={loadingVendas}
+                  className="p-2 text-slate-500 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                  title="Atualizar lista"
+                >
+                  <RefreshCw className={`w-4 h-4 ${loadingVendas ? "animate-spin text-blue-600" : ""}`} />
+                </button>
+                <button
+                  onClick={() => setExtratoOpen(false)}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-4">
+              <ExtratoVendasReport
+                vendas={vendasList}
+                closedOrders={[]}
+                reportType="daily"
+                reportDate={new Date().toISOString().split("T")[0]}
+                reportStartDate={new Date().toISOString().split("T")[0]}
+                reportEndDate={new Date().toISOString().split("T")[0]}
+                onPrintReceipt={(content) => onSaleSuccess(content, "", "")}
+                onRefresh={fetchVendas}
+              />
+            </div>
           </div>
         </div>
       )}
