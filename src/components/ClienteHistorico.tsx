@@ -23,6 +23,33 @@ interface ClienteHistoricoProps {
   onPrintReceipt?: (title: string, content: string, phone: string, clientName: string) => void;
 }
 
+const formatPhoneNumber = (value: string) => {
+  const cleaned = value.replace(/\D/g, "");
+  if (cleaned.length === 0) return "";
+  if (cleaned.length <= 2) return `(${cleaned}`;
+  if (cleaned.length <= 6) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2)}`;
+  if (cleaned.length <= 10) return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 6)}-${cleaned.slice(6)}`;
+  return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
+};
+
+const formatDoc = (value: string) => {
+  const cleaned = value.replace(/\D/g, "");
+  if (cleaned.length <= 11) {
+    if (cleaned.length === 0) return "";
+    if (cleaned.length <= 3) return cleaned;
+    if (cleaned.length <= 6) return `${cleaned.slice(0, 3)}.${cleaned.slice(3)}`;
+    if (cleaned.length <= 9) return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6)}`;
+    return `${cleaned.slice(0, 3)}.${cleaned.slice(3, 6)}.${cleaned.slice(6, 9)}-${cleaned.slice(9, 11)}`;
+  } else {
+    const lim = cleaned.slice(0, 14);
+    if (lim.length <= 2) return lim;
+    if (lim.length <= 5) return `${lim.slice(0, 2)}.${lim.slice(2)}`;
+    if (lim.length <= 8) return `${lim.slice(0, 2)}.${lim.slice(2, 5)}.${lim.slice(5)}`;
+    if (lim.length <= 12) return `${lim.slice(0, 2)}.${lim.slice(2, 5)}.${lim.slice(5, 8)}/${lim.slice(8)}`;
+    return `${lim.slice(0, 2)}.${lim.slice(2, 5)}.${lim.slice(5, 8)}/${lim.slice(8, 12)}-${lim.slice(12, 14)}`;
+  }
+};
+
 export default function ClienteHistorico({ onPrintReceipt }: ClienteHistoricoProps) {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
@@ -33,11 +60,129 @@ export default function ClienteHistorico({ onPrintReceipt }: ClienteHistoricoPro
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
+  // Client info editing state
+  const [isEditingClient, setIsEditingClient] = useState<boolean>(false);
+  const [editClientName, setEditClientName] = useState<string>("");
+  const [editClientPhone, setEditClientPhone] = useState<string>("");
+  const [editClientDoc, setEditClientDoc] = useState<string>("");
+  const [isSavingClient, setIsSavingClient] = useState<boolean>(false);
+  const [clientFeedbackMsg, setClientFeedbackMsg] = useState<string | null>(null);
+
   // Guarantee editing state
   const [editingWarrantyItemId, setEditingWarrantyItemId] = useState<string | null>(null);
   const [editingWarrantyVal, setEditingWarrantyVal] = useState<string>("");
   const [isSavingWarranty, setIsSavingWarranty] = useState<boolean>(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ id: string; text: string } | null>(null);
+
+  const handleStartEditClient = (client: CombinedClient) => {
+    setIsEditingClient(true);
+    setEditClientName(client.name === "Consumidor" || client.name === "Consumidor Final" ? "" : client.name);
+    setEditClientPhone(client.phone || "");
+    setEditClientDoc(client.cnpj || client.cpf || "");
+  };
+
+  const handleCancelEditClient = () => {
+    setIsEditingClient(false);
+    setEditClientName("");
+    setEditClientPhone("");
+    setEditClientDoc("");
+  };
+
+  const handleSaveClientData = async (client: CombinedClient) => {
+    const finalName = editClientName.trim();
+    if (!finalName) return;
+
+    setIsSavingClient(true);
+    try {
+      const cleanDoc = editClientDoc.replace(/\D/g, "");
+      const isCnpj = cleanDoc.length > 11;
+      const cpf = !isCnpj ? editClientDoc : "";
+      const cnpj = isCnpj ? editClientDoc : "";
+
+      if (client.isRegistered) {
+        // Update registered client
+        const res = await fetch(`/api/clientes/${client.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: finalName,
+            phone: editClientPhone,
+            cpf,
+            cnpj,
+            documentType: isCnpj ? "cnpj" : "cpf"
+          })
+        });
+
+        if (res.ok) {
+          setClientes(prev =>
+            prev.map(c =>
+              c.id === client.id
+                ? { ...c, name: finalName, phone: editClientPhone, cpf, cnpj, documentType: isCnpj ? "cnpj" : "cpf" }
+                : c
+            )
+          );
+        }
+      } else {
+        // Unregistered client (e.g. "Consumidor") -> create formal registered client
+        const res = await fetch("/api/clientes", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: finalName,
+            phone: editClientPhone,
+            cpf,
+            cnpj,
+            documentType: isCnpj ? "cnpj" : "cpf"
+          })
+        });
+
+        if (res.ok) {
+          const newCreated: Cliente = await res.json();
+          // Update all vendas with old generic name
+          const oldNameLower = client.name.toLowerCase().trim();
+          const matchingVendas = vendas.filter(
+            v => !v.clienteId && v.clienteName && v.clienteName.toLowerCase().trim() === oldNameLower
+          );
+
+          for (const v of matchingVendas) {
+            await fetch(`/api/vendas/${v.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clienteId: newCreated.id,
+                clienteName: finalName
+              })
+            }).catch(console.error);
+          }
+
+          // Update atendimentos if any matching
+          const matchingAts = atendimentos.filter(
+            a => a.clienteId === client.id
+          );
+          for (const a of matchingAts) {
+            await fetch(`/api/atendimentos/${a.id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                clienteId: newCreated.id
+              })
+            }).catch(console.error);
+          }
+
+          await fetchData();
+          setSelectedClientId(newCreated.id);
+        }
+      }
+
+      setClientFeedbackMsg("Dados do cliente atualizados com sucesso!");
+      setTimeout(() => setClientFeedbackMsg(null), 3500);
+      setIsEditingClient(false);
+    } catch (err) {
+      console.error("Erro ao atualizar cliente:", err);
+    } finally {
+      setIsSavingClient(false);
+    }
+  };
 
   const handleStartEditWarranty = (item: any) => {
     setEditingWarrantyItemId(item.id);
@@ -499,49 +644,192 @@ TERMO: Autorizo o diagnóstico.`;
           </div>
         ) : (
           <div className="space-y-4">
-            {/* Selected Client Summary Card */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
-              <div className="flex justify-between items-start gap-3">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 bg-[#1E88E5] text-white rounded-xl flex items-center justify-center font-bold text-base shadow-sm shrink-0">
-                    {selectedClient.name.charAt(0).toUpperCase()}
+            {/* Selected Client Summary / Edit Card */}
+            {isEditingClient ? (
+              <div className="bg-white p-5 rounded-2xl border border-blue-200 shadow-md space-y-4 animate-fade-in">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 bg-blue-100 text-[#1E88E5] rounded-lg flex items-center justify-center font-bold">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <h4 className="font-extrabold text-slate-800 text-sm">Personalizar / Definir Nome do Cliente</h4>
+                      <p className="text-[10px] text-slate-400">Substitua o nome genérico pelo nome real do cliente</p>
+                    </div>
                   </div>
+                  <button
+                    type="button"
+                    onClick={handleCancelEditClient}
+                    className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer"
+                    title="Cancelar"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block mb-1">
+                      Nome do Cliente <span className="text-red-500">*</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={editClientName}
+                      onChange={(e) => setEditClientName(e.target.value)}
+                      placeholder="Ex: João da Silva, Maria Santos..."
+                      autoFocus
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#1E88E5] transition"
+                    />
+                  </div>
+
                   <div>
-                    <h4 className="font-extrabold text-slate-800 text-sm leading-tight">{selectedClient.name}</h4>
-                    {selectedClient.phone && (
-                      <p className="text-[10px] text-slate-400 font-bold mt-0.5">{selectedClient.phone}</p>
-                    )}
-                    {selectedClient.cnpj ? (
-                      <p className="text-[9px] text-blue-700 font-mono font-bold mt-0.5">CNPJ: {selectedClient.cnpj}</p>
-                    ) : selectedClient.cpf ? (
-                      <p className="text-[9px] text-slate-400 font-mono mt-0.5">CPF: {selectedClient.cpf}</p>
-                    ) : null}
+                    <label className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block mb-1">
+                      WhatsApp / Telefone (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editClientPhone}
+                      onChange={(e) => setEditClientPhone(formatPhoneNumber(e.target.value))}
+                      placeholder="(00) 00000-0000"
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#1E88E5] transition"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] font-extrabold text-slate-600 uppercase tracking-wider block mb-1">
+                      CPF ou CNPJ (opcional)
+                    </label>
+                    <input
+                      type="text"
+                      value={editClientDoc}
+                      onChange={(e) => setEditClientDoc(formatDoc(e.target.value))}
+                      placeholder="000.000.000-00 ou CNPJ"
+                      className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#1E88E5] transition"
+                    />
                   </div>
                 </div>
 
-                <div className="text-right">
-                  <span className="text-[9px] bg-emerald-50 text-emerald-700 font-black px-2 py-1 rounded-lg uppercase tracking-wider">
-                    Fidelidade ativa
-                  </span>
+                {/* Action buttons */}
+                <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    onClick={handleCancelEditClient}
+                    disabled={isSavingClient}
+                    className="px-4 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSaveClientData(selectedClient)}
+                    disabled={isSavingClient || !editClientName.trim()}
+                    className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-[#1E88E5] hover:bg-blue-600 active:scale-95 disabled:opacity-50 rounded-xl transition shadow-xs cursor-pointer"
+                  >
+                    {isSavingClient ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Salvando dados...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-3.5 h-3.5" />
+                        <span>Salvar Nome do Cliente</span>
+                      </>
+                    )}
+                  </button>
                 </div>
               </div>
+            ) : (
+              <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+                <div className="flex flex-col sm:flex-row justify-between sm:items-start gap-3">
+                  <div className="flex items-start gap-3">
+                    <div className="w-11 h-11 bg-[#1E88E5] text-white rounded-xl flex items-center justify-center font-bold text-lg shadow-sm shrink-0">
+                      {selectedClient.name ? selectedClient.name.charAt(0).toUpperCase() : "C"}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-extrabold text-slate-800 text-base leading-tight">
+                          {selectedClient.name}
+                        </h4>
+                        <button
+                          type="button"
+                          onClick={() => handleStartEditClient(selectedClient)}
+                          className="flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold text-[#1E88E5] hover:text-blue-700 bg-blue-50 hover:bg-blue-100/80 rounded-md transition cursor-pointer"
+                          title="Digitar / Alterar nome do cliente"
+                        >
+                          <Pencil className="w-3 h-3" />
+                          <span>Editar Nome</span>
+                        </button>
+                      </div>
 
-              {/* Quick stats badges */}
-              <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-50 text-center">
-                <div className="p-2 bg-slate-50/50 rounded-xl">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Gasto</p>
-                  <p className="text-xs font-black text-[#1E88E5] font-mono mt-0.5">R$ {selectedClient.totalSpent.toFixed(2)}</p>
+                      {(selectedClient.name.toLowerCase() === "consumidor" || selectedClient.name.toLowerCase() === "consumidor final" || !selectedClient.isRegistered) && (
+                        <p className="text-[10px] text-amber-600 font-bold flex items-center gap-1 mt-1">
+                          <span>💡 Nome genérico registrado. Clique em "Editar Nome" para salvar o nome do cliente.</span>
+                        </p>
+                      )}
+
+                      <div className="flex items-center gap-3 mt-1 text-slate-400 font-medium text-[11px] flex-wrap">
+                        {selectedClient.phone ? (
+                          <span className="flex items-center gap-1 font-bold text-slate-600 font-mono">
+                            <Phone className="w-3 h-3 text-slate-400" />
+                            {selectedClient.phone}
+                          </span>
+                        ) : (
+                          <span className="text-slate-400 italic text-[10px]">Sem telefone cadastrado</span>
+                        )}
+
+                        {selectedClient.cnpj ? (
+                          <span className="text-blue-700 font-mono font-bold text-[10px]">
+                            CNPJ: {selectedClient.cnpj}
+                          </span>
+                        ) : selectedClient.cpf ? (
+                          <span className="text-slate-500 font-mono text-[10px]">
+                            CPF: {selectedClient.cpf}
+                          </span>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center sm:flex-col items-end gap-2 shrink-0">
+                    <span className="text-[9px] bg-emerald-50 text-emerald-700 font-black px-2 py-1 rounded-lg uppercase tracking-wider">
+                      Fidelidade ativa
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => handleStartEditClient(selectedClient)}
+                      className="sm:mt-1 flex items-center gap-1.5 px-3 py-1 text-[11px] font-bold text-slate-700 hover:text-[#1E88E5] bg-slate-50 hover:bg-blue-50 border border-slate-200 rounded-lg transition cursor-pointer shadow-xs"
+                    >
+                      <Pencil className="w-3.5 h-3.5 text-[#1E88E5]" />
+                      <span>Alterar Cadastro</span>
+                    </button>
+                  </div>
                 </div>
-                <div className="p-2 bg-slate-50/50 rounded-xl">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Ordens de Serviço</p>
-                  <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedClient.atendimentosCount}</p>
-                </div>
-                <div className="p-2 bg-slate-50/50 rounded-xl">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Vendas Rápidas</p>
-                  <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedClient.vendasCount}</p>
+
+                {clientFeedbackMsg && (
+                  <div className="p-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-xl text-xs font-bold flex items-center gap-2 animate-fade-in">
+                    <CheckCircle className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>{clientFeedbackMsg}</span>
+                  </div>
+                )}
+
+                {/* Quick stats badges */}
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-50 text-center">
+                  <div className="p-2.5 bg-slate-50/70 rounded-xl">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Gasto</p>
+                    <p className="text-xs font-black text-[#1E88E5] font-mono mt-0.5">R$ {selectedClient.totalSpent.toFixed(2)}</p>
+                  </div>
+                  <div className="p-2.5 bg-slate-50/70 rounded-xl">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Ordens de Serviço</p>
+                    <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedClient.atendimentosCount}</p>
+                  </div>
+                  <div className="p-2.5 bg-slate-50/70 rounded-xl">
+                    <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Vendas Rápidas</p>
+                    <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedClient.vendasCount}</p>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             {/* Timeline Events List */}
             <div className="space-y-3.5">
