@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { 
   Search, Calendar, ShoppingBag, ShieldCheck, ShieldAlert, ChevronDown, ChevronUp, 
   User, Phone, DollarSign, Clock, FileText, ArrowRight, Package, Wrench, RefreshCw, BadgePercent,
-  Printer
+  Printer, Pencil, Check, X, CheckCircle, Loader2
 } from "lucide-react";
 import { motion } from "motion/react";
 import { Cliente, Atendimento, Venda } from "../types";
@@ -33,6 +33,62 @@ export default function ClienteHistorico({ onPrintReceipt }: ClienteHistoricoPro
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
   const [expandedItems, setExpandedItems] = useState<Record<string, boolean>>({});
 
+  // Guarantee editing state
+  const [editingWarrantyItemId, setEditingWarrantyItemId] = useState<string | null>(null);
+  const [editingWarrantyVal, setEditingWarrantyVal] = useState<string>("");
+  const [isSavingWarranty, setIsSavingWarranty] = useState<boolean>(false);
+  const [feedbackMsg, setFeedbackMsg] = useState<{ id: string; text: string } | null>(null);
+
+  const handleStartEditWarranty = (item: any) => {
+    setEditingWarrantyItemId(item.id);
+    const current = item.raw.garantia || item.raw.warranty || "Garantia de 90 dias (3 meses)";
+    setEditingWarrantyVal(current);
+  };
+
+  const handleCancelEditWarranty = () => {
+    setEditingWarrantyItemId(null);
+    setEditingWarrantyVal("");
+  };
+
+  const handleSaveWarranty = async (item: any) => {
+    const val = editingWarrantyVal.trim();
+    if (!val) return;
+
+    setIsSavingWarranty(true);
+    try {
+      if (item.type === "atendimento") {
+        const res = await fetch(`/api/atendimentos/${item.raw.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ garantia: val }),
+        });
+        if (res.ok) {
+          setAtendimentos((prev) =>
+            prev.map((a) => (a.id === item.raw.id ? { ...a, garantia: val } : a))
+          );
+        }
+      } else {
+        const res = await fetch(`/api/vendas/${item.raw.id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ garantia: val }),
+        });
+        if (res.ok) {
+          setVendas((prev) =>
+            prev.map((v) => (v.id === item.raw.id ? { ...v, garantia: val } : v))
+          );
+        }
+      }
+      setFeedbackMsg({ id: item.id, text: "Garantia atualizada com sucesso!" });
+      setTimeout(() => setFeedbackMsg(null), 3500);
+      setEditingWarrantyItemId(null);
+    } catch (error) {
+      console.error("Erro ao salvar garantia:", error);
+    } finally {
+      setIsSavingWarranty(false);
+    }
+  };
+
   const handlePrintVenda = (v: Venda, client: CombinedClient) => {
     const finalClientPhone = client.phone || "";
     const clientDocLine = client.cnpj ? `CNPJ: ${client.cnpj}` : (client.cpf ? `CPF: ${client.cpf}` : "");
@@ -61,7 +117,8 @@ FORMA DE PGTO:  ${
 VALOR RECEBIDO: R$ ${(v.receivedAmount || v.totalAmount).toFixed(2)}
 TROCO REGISTRADO: R$ ${(v.change || 0).toFixed(2)}
 ================================
-${v.observations ? `OBS: ${v.observations}\n================================` : ""}
+GARANTIA: ${v.garantia || "Garantia de 90 dias (3 meses)"}
+${v.observations ? `OBS: ${v.observations}\n================================` : "================================"}
 Obrigado pela preferência!
 Volte sempre!`;
 
@@ -551,27 +608,148 @@ TERMO: Autorizo o diagnóstico.`;
                               
                               {/* Warranty Section */}
                               {warranty && (
-                                <div className={`p-3 rounded-xl border flex items-start gap-3 ${
-                                  warranty.status === "active" 
-                                    ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
-                                    : warranty.status === "expired"
-                                    ? "bg-slate-50 border-slate-200 text-slate-500"
-                                    : "bg-blue-50/50 border-blue-100 text-blue-800"
-                                }`}>
-                                  {warranty.status === "active" ? (
-                                    <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-                                  ) : warranty.status === "expired" ? (
-                                    <ShieldAlert className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                                <div className="space-y-2">
+                                  {editingWarrantyItemId === item.id ? (
+                                    <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3 shadow-xs">
+                                      <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2">
+                                          <ShieldCheck className="w-4 h-4 text-blue-600" />
+                                          <span className="font-extrabold text-xs text-blue-950">Alterar Prazo / Termo de Garantia</span>
+                                        </div>
+                                        <button
+                                          type="button"
+                                          onClick={handleCancelEditWarranty}
+                                          className="text-slate-400 hover:text-slate-600 p-1 rounded-md hover:bg-white/60 transition cursor-pointer"
+                                          title="Cancelar"
+                                        >
+                                          <X className="w-4 h-4" />
+                                        </button>
+                                      </div>
+
+                                      <div>
+                                        <label className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider block mb-1">
+                                          Descrição da Garantia
+                                        </label>
+                                        <input
+                                          type="text"
+                                          value={editingWarrantyVal}
+                                          onChange={(e) => setEditingWarrantyVal(e.target.value)}
+                                          placeholder="Ex: Garantia de 90 dias (3 meses)..."
+                                          className="w-full px-3 py-2 bg-white border border-blue-200 rounded-lg text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-[#1E88E5] transition"
+                                        />
+                                      </div>
+
+                                      {/* Presets */}
+                                      <div>
+                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+                                          Prazos Pré-definidos:
+                                        </span>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {[
+                                            "Garantia de 90 dias (3 meses)",
+                                            "Garantia de 30 dias",
+                                            "Garantia de 60 dias",
+                                            "Garantia de 6 meses",
+                                            "Garantia de 1 ano",
+                                            "Sem garantia"
+                                          ].map((preset) => (
+                                            <button
+                                              key={preset}
+                                              type="button"
+                                              onClick={() => setEditingWarrantyVal(preset)}
+                                              className={`px-2.5 py-1 rounded-lg text-[10px] font-bold border transition cursor-pointer ${
+                                                editingWarrantyVal === preset
+                                                  ? "bg-[#1E88E5] text-white border-[#1E88E5] shadow-xs"
+                                                  : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300"
+                                              }`}
+                                            >
+                                              {preset}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* Action buttons */}
+                                      <div className="flex items-center justify-end gap-2 pt-1">
+                                        <button
+                                          type="button"
+                                          onClick={handleCancelEditWarranty}
+                                          disabled={isSavingWarranty}
+                                          className="px-3 py-1.5 text-[11px] font-bold text-slate-600 bg-white border border-slate-200 rounded-lg hover:bg-slate-50 transition cursor-pointer"
+                                        >
+                                          Cancelar
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => handleSaveWarranty(item)}
+                                          disabled={isSavingWarranty || !editingWarrantyVal.trim()}
+                                          className="flex items-center gap-1.5 px-3.5 py-1.5 text-[11px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 active:scale-95 disabled:opacity-50 rounded-lg transition shadow-xs cursor-pointer"
+                                        >
+                                          {isSavingWarranty ? (
+                                            <>
+                                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                                              <span>Salvando...</span>
+                                            </>
+                                          ) : (
+                                            <>
+                                              <Check className="w-3.5 h-3.5" />
+                                              <span>Salvar Garantia</span>
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    </div>
                                   ) : (
-                                    <FileText className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                                    <div className={`p-3 rounded-xl border flex items-start justify-between gap-3 transition ${
+                                      warranty.status === "active" 
+                                        ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
+                                        : warranty.status === "expired"
+                                        ? "bg-slate-50 border-slate-200 text-slate-500"
+                                        : "bg-blue-50/50 border-blue-100 text-blue-800"
+                                    }`}>
+                                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                                        {warranty.status === "active" ? (
+                                          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+                                        ) : warranty.status === "expired" ? (
+                                          <ShieldAlert className="w-5 h-5 text-slate-400 shrink-0 mt-0.5" />
+                                        ) : (
+                                          <FileText className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" />
+                                        )}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="flex items-center gap-2">
+                                            <p className="font-extrabold text-xs">Garantia & Termos de Troca</p>
+                                            {warranty.status === "active" && (
+                                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-100/80 text-emerald-700 rounded-full">
+                                                Ativa
+                                              </span>
+                                            )}
+                                          </div>
+                                          <p className="text-[10px] mt-0.5 font-medium leading-relaxed">{warranty.text}</p>
+                                          {warranty.expDate && (
+                                            <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase">Prazo final: {warranty.expDate}</p>
+                                          )}
+                                        </div>
+                                      </div>
+
+                                      {/* Edit button */}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleStartEditWarranty(item)}
+                                        className="flex items-center gap-1 px-2.5 py-1 text-[10px] font-bold text-slate-600 hover:text-blue-700 bg-white hover:bg-blue-50 border border-slate-200 hover:border-blue-200 rounded-lg transition shadow-xs shrink-0 cursor-pointer"
+                                        title="Alterar garantia ou corrigir prazo"
+                                      >
+                                        <Pencil className="w-3 h-3 text-blue-600" />
+                                        <span>Editar</span>
+                                      </button>
+                                    </div>
                                   )}
-                                  <div className="flex-1 min-w-0">
-                                    <p className="font-extrabold text-xs">Garantia & Termos de Troca</p>
-                                    <p className="text-[10px] mt-0.5 font-medium leading-relaxed">{warranty.text}</p>
-                                    {warranty.expDate && (
-                                      <p className="text-[9px] text-slate-400 font-bold mt-1 uppercase">Prazo final: {warranty.expDate}</p>
-                                    )}
-                                  </div>
+
+                                  {feedbackMsg && feedbackMsg.id === item.id && (
+                                    <div className="p-2 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-lg text-[10px] font-bold flex items-center gap-1.5 animate-fade-in">
+                                      <CheckCircle className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                                      <span>{feedbackMsg.text}</span>
+                                    </div>
+                                  )}
                                 </div>
                               )}
 

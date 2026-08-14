@@ -142,6 +142,7 @@ export interface Venda {
   sellerId?: string;
   sellerName?: string;
   observations?: string;
+  garantia?: string;
 }
 
 export interface Marca {

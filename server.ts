@@ -1535,7 +1535,7 @@ async function startServer() {
 
   app.post("/api/vendas", async (req, res) => {
     try {
-      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName, observations } = req.body;
+      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName, observations, garantia } = req.body;
 
       if (!items || items.length === 0) {
         return res.status(400).json({ message: "A venda deve conter pelo menos um item." });
@@ -1574,7 +1574,8 @@ async function startServer() {
         date: new Date().toISOString(),
         sellerId: sellerId || null,
         sellerName: sellerName || "Balcão",
-        observations: observations || ""
+        observations: observations || "",
+        garantia: garantia || "Garantia de 90 dias (3 meses)"
       };
 
       // Save venda document
@@ -1598,6 +1599,23 @@ async function startServer() {
     } catch (error: any) {
       console.error("Error creating direct sale:", error);
       res.status(500).json({ error: error.message, message: error.message });
+    }
+  });
+
+  app.put("/api/vendas/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const existing = await getDocument<Venda>("vendas", id);
+      if (!existing) return res.status(404).json({ message: "Venda não encontrada" });
+
+      const updated = {
+        ...existing,
+        ...req.body
+      };
+      await setDocument("vendas", id, updated);
+      res.json(updated);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
     }
   });
 
