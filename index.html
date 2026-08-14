@@ -4,6 +4,43 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Minha Assistência</title>
+    <script>
+      (function() {
+        function isViteWSError(err) {
+          if (!err) return false;
+          var str = typeof err === 'string' ? err : (err && (err.message || err.stack || err.reason)) || String(err);
+          if (typeof str !== 'string') return false;
+          var lower = str.toLowerCase();
+          return (
+            lower.indexOf('websocket') !== -1 ||
+            lower.indexOf('vite') !== -1 ||
+            lower.indexOf('hmr') !== -1 ||
+            lower.indexOf('ws://') !== -1 ||
+            lower.indexOf('wss://') !== -1 ||
+            lower.indexOf('closed without') !== -1 ||
+            lower.indexOf('closed before') !== -1
+          );
+        }
+        window.addEventListener('unhandledrejection', function(event) {
+          if (isViteWSError(event.reason) || isViteWSError(event)) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+          }
+        }, true);
+        window.addEventListener('error', function(event) {
+          if (isViteWSError(event.message) || isViteWSError(event.error) || isViteWSError(event.filename)) {
+            event.preventDefault();
+            event.stopPropagation();
+            if (typeof event.stopImmediatePropagation === 'function') {
+              event.stopImmediatePropagation();
+            }
+          }
+        }, true);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>
