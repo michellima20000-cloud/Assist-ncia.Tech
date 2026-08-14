@@ -91,7 +91,8 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
             delayHours: 3,
             messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
             readyMessageTemplate: "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
-            entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+            entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
+            googleReviewUrl: ""
           };
         } else {
           if (!config.readyMessageTemplate) {
@@ -110,10 +111,11 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       if (method === "POST") {
         const config = {
           enabled: body.enabled !== undefined ? !!body.enabled : true,
-          delayHours: Number(body.delayHours) || 3,
+          delayHours: Number(body.delayHours) >= 0 ? Number(body.delayHours) : 3,
           messageTemplate: body.messageTemplate || "",
           readyMessageTemplate: body.readyMessageTemplate || "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
-          entryMessageTemplate: body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+          entryMessageTemplate: body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
+          googleReviewUrl: body.googleReviewUrl || ""
         };
         await setDoc(doc(db, "config", "feedback"), config);
         return new Response(JSON.stringify(config), {
@@ -122,6 +124,199 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         });
       }
     }
+
+    // 1.2 Dedicated Feedbacks REST & Sync
+    if (path === "/api/feedbacks/sync" && method === "POST") {
+      const [atSnap, fbSnap, vendSnap, cliSnap] = await Promise.all([
+        getDocs(collection(db, "atendimentos")),
+        getDocs(collection(db, "feedbacks")),
+        getDocs(collection(db, "vendas")),
+        getDocs(collection(db, "clientes"))
+      ]);
+
+      const atendimentos = getDocsData(atSnap);
+      const feedbacks = getDocsData(fbSnap);
+      const vendas = getDocsData(vendSnap);
+      const clientes = getDocsData(cliSnap);
+
+      const cfgSnap = await getDoc(doc(db, "config", "feedback"));
+      const cfg = cfgSnap.exists() ? cfgSnap.data() : {
+        enabled: true,
+        delayHours: 3,
+        messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
+        googleReviewUrl: ""
+      };
+
+      const existingAtIds = new Set(feedbacks.map(f => f.atendimentoId).filter(Boolean));
+      const existingVendIds = new Set(feedbacks.map(f => f.vendaId).filter(Boolean));
+
+      let syncedCount = 0;
+      const finalizedAts = atendimentos.filter(a => 
+        a.status === "finalizado" || 
+        a.detailedStatus === "Pronto para entrega" || 
+        a.detailedStatus === "Entregue / Finalizado"
+      );
+
+      for (const at of finalizedAts) {
+        if (!existingAtIds.has(at.id)) {
+          let clientName = "Cliente";
+          let clientPhone = "";
+          const foundCli = clientes.find(c => c.id === at.clienteId || (c.name && at.clienteId && c.name.toLowerCase() === String(at.clienteId).toLowerCase()));
+          if (foundCli) {
+            clientName = foundCli.name || clientName;
+            clientPhone = foundCli.phone || clientPhone;
+          }
+
+          const delayHours = Number(cfg.delayHours) >= 0 ? Number(cfg.delayHours) : 3;
+          const scheduledTime = new Date(Date.now() + delayHours * 3600000).toISOString();
+          const valorFmt = Number(at.totalAmount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+          
+          let msg = cfg.messageTemplate || "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇";
+          msg = msg
+            .replace(/{cliente}/g, clientName)
+            .replace(/{aparelho}/g, at.item || "aparelho")
+            .replace(/{marca}/g, at.brand || "")
+            .replace(/{modelo}/g, at.model || "")
+            .replace(/{numero_os}/g, at.controlNumber || "")
+            .replace(/{valor}/g, valorFmt);
+
+          const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+          const newFb = {
+            id: fbId,
+            clienteId: at.clienteId || "",
+            clienteName: clientName,
+            clientePhone: clientPhone,
+            atendimentoId: at.id,
+            controlNumber: at.controlNumber || "",
+            item: at.item || "",
+            brand: at.brand || "",
+            model: at.model || "",
+            scheduledTime,
+            status: "pending",
+            messageText: msg,
+            createdAt: new Date().toISOString()
+          };
+          await setDoc(doc(db, "feedbacks", fbId), newFb);
+          syncedCount++;
+          existingAtIds.add(at.id);
+        }
+      }
+
+      for (const v of vendas.filter(v => v.status !== "estornada" && v.clienteName && v.clienteName !== "Consumidor Final")) {
+        if (!existingVendIds.has(v.id)) {
+          let clientPhone = "";
+          const foundCli = clientes.find(c => c.id === v.clienteId || (c.name && v.clienteName && c.name.toLowerCase() === v.clienteName.toLowerCase()));
+          if (foundCli) clientPhone = foundCli.phone || "";
+
+          const delayHours = Number(cfg.delayHours) >= 0 ? Number(cfg.delayHours) : 3;
+          const scheduledTime = new Date(Date.now() + delayHours * 3600000).toISOString();
+          const itemsSummary = (v.items || []).map((i: any) => `${i.name} (x${i.quantity})`).join(", ");
+
+          const msg = `Olá, ${v.clienteName}! Tudo bem? Passando para agradecer sua compra (${itemsSummary}) em nossa loja! O que você achou dos produtos e do nosso atendimento? Seu feedback é muito importante para nós! 👇`;
+
+          const fbId = "fb-venda-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+          const newFb = {
+            id: fbId,
+            clienteId: v.clienteId || "",
+            clienteName: v.clienteName,
+            clientePhone: clientPhone,
+            vendaId: v.id,
+            controlNumber: `Venda #${v.id.slice(-6)}`,
+            item: itemsSummary || "Compra na Loja",
+            brand: "",
+            model: "",
+            scheduledTime,
+            status: "pending",
+            messageText: msg,
+            createdAt: new Date().toISOString()
+          };
+          await setDoc(doc(db, "feedbacks", fbId), newFb);
+          syncedCount++;
+          existingVendIds.add(v.id);
+        }
+      }
+
+      const updatedFbSnap = await getDocs(collection(db, "feedbacks"));
+      const updatedList = getDocsData(updatedFbSnap).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+
+      return new Response(JSON.stringify({
+        success: true,
+        syncedCount,
+        totalFeedbacks: updatedList.length,
+        feedbacks: updatedList
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path === "/api/feedbacks" && method === "GET") {
+      const snap = await getDocs(collection(db, "feedbacks"));
+      const list = getDocsData(snap).sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+      return new Response(JSON.stringify(list), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path === "/api/feedbacks" && method === "POST") {
+      const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+      const newFeedback = {
+        id: fbId,
+        clienteId: body.clienteId || "",
+        clienteName: body.clienteName || "Cliente",
+        clientePhone: body.clientePhone || "",
+        atendimentoId: body.atendimentoId || "",
+        vendaId: body.vendaId || "",
+        controlNumber: body.controlNumber || "",
+        item: body.item || "",
+        brand: body.brand || "",
+        model: body.model || "",
+        scheduledTime: body.scheduledTime || new Date().toISOString(),
+        status: "pending",
+        messageText: body.messageText || "",
+        createdAt: new Date().toISOString()
+      };
+      await setDoc(doc(db, "feedbacks", fbId), newFeedback);
+      return new Response(JSON.stringify(newFeedback), {
+        status: 201,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path.startsWith("/api/feedbacks/") && method === "PUT") {
+      const fbId = path.replace("/api/feedbacks/", "");
+      const fbRef = doc(db, "feedbacks", fbId);
+      const fbSnap = await getDoc(fbRef);
+      if (!fbSnap.exists()) {
+        return new Response(JSON.stringify({ error: "Feedback não encontrado" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      const existing = getDocData(fbSnap);
+      const updated = {
+        ...existing,
+        ...body,
+        sentAt: body.status === "sent" ? (existing.sentAt || new Date().toISOString()) : existing.sentAt
+      };
+      await setDoc(fbRef, updated);
+      return new Response(JSON.stringify(updated), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path.startsWith("/api/feedbacks/") && method === "DELETE") {
+      const fbId = path.replace("/api/feedbacks/", "");
+      const fbRef = doc(db, "feedbacks", fbId);
+      await deleteDoc(fbRef);
+      return new Response(JSON.stringify({ success: true, id: fbId }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
 
     // 1.2 Config Status route
     if (path === "/api/config/status") {

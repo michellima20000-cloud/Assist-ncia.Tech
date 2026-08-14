@@ -169,3 +169,30 @@ export interface DashboardStats {
     totalCollected: number;
   };
 }
+
+export interface FeedbackItem {
+  id: string;
+  clienteId?: string;
+  clienteName: string;
+  clientePhone: string;
+  atendimentoId?: string;
+  controlNumber?: string;
+  vendaId?: string;
+  item?: string;
+  brand?: string;
+  model?: string;
+  scheduledTime: string;
+  status: 'pending' | 'sent' | 'canceled';
+  messageText: string;
+  createdAt: string;
+  sentAt?: string;
+}
+
+export interface FeedbackConfig {
+  enabled: boolean;
+  delayHours: number;
+  messageTemplate: string;
+  readyMessageTemplate?: string;
+  entryMessageTemplate?: string;
+  googleReviewUrl?: string;
+}

@@ -639,11 +639,17 @@ async function startServer() {
       const existing = await getDocument<Atendimento>("atendimentos", id);
       if (!existing) return res.status(404).json({ message: "Atendimento não encontrado" });
 
-      const updated = {
+      const updated: Atendimento = {
         ...existing,
         ...req.body
       };
       await setDocument("atendimentos", id, updated);
+
+      // If status changed to finalizado or delivered, schedule post-sale feedback
+      if (updated.status === "finalizado" || updated.detailedStatus === "Pronto para entrega" || updated.detailedStatus === "Entregue / Finalizado") {
+        await scheduleFeedbackForAtendimento(updated);
+      }
+
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1024,6 +1030,144 @@ async function startServer() {
     }
   });
 
+  // Helper to schedule feedback for an atendimento
+  async function scheduleFeedbackForAtendimento(at: Atendimento): Promise<any | null> {
+    try {
+      let config = await getDocument<any>("config", "feedback");
+      if (!config) {
+        config = {
+          enabled: true,
+          delayHours: 3,
+          messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
+          readyMessageTemplate: "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
+          entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+        };
+      }
+
+      // Check if feedback already exists for this atendimento
+      const allFeedbacks = await getCollection<any>("feedbacks");
+      const existing = allFeedbacks.find(fb => fb.atendimentoId === at.id);
+      if (existing) {
+        return existing;
+      }
+
+      // Find client info cleanly
+      let clientName = "Cliente";
+      let clientPhone = "";
+      if (at.clienteId) {
+        const client = await getDocument<Cliente>("clientes", at.clienteId);
+        if (client) {
+          clientName = client.name || clientName;
+          clientPhone = client.phone || clientPhone;
+        }
+      }
+      if (!clientPhone) {
+        const allClients = await getCollection<Cliente>("clientes");
+        const cleanTarget = String(at.clienteId || "").trim().toLowerCase();
+        const found = allClients.find(c => 
+          (c.id && String(c.id).trim().toLowerCase() === cleanTarget) ||
+          (c.name && cleanTarget && String(c.name).trim().toLowerCase() === cleanTarget)
+        );
+        if (found) {
+          clientName = found.name || clientName;
+          clientPhone = found.phone || clientPhone;
+        }
+      }
+
+      const delayHours = Number(config.delayHours) >= 0 ? Number(config.delayHours) : 3;
+      const delayMs = delayHours * 60 * 60 * 1000;
+      const scheduledTime = new Date(Date.now() + delayMs).toISOString();
+
+      let messageText = config.messageTemplate || "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇";
+      const valorFormatted = Number(at.totalAmount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+      messageText = messageText
+        .replace(/{cliente}/g, clientName)
+        .replace(/{aparelho}/g, at.item || "aparelho")
+        .replace(/{marca}/g, at.brand || "")
+        .replace(/{modelo}/g, at.model || "")
+        .replace(/{numero_os}/g, at.controlNumber || "")
+        .replace(/{valor}/g, valorFormatted);
+
+      const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+      const newFeedback = {
+        id: fbId,
+        clienteId: at.clienteId || "",
+        clienteName: clientName,
+        clientePhone: clientPhone,
+        atendimentoId: at.id,
+        controlNumber: at.controlNumber || "",
+        item: at.item || "",
+        brand: at.brand || "",
+        model: at.model || "",
+        scheduledTime,
+        status: "pending",
+        messageText,
+        createdAt: new Date().toISOString()
+      };
+
+      await setDocument("feedbacks", fbId, newFeedback);
+      return newFeedback;
+    } catch (fbErr) {
+      console.error("Error scheduling feedback for atendimento:", fbErr);
+      return null;
+    }
+  }
+
+  // Helper to schedule feedback for a direct sale
+  async function scheduleFeedbackForVenda(v: Venda): Promise<any | null> {
+    try {
+      if (!v.clienteName || v.clienteName === "Consumidor Final") return null;
+      let config = await getDocument<any>("config", "feedback");
+      if (!config || config.enabled === false) return null;
+
+      const allFeedbacks = await getCollection<any>("feedbacks");
+      const existing = allFeedbacks.find(fb => fb.vendaId === v.id);
+      if (existing) return existing;
+
+      let clientPhone = "";
+      if (v.clienteId) {
+        const client = await getDocument<Cliente>("clientes", v.clienteId);
+        if (client) clientPhone = client.phone || "";
+      }
+      if (!clientPhone && v.clienteName) {
+        const allClients = await getCollection<Cliente>("clientes");
+        const found = allClients.find(c => c.name?.toLowerCase() === v.clienteName?.toLowerCase());
+        if (found) clientPhone = found.phone || "";
+      }
+
+      const delayHours = Number(config.delayHours) >= 0 ? Number(config.delayHours) : 3;
+      const delayMs = delayHours * 60 * 60 * 1000;
+      const scheduledTime = new Date(Date.now() + delayMs).toISOString();
+
+      const itemsSummary = (v.items || []).map(i => `${i.name} (x${i.quantity})`).join(", ");
+      const messageText = `Olá, ${v.clienteName}! Tudo bem? Passando para agradecer sua compra (${itemsSummary}) em nossa loja! O que você achou dos produtos e do nosso atendimento? Seu feedback é muito importante para nós! 👇`;
+
+      const fbId = "fb-venda-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+      const newFeedback = {
+        id: fbId,
+        clienteId: v.clienteId || "",
+        clienteName: v.clienteName,
+        clientePhone: clientPhone,
+        vendaId: v.id,
+        controlNumber: `Venda #${v.id.slice(-6)}`,
+        item: itemsSummary || "Compra na Loja",
+        brand: "",
+        model: "",
+        scheduledTime,
+        status: "pending",
+        messageText,
+        createdAt: new Date().toISOString()
+      };
+
+      await setDocument("feedbacks", fbId, newFeedback);
+      return newFeedback;
+    } catch (err) {
+      console.error("Error in scheduleFeedbackForVenda:", err);
+      return null;
+    }
+  }
+
   // Payments & Exit finalization
   app.post("/api/pagamentos", async (req, res) => {
     try {
@@ -1066,53 +1210,7 @@ async function startServer() {
       }
 
       // Schedule Feedback Automation
-      try {
-        const client = await getDocument<Cliente>("clientes", at.clienteId);
-        if (client) {
-          let config = await getDocument<any>("config", "feedback");
-          if (!config) {
-            config = {
-              enabled: true,
-              delayHours: 3,
-              messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇"
-            };
-          }
-          
-          if (config.enabled) {
-            const delayMs = (Number(config.delayHours) || 3) * 60 * 60 * 1000;
-            const scheduledTime = new Date(Date.now() + delayMs).toISOString();
-            
-            let messageText = config.messageTemplate || "";
-            messageText = messageText
-              .replace(/{cliente}/g, client.name || "Cliente")
-              .replace(/{aparelho}/g, at.item || "aparelho")
-              .replace(/{marca}/g, at.brand || "")
-              .replace(/{modelo}/g, at.model || "")
-              .replace(/{numero_os}/g, at.controlNumber || "");
-
-            const fbId = "fb-" + Date.now();
-            const newFeedback = {
-              id: fbId,
-              clienteId: at.clienteId,
-              clienteName: client.name || "Cliente",
-              clientePhone: client.phone || "",
-              atendimentoId: at.id,
-              controlNumber: at.controlNumber || "",
-              item: at.item || "",
-              brand: at.brand || "",
-              model: at.model || "",
-              scheduledTime,
-              status: "pending",
-              messageText,
-              createdAt: new Date().toISOString()
-            };
-            
-            await setDocument("feedbacks", fbId, newFeedback);
-          }
-        }
-      } catch (fbErr) {
-        console.error("Error scheduling feedback:", fbErr);
-      }
+      await scheduleFeedbackForAtendimento(at);
 
       res.status(201).json({ payment: newPayment, atendimento: at });
     } catch (error: any) {
@@ -1131,7 +1229,8 @@ async function startServer() {
           delayHours: 3,
           messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
           readyMessageTemplate: "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
-          entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+          entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
+          googleReviewUrl: ""
         };
       } else {
         if (!config.readyMessageTemplate) {
@@ -1152,10 +1251,11 @@ async function startServer() {
     try {
       const config = {
         enabled: req.body.enabled !== undefined ? !!req.body.enabled : true,
-        delayHours: Number(req.body.delayHours) || 3,
+        delayHours: Number(req.body.delayHours) >= 0 ? Number(req.body.delayHours) : 3,
         messageTemplate: req.body.messageTemplate || "",
         readyMessageTemplate: req.body.readyMessageTemplate || "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
-        entryMessageTemplate: req.body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!"
+        entryMessageTemplate: req.body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
+        googleReviewUrl: req.body.googleReviewUrl || ""
       };
       await setDocument("config", "feedback", config);
       res.json(config);
@@ -1163,6 +1263,7 @@ async function startServer() {
       res.status(500).json({ error: error.message });
     }
   });
+
 
   // Get Custom Statuses
   app.get("/api/config/status", async (req, res) => {
@@ -1257,7 +1358,95 @@ async function startServer() {
     }
   });
 
-  // Update feedback status
+  // Create manual or custom feedback
+  app.post("/api/feedbacks", async (req, res) => {
+    try {
+      const { clienteName, clientePhone, clienteId, atendimentoId, vendaId, item, brand, model, controlNumber, messageText, scheduledTime } = req.body;
+      const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
+      const newFeedback = {
+        id: fbId,
+        clienteId: clienteId || "",
+        clienteName: clienteName || "Cliente",
+        clientePhone: clientePhone || "",
+        atendimentoId: atendimentoId || "",
+        vendaId: vendaId || "",
+        controlNumber: controlNumber || "",
+        item: item || "",
+        brand: brand || "",
+        model: model || "",
+        scheduledTime: scheduledTime || new Date().toISOString(),
+        status: "pending",
+        messageText: messageText || "",
+        createdAt: new Date().toISOString()
+      };
+      await setDocument("feedbacks", fbId, newFeedback);
+      res.status(201).json(newFeedback);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Sync / Backfill post-sale feedback for all finalized atendimentos and sales
+  app.post("/api/feedbacks/sync", async (req, res) => {
+    try {
+      const [atendimentos, existingFeedbacks, vendas] = await Promise.all([
+        getCollection<Atendimento>("atendimentos"),
+        getCollection<any>("feedbacks"),
+        getCollection<Venda>("vendas")
+      ]);
+
+      const existingAtendimentoIds = new Set(existingFeedbacks.map(f => f.atendimentoId).filter(Boolean));
+      const existingVendaIds = new Set(existingFeedbacks.map(f => f.vendaId).filter(Boolean));
+
+      let createdCount = 0;
+      // 1. Process finalized atendimentos
+      const finalizedList = atendimentos.filter(a => 
+        a.status === "finalizado" || 
+        a.detailedStatus === "Pronto para entrega" || 
+        a.detailedStatus === "Entregue / Finalizado"
+      );
+
+      for (const at of finalizedList) {
+        if (!existingAtendimentoIds.has(at.id)) {
+          const created = await scheduleFeedbackForAtendimento(at);
+          if (created) {
+            createdCount++;
+            existingAtendimentoIds.add(at.id);
+          }
+        }
+      }
+
+      // 2. Process vendas with client name
+      const eligibleVendas = vendas.filter(v => 
+        v.status !== "estornada" && 
+        v.clienteName && 
+        v.clienteName !== "Consumidor Final"
+      );
+
+      for (const v of eligibleVendas) {
+        if (!existingVendaIds.has(v.id)) {
+          const created = await scheduleFeedbackForVenda(v);
+          if (created) {
+            createdCount++;
+            existingVendaIds.add(v.id);
+          }
+        }
+      }
+
+      const updatedFeedbacks = await getCollection<any>("feedbacks");
+      res.json({
+        success: true,
+        syncedCount: createdCount,
+        totalFeedbacks: updatedFeedbacks.length,
+        feedbacks: updatedFeedbacks.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime())
+      });
+    } catch (err: any) {
+      console.error("Error syncing feedbacks:", err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Update feedback status or text
   app.put("/api/feedbacks/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -1266,7 +1455,8 @@ async function startServer() {
 
       const updated = {
         ...existing,
-        ...req.body
+        ...req.body,
+        sentAt: req.body.status === "sent" ? (existing.sentAt || new Date().toISOString()) : existing.sentAt
       };
       await setDocument("feedbacks", id, updated);
       res.json(updated);
@@ -1592,6 +1782,9 @@ async function startServer() {
         date: new Date().toISOString()
       };
       await setDocument("pagamentos", payId, newPayment);
+
+      // Schedule feedback for direct sale if customer info is present
+      await scheduleFeedbackForVenda(newVenda);
 
       res.status(201).json({ success: true, venda: newVenda, payment: newPayment });
     } catch (error: any) {

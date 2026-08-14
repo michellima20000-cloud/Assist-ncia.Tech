@@ -53,6 +53,7 @@ export default function App() {
     entregaCount: 0,
     financials: { cash: 0, card: 0, pending: 0, expenses: 0, totalCollected: 0 }
   });
+  const [readyFeedbackCount, setReadyFeedbackCount] = useState<number>(0);
 
   // Selected Order for Saida / Payment flows
   const [selectedAtendimento, setSelectedAtendimento] = useState<Atendimento | null>(null);
@@ -148,10 +149,19 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
     try {
       const todayStr = new Date().toLocaleDateString('sv-SE'); // YYYY-MM-DD local format
       const offset = new Date().getTimezoneOffset();
-      const res = await fetch(`/api/stats?today=${todayStr}&offset=${offset}`);
-      if (res.ok) {
-        const data = await res.json();
+      const [resStats, resFeedbacks] = await Promise.all([
+        fetch(`/api/stats?today=${todayStr}&offset=${offset}`),
+        fetch("/api/feedbacks")
+      ]);
+      if (resStats.ok) {
+        const data = await resStats.json();
         setStats(data);
+      }
+      if (resFeedbacks.ok) {
+        const fbList = await resFeedbacks.json();
+        const now = Date.now();
+        const ready = (fbList || []).filter((f: any) => f.status === "pending" && new Date(f.scheduledTime).getTime() <= now).length;
+        setReadyFeedbackCount(ready);
       }
     } catch (err) {
       console.error("Erro ao carregar dados do painel", err);
@@ -524,8 +534,13 @@ ________________________`;
                 {/* PÓS-VENDA & MARKETING (teal/emerald) */}
                 <button
                   onClick={() => setActiveTab("feedback")}
-                  className="p-5 bg-white border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                  className="p-5 bg-white border border-slate-100 hover:border-emerald-200 hover:bg-emerald-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group relative"
                 >
+                  {readyFeedbackCount > 0 && (
+                    <span className="absolute top-3 right-3 px-2 py-0.5 bg-emerald-500 text-white font-black text-[10px] rounded-full shadow-sm animate-pulse">
+                      {readyFeedbackCount} pronta{readyFeedbackCount > 1 ? "s" : ""}
+                    </span>
+                  )}
                   <div className="w-12 h-12 bg-emerald-100 text-emerald-700 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
                     <MessageSquare className="w-6 h-6" />
                   </div>

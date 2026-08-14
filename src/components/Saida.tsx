@@ -320,6 +320,49 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
     }
   };
 
+  const handleGenerateFeedbackForCurrentOS = async () => {
+    try {
+      const clientName = client?.name || "Cliente";
+      const clientPhone = client?.phone || "";
+      const delayHours = Number(feedbackConfig?.delayHours) >= 0 ? Number(feedbackConfig?.delayHours) : 3;
+      const scheduledTime = new Date(Date.now() + delayHours * 3600000).toISOString();
+      const valorFmt = Number(atendimento.totalAmount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+      
+      let msg = feedbackConfig?.messageTemplate || "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇";
+      msg = msg
+        .replace(/{cliente}/g, clientName)
+        .replace(/{aparelho}/g, atendimento.item || "aparelho")
+        .replace(/{marca}/g, atendimento.brand || "")
+        .replace(/{modelo}/g, atendimento.model || "")
+        .replace(/{numero_os}/g, atendimento.controlNumber || "")
+        .replace(/{valor}/g, valorFmt);
+
+      const res = await fetch("/api/feedbacks", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          clienteId: atendimento.clienteId,
+          clienteName: clientName,
+          clientePhone: clientPhone,
+          atendimentoId: atendimento.id,
+          controlNumber: atendimento.controlNumber || "",
+          item: atendimento.item || "",
+          brand: atendimento.brand || "",
+          model: atendimento.model || "",
+          scheduledTime,
+          messageText: msg
+        })
+      });
+      if (res.ok) {
+        const created = await res.json();
+        setRelatedFeedback(created);
+        setFeedbackTextVal(created.messageText);
+      }
+    } catch (err) {
+      console.error("Erro ao gerar feedback:", err);
+    }
+  };
+
   const handleSaveFeedbackMessage = async () => {
     if (!relatedFeedback) return;
     try {
@@ -1349,8 +1392,27 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                     </div>
                   </div>
                 ) : (
-                  <div className="p-3 bg-amber-50 text-amber-800 rounded-xl text-[10px] font-medium border border-amber-100">
-                    O agendamento de pós-venda está desativado ou foi removido para esta OS.
+                  <div className="p-3.5 bg-emerald-50/70 border border-emerald-100 rounded-xl space-y-2.5">
+                    <p className="text-[11px] text-emerald-900 font-semibold">
+                      Esta OS está finalizada e pronta para envio da mensagem de pós-venda.
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={handleGenerateFeedbackForCurrentOS}
+                        className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                        Agendar / Gerar Pós-Venda Agora
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSendWhatsApp("feedback")}
+                        className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition"
+                      >
+                        Enviar Direto no WhatsApp
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>
