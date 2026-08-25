@@ -43,7 +43,7 @@ if (typeof window !== 'undefined') {
   }, true);
 }
 
-// Intercept fetch requests to handle /api routes cleanly with failover to client router
+// Intercept fetch requests to handle /api routes cleanly with user context and failover to client router
 const originalFetch = window.fetch;
 const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
   let urlStr = "";
@@ -63,6 +63,28 @@ const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
   }
 
   if (pathname.startsWith("/api/")) {
+    // Inject authenticated user ID into headers for multi-tenant Firestore data separation
+    let updatedInit: RequestInit = { ...(init || {}) };
+    let headers = new Headers(updatedInit.headers || {});
+    
+    try {
+      const savedUser = localStorage.getItem("user_session");
+      const savedToken = localStorage.getItem("user_token");
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        const uid = parsed?.id || parsed?.uid;
+        if (uid && !headers.has("x-user-id") && !headers.has("X-User-Id")) {
+          headers.set("x-user-id", uid);
+        }
+      }
+      if (savedToken && !headers.has("Authorization") && !headers.has("authorization")) {
+        headers.set("Authorization", `Bearer ${savedToken}`);
+      }
+    } catch (e) {
+      console.warn("Could not inject user session headers into fetch:", e);
+    }
+    updatedInit.headers = headers;
+
     const isExternalDomain =
       window.location.hostname !== "localhost" &&
       !window.location.hostname.includes("us-east1.run.app") &&
@@ -70,12 +92,12 @@ const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
       !window.location.hostname.includes("0.0.0.0");
 
     if (isExternalDomain) {
-      return handleClientRoute(urlStr, init);
+      return handleClientRoute(urlStr, updatedInit);
     }
 
-    return originalFetch(input, init).catch((err) => {
+    return originalFetch(input, updatedInit).catch((err) => {
       console.warn("Backend API fetch failed, falling back to client router:", err);
-      return handleClientRoute(urlStr, init);
+      return handleClientRoute(urlStr, updatedInit);
     });
   }
 

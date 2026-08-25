@@ -2,7 +2,6 @@ import express from "express";
 import path from "path";
 import fs from "fs";
 import { createServer as createViteServer } from "vite";
-import { fileURLToPath } from "url";
 import { initializeApp } from "firebase/app";
 import {
   getFirestore,
@@ -21,8 +20,6 @@ import {
   Timestamp,
   Firestore
 } from "firebase/firestore";
-
-// Define path resolution using process.cwd() as needed
 
 const PORT = 3000;
 const DB_FILE = path.join(process.cwd(), "database.json");
@@ -72,7 +69,6 @@ function convertToFirestore(obj: any): any {
   if (obj instanceof Date) return Timestamp.fromDate(obj);
   
   if (typeof obj === "string") {
-    // Matches full ISO timestamp dates (not simple date string "YYYY-MM-DD")
     const isoPattern = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
     if (isoPattern.test(obj)) {
       const parsedDate = new Date(obj);
@@ -134,9 +130,39 @@ function convertFromFirestore(obj: any): any {
   return obj;
 }
 
-// Helper methods to operate Firestore collections
-async function getCollection<T>(collectionName: string): Promise<T[]> {
-  const colRef = collection(db, collectionName);
+// Extract authenticated user ID from request headers or auth token
+function getUserIdFromReq(req: express.Request): string {
+  const headerUid = (req.headers["x-user-id"] || req.headers["x-user-uid"] || req.headers["X-User-Id"]) as string;
+  if (headerUid && typeof headerUid === "string" && headerUid.trim()) {
+    return headerUid.trim();
+  }
+  const queryUid = (req.query.userId || req.query.uid) as string;
+  if (queryUid && typeof queryUid === "string" && queryUid.trim()) {
+    return queryUid.trim();
+  }
+  const authHeader = req.headers.authorization;
+  if (authHeader && authHeader.startsWith("Bearer ")) {
+    const token = authHeader.substring(7).trim();
+    if (token.startsWith("fb-session-token-")) {
+      return token.replace("fb-session-token-", "").trim();
+    }
+    if (token.startsWith("mock-session-token-")) {
+      return token.replace("mock-session-token-", "").trim();
+    }
+    if (token && token.length > 5 && !token.includes(" ")) {
+      return token;
+    }
+  }
+  return "default";
+}
+
+// In-memory cache of seeded users
+const seededUsers = new Set<string>();
+
+// User-scoped Firestore helper methods
+async function getUserCollection<T>(userId: string, collectionName: string): Promise<T[]> {
+  await checkAndSeedUser(userId);
+  const colRef = collection(db, "users", userId, collectionName);
   const snapshot = await getDocs(colRef);
   const list: any[] = [];
   snapshot.forEach(docSnap => {
@@ -145,21 +171,21 @@ async function getCollection<T>(collectionName: string): Promise<T[]> {
   return list;
 }
 
-async function getDocument<T>(collectionName: string, docId: string): Promise<T | null> {
-  const docRef = doc(db, collectionName, docId);
+async function getUserDocument<T>(userId: string, collectionName: string, docId: string): Promise<T | null> {
+  await checkAndSeedUser(userId);
+  const docRef = doc(db, "users", userId, collectionName, docId);
   const docSnap = await getDoc(docRef);
   if (!docSnap.exists()) return null;
   return convertFromFirestore({ id: docSnap.id, ...docSnap.data() }) as T;
 }
 
-async function setDocument(collectionName: string, docId: string, data: any): Promise<void> {
-  const docRef = doc(db, collectionName, docId);
+async function setUserDocument(userId: string, collectionName: string, docId: string, data: any): Promise<void> {
+  const docRef = doc(db, "users", userId, collectionName, docId);
   const docSnap = await getDoc(docRef);
   
   const now = Timestamp.now();
   const rawData = { ...data };
   
-  // Clean id to prevent storing redundant field
   delete rawData.id;
   
   const payload = convertToFirestore(rawData);
@@ -168,40 +194,42 @@ async function setDocument(collectionName: string, docId: string, data: any): Pr
   }
   payload.updatedAt = now;
   if (!payload.createdBy) {
-    payload.createdBy = "u-1"; // Default to u-1 admin
+    payload.createdBy = userId;
   }
   
   await setDoc(docRef, payload, { merge: true });
 }
 
-async function deleteDocument(collectionName: string, docId: string): Promise<void> {
-  const docRef = doc(db, collectionName, docId);
+async function deleteUserDocument(userId: string, collectionName: string, docId: string): Promise<void> {
+  const docRef = doc(db, "users", userId, collectionName, docId);
   await deleteDoc(docRef);
 }
 
-// Seed local database.json data to Firestore if it's empty
-async function seedDatabase() {
+// Seed user-scoped database if empty
+async function checkAndSeedUser(userId: string) {
+  if (!userId || seededUsers.has(userId)) return;
+
   try {
-    const configRef = doc(db, "config", "main");
+    const configRef = doc(db, "users", userId, "config", "main");
     const configSnap = await getDoc(configRef);
     
-    if (configSnap.exists() && configSnap.data()?.hasBeenCleared) {
-      console.log("Database has been cleared/reset for real usage. Skipping seeding.");
+    if (configSnap.exists()) {
+      seededUsers.add(userId);
       return;
     }
 
-    if (!configSnap.exists()) {
-      console.log("Firestore main config not found. Creating default config...");
-      await setDoc(configRef, convertToFirestore({
-        nextControlNumber: 3,
-        printerConfigured: false,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        createdBy: "system"
-      }));
-    }
+    console.log(`Initializing user subcollections for user [${userId}]...`);
 
-    // Comprehensive default data for automatic seeding if collections are empty
+    // Create user config
+    await setDoc(configRef, convertToFirestore({
+      nextControlNumber: 1,
+      printerConfigured: false,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      createdBy: userId
+    }));
+
+    // Default Seed Data
     const defaultData: { [key: string]: any[] } = {
       itens: [
         { id: "item-1", name: "Celular" },
@@ -226,22 +254,22 @@ async function seedDatabase() {
         { id: "marca-10", name: "JBL" }
       ],
       servicos: [
-        { id: "srv-1", name: "Troca de Tela / Display", price: 280.00 },
-        { id: "srv-2", name: "Troca de Bateria", price: 140.00 },
-        { id: "srv-3", name: "Desoxidação / Limpeza Química", price: 180.00 },
-        { id: "srv-4", name: "Reparo de Conector de Carga", price: 120.00 },
-        { id: "srv-5", name: "Formatação e Reinstalação de OS", price: 90.00 },
-        { id: "srv-6", name: "Reparo de Placa-Mãe / Solda BGA", price: 450.00 },
-        { id: "srv-7", name: "Limpeza Física + Pasta Térmica", price: 150.00 },
-        { id: "srv-8", name: "Recuperação de Carcaça/Dobradiça", price: 200.00 }
+        { id: "srv-1", name: "Troca de Tela / Display", price: 280.00, position: 1 },
+        { id: "srv-2", name: "Troca de Bateria", price: 140.00, position: 2 },
+        { id: "srv-3", name: "Desoxidação / Limpeza Química", price: 180.00, position: 3 },
+        { id: "srv-4", name: "Reparo de Conector de Carga", price: 120.00, position: 4 },
+        { id: "srv-5", name: "Formatação e Reinstalação de OS", price: 90.00, position: 5 },
+        { id: "srv-6", name: "Reparo de Placa-Mãe / Solda BGA", price: 450.00, position: 6 },
+        { id: "srv-7", name: "Limpeza Física + Pasta Térmica", price: 150.00, position: 7 },
+        { id: "srv-8", name: "Recuperação de Carcaça/Dobradiça", price: 200.00, position: 8 }
       ],
       produtos: [
-        { id: "prod-1", name: "Película de Vidro 3D", price: 30.00, cost: 8.00, stock: 85, category: "Películas", code: "PEL-3D" },
-        { id: "prod-2", name: "Carregador Turbo 20W USB-C", price: 75.00, cost: 22.00, stock: 40, category: "Carregadores", code: "CAR-20W" },
-        { id: "prod-3", name: "Cabo Reforçado USB-C 1.5m", price: 45.00, cost: 12.00, stock: 60, category: "Cabos", code: "CAB-USBC" },
-        { id: "prod-4", name: "Bateria Compatível iPhone 11", price: 190.00, cost: 70.00, stock: 15, category: "Baterias", code: "BAT-IPH11" },
-        { id: "prod-5", name: "SSD SATA III 480GB", price: 260.00, cost: 130.00, stock: 20, category: "Armazenamento", code: "SSD-480GB" },
-        { id: "prod-6", name: "Fone de Ouvido com Fio Stereo", price: 35.00, cost: 10.00, stock: 35, category: "Acessórios", code: "FON-STEREO" }
+        { id: "prod-1", name: "Película de Vidro 3D", price: 30.00, cost: 8.00, stock: 85, category: "Películas", code: "PEL-3D", position: 1 },
+        { id: "prod-2", name: "Carregador Turbo 20W USB-C", price: 75.00, cost: 22.00, stock: 40, category: "Carregadores", code: "CAR-20W", position: 2 },
+        { id: "prod-3", name: "Cabo Reforçado USB-C 1.5m", price: 45.00, cost: 12.00, stock: 60, category: "Cabos", code: "CAB-USBC", position: 3 },
+        { id: "prod-4", name: "Bateria Compatível iPhone 11", price: 190.00, cost: 70.00, stock: 15, category: "Baterias", code: "BAT-IPH11", position: 4 },
+        { id: "prod-5", name: "SSD SATA III 480GB", price: 260.00, cost: 130.00, stock: 20, category: "Armazenamento", code: "SSD-480GB", position: 5 },
+        { id: "prod-6", name: "Fone de Ouvido com Fio Stereo", price: 35.00, cost: 10.00, stock: 35, category: "Acessórios", code: "FON-STEREO", position: 6 }
       ],
       convenios: [
         { id: "conv-1", name: "Sem Convênio (Padrão)", discountPercent: 0 },
@@ -256,70 +284,60 @@ async function seedDatabase() {
       ]
     };
 
-    // Check if we also have seed data in database.json to merge or prioritize
-    let localDb: any = {};
-    if (fs.existsSync(DB_FILE)) {
-      try {
-        const fileData = fs.readFileSync(DB_FILE, "utf8");
-        localDb = JSON.parse(fileData);
-        console.log("Loaded custom database.json for additional seed data");
-      } catch (e) {
-        console.warn("Could not parse database.json:", e);
+    // Populate subcollections
+    for (const [colName, items] of Object.entries(defaultData)) {
+      for (const item of items) {
+        const itemRef = doc(db, "users", userId, colName, item.id);
+        await setDoc(itemRef, convertToFirestore({
+          ...item,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+          createdBy: userId
+        }));
       }
     }
 
-    const collectionsToSeed = [
-      "clientes",
-      "marcas",
-      "itens",
-      "servicos",
-      "produtos",
-      "convenios"
-    ];
+    // Default feedback config
+    await setDoc(doc(db, "users", userId, "config", "feedback"), convertToFirestore({
+      enabled: true,
+      delayHours: 3,
+      messageTemplate: "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇",
+      readyMessageTemplate: "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!",
+      entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
+      googleReviewUrl: ""
+    }));
 
-    for (const col of collectionsToSeed) {
-      const colRef = collection(db, col);
-      const snap = await getDocs(query(colRef, limit(1)));
-      
-      // If collection is completely empty, seed it
-      if (snap.empty) {
-        // Use custom localDb data if available, otherwise fallback to our beautiful defaults
-        const itemsToSeed = (localDb[col] && localDb[col].length > 0) 
-          ? localDb[col] 
-          : (defaultData[col] || []);
-        
-        console.log(`Collection '${col}' is empty. Seeding with ${itemsToSeed.length} default items...`);
-        
-        for (const item of itemsToSeed) {
-          const docId = item.id;
-          if (docId) {
-            const itemRef = doc(db, col, docId);
-            await setDoc(itemRef, convertToFirestore({
-              ...item,
-              createdAt: item.createdAt || new Date().toISOString(),
-              updatedAt: item.updatedAt || new Date().toISOString(),
-              createdBy: item.createdBy || "system"
-            }));
-          }
-        }
-      } else {
-        console.log(`Collection '${col}' already has data. Skipping seed.`);
-      }
-    }
-    
-    console.log("Database seeding verification completed successfully.");
+    // Default status list
+    await setDoc(doc(db, "users", userId, "config", "status"), convertToFirestore({
+      list: [
+        "Aguardando técnico",
+        "Em avaliação",
+        "Aguardando aprovação do cliente",
+        "Aprovado pelo cliente",
+        "Reprovado pelo cliente",
+        "Em manutenção",
+        "Pronto para entrega",
+        "Aguardando peça(s)",
+        "Peça(s) na assistência",
+        "Aguardando pagamento",
+        "Sem conserto",
+        "Não reclamado/Abandonado"
+      ]
+    }));
+
+    seededUsers.add(userId);
+    console.log(`User [${userId}] seeded successfully.`);
   } catch (error) {
-    console.error("Error seeding database:", error);
+    console.error(`Error seeding data for user [${userId}]:`, error);
   }
 }
 
 async function startServer() {
-  // Initialize Firebase dynamically first
   await initFirebase();
 
   const app = express();
 
-  // Custom CORS middleware to allow Vercel and external domains to communicate with this backend
+  // Custom CORS middleware to allow external domains
   app.use((req, res, next) => {
     const origin = req.headers.origin;
     if (origin) {
@@ -328,22 +346,20 @@ async function startServer() {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, X-User-Id, x-user-id, X-User-Uid, x-user-uid");
     res.setHeader("Access-Control-Allow-Credentials", "true");
 
-    // Handle OPTIONS preflight requests
     if (req.method === "OPTIONS") {
       return res.sendStatus(200);
     }
     next();
   });
 
-  // Increase payload limit for base64 uploads
   app.use(express.json({ limit: "20mb" }));
   app.use(express.urlencoded({ limit: "20mb", extended: true }));
 
-  // Seed DB on start
-  await seedDatabase();
+  // Seed default user on start
+  await checkAndSeedUser("default");
 
   // --- API ROUTES ---
 
@@ -357,7 +373,7 @@ async function startServer() {
     }
   });
 
-  // Handle Firebase authenticated session (Google Sign-In or Email Password sign-in)
+  // Handle Firebase authenticated session (Google Sign-In or Email/Password sign-in)
   app.post("/api/auth/firebase-login", async (req, res) => {
     try {
       const { email, name, uid } = req.body;
@@ -366,19 +382,14 @@ async function startServer() {
       }
 
       const emailLower = String(email).toLowerCase();
-      const colRef = collection(db, "users");
-      const q = query(colRef, where("email", "==", emailLower), limit(1));
-      const snapshot = await getDocs(q);
+      const userDocRef = doc(db, "users", uid);
+      const userDocSnap = await getDoc(userDocRef);
 
       let userToReturn: any = null;
 
-      if (snapshot.empty) {
-        // Create user document if it doesn't exist
-        // Automatically make first user, michel.lima20000@gmail.com, or admin@minhaassistencia.com as admin
-        const allUsers = await getCollection<any>("users");
-        const isFirstUser = allUsers.length === 0;
+      if (!userDocSnap.exists()) {
         const isAdminEmail = emailLower === "michel.lima20000@gmail.com" || emailLower === "admin@minhaassistencia.com";
-        const role = (isFirstUser || isAdminEmail) ? "admin" : "employee";
+        const role = isAdminEmail ? "admin" : "admin"; // New registered users default to manager/admin of their own workspace
 
         userToReturn = {
           id: uid,
@@ -387,19 +398,20 @@ async function startServer() {
           role: role
         };
 
-        // Write the document directly to the users collection with uid as document id
-        await setDoc(doc(db, "users", uid), convertToFirestore(userToReturn));
-        console.log(`New Firebase user registered: ${emailLower} with role ${role}`);
+        await setDoc(userDocRef, convertToFirestore(userToReturn));
+        console.log(`New Firebase manager user registered: ${emailLower} (${uid})`);
       } else {
-        const docSnap = snapshot.docs[0];
-        const existingData = convertFromFirestore(docSnap.data());
+        const existingData = convertFromFirestore(userDocSnap.data());
         userToReturn = {
-          id: docSnap.id,
+          id: uid,
           name: existingData.name || name || emailLower.split("@")[0],
           email: emailLower,
-          role: existingData.role || "employee"
+          role: existingData.role || "admin"
         };
       }
+
+      // Seed data specifically under users/${uid}/...
+      await checkAndSeedUser(uid);
 
       res.json({
         user: userToReturn,
@@ -411,7 +423,7 @@ async function startServer() {
     }
   });
 
-  // Auth
+  // Email / Password Login
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
@@ -428,13 +440,16 @@ async function startServer() {
         return res.status(401).json({ message: "E-mail ou senha incorretos." });
       }
       
-      const doc = snapshot.docs[0];
-      const userData = convertFromFirestore(doc.data());
+      const docSnap = snapshot.docs[0];
+      const userData = convertFromFirestore(docSnap.data());
       const { password: _, ...userWithoutPassword } = userData;
+      const targetUid = docSnap.id;
+
+      await checkAndSeedUser(targetUid);
       
       res.json({
-        user: { id: doc.id, ...userWithoutPassword },
-        token: "mock-session-token-" + doc.id
+        user: { id: targetUid, ...userWithoutPassword },
+        token: "mock-session-token-" + targetUid
       });
     } catch (error: any) {
       console.error("Login error:", error);
@@ -442,17 +457,19 @@ async function startServer() {
     }
   });
 
-  // Dashboard Stats
+  // Dashboard Stats (Scoped to current user)
   app.get("/api/stats", async (req, res) => {
     try {
-      const atendimentos = await getCollection<Atendimento>("atendimentos");
-      const pagamentos = await getCollection<Pagamento>("pagamentos");
-      const despesas = await getCollection<Despesa>("despesas");
+      const userId = getUserIdFromReq(req);
+      const [atendimentos, pagamentos, despesas] = await Promise.all([
+        getUserCollection<Atendimento>(userId, "atendimentos"),
+        getUserCollection<Pagamento>(userId, "pagamentos"),
+        getUserCollection<Despesa>(userId, "despesas")
+      ]);
       
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
 
-      // Get target date (default to server's local YYYY-MM-DD)
       const todayQuery = req.query.today as string;
       const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
       const offsetQuery = req.query.offset ? Number(req.query.offset) : null;
@@ -466,7 +483,6 @@ async function startServer() {
         return localTime.toISOString().substring(0, 10);
       };
 
-      // Financial calculations
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
@@ -477,7 +493,7 @@ async function startServer() {
         if (p.method === "cash") {
           cash += p.totalAmount;
         } else {
-          card += p.totalAmount; // Debit/Credit grouped into Card
+          card += p.totalAmount;
         }
         totalCollected += p.totalAmount;
       });
@@ -506,10 +522,11 @@ async function startServer() {
     }
   });
 
-  // Clientes REST
+  // Clientes REST (Scoped to current user)
   app.get("/api/clientes", async (req, res) => {
     try {
-      const list = await getCollection<Cliente>("clientes");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Cliente>(userId, "clientes");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -518,6 +535,7 @@ async function startServer() {
 
   app.post("/api/clientes", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "c-" + Date.now();
       const newCliente = {
         id,
@@ -527,9 +545,11 @@ async function startServer() {
         cpf: req.body.cpf || "",
         cnpj: req.body.cnpj || "",
         documentType: req.body.documentType || (req.body.cnpj ? "cnpj" : "cpf"),
-        address: req.body.address || ""
+        address: req.body.address || "",
+        city: req.body.city || "",
+        notes: req.body.notes || ""
       };
-      await setDocument("clientes", id, newCliente);
+      await setUserDocument(userId, "clientes", id, newCliente);
       res.status(201).json(newCliente);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -538,8 +558,9 @@ async function startServer() {
 
   app.put("/api/clientes/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<Cliente>("clientes", id);
+      const existing = await getUserDocument<Cliente>(userId, "clientes", id);
       if (!existing) return res.status(404).json({ message: "Cliente não encontrado" });
       
       const updated = {
@@ -550,9 +571,11 @@ async function startServer() {
         cpf: req.body.cpf ?? existing.cpf,
         cnpj: req.body.cnpj ?? (existing as any).cnpj ?? "",
         documentType: req.body.documentType ?? (existing as any).documentType ?? "cpf",
-        address: req.body.address ?? existing.address
+        address: req.body.address ?? existing.address,
+        city: req.body.city ?? (existing as any).city ?? "",
+        notes: req.body.notes ?? (existing as any).notes ?? ""
       };
-      await setDocument("clientes", id, updated);
+      await setUserDocument(userId, "clientes", id, updated);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -561,17 +584,19 @@ async function startServer() {
 
   app.delete("/api/clientes/:id", async (req, res) => {
     try {
-      await deleteDocument("clientes", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "clientes", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Atendimentos REST
+  // Atendimentos REST (Scoped to current user)
   app.get("/api/atendimentos", async (req, res) => {
     try {
-      const list = await getCollection<Atendimento>("atendimentos");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Atendimento>(userId, "atendimentos");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -580,7 +605,8 @@ async function startServer() {
 
   app.post("/api/atendimentos", async (req, res) => {
     try {
-      const configRef = doc(db, "config", "main");
+      const userId = getUserIdFromReq(req);
+      const configRef = doc(db, "users", userId, "config", "main");
       let nextNum = 1;
 
       await runTransaction(db, async (transaction) => {
@@ -591,7 +617,7 @@ async function startServer() {
             printerConfigured: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
-            createdBy: "system"
+            createdBy: userId
           }));
           nextNum = 1;
         } else {
@@ -622,10 +648,12 @@ async function startServer() {
         services: req.body.services || [],
         products: req.body.products || [],
         entryDate: new Date().toISOString(),
-        totalAmount: req.body.totalAmount || 0
+        totalAmount: req.body.totalAmount || 0,
+        detailedStatus: req.body.detailedStatus || "Aguardando técnico",
+        assignedTo: req.body.assignedTo || ""
       };
 
-      await setDocument("atendimentos", id, newAtendimento);
+      await setUserDocument(userId, "atendimentos", id, newAtendimento);
       res.status(201).json(newAtendimento);
     } catch (error: any) {
       console.error("Error creating order:", error);
@@ -635,19 +663,19 @@ async function startServer() {
 
   app.put("/api/atendimentos/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<Atendimento>("atendimentos", id);
+      const existing = await getUserDocument<Atendimento>(userId, "atendimentos", id);
       if (!existing) return res.status(404).json({ message: "Atendimento não encontrado" });
 
       const updated: Atendimento = {
         ...existing,
         ...req.body
       };
-      await setDocument("atendimentos", id, updated);
+      await setUserDocument(userId, "atendimentos", id, updated);
 
-      // If status changed to finalizado or delivered, schedule post-sale feedback
       if (updated.status === "finalizado" || updated.detailedStatus === "Pronto para entrega" || updated.detailedStatus === "Entregue / Finalizado") {
-        await scheduleFeedbackForAtendimento(updated);
+        await scheduleFeedbackForAtendimento(userId, updated);
       }
 
       res.json(updated);
@@ -658,17 +686,19 @@ async function startServer() {
 
   app.delete("/api/atendimentos/:id", async (req, res) => {
     try {
-      await deleteDocument("atendimentos", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "atendimentos", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Servicos REST
+  // Servicos REST (Scoped to current user)
   app.get("/api/servicos", async (req, res) => {
     try {
-      const list = await getCollection<Servico>("servicos");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Servico>(userId, "servicos");
       res.json(list.sort((a, b) => a.position - b.position));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -677,20 +707,19 @@ async function startServer() {
 
   app.post("/api/servicos", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "s-" + Date.now();
-      const colRef = collection(db, "servicos");
-      const snapshot = await getDocs(colRef);
-      const servicesCount = snapshot.size;
+      const list = await getUserCollection<Servico>(userId, "servicos");
       
       const newService: Servico = {
         id,
         name: req.body.name,
         description: req.body.description || "",
         price: Number(req.body.price) || 0,
-        position: Number(req.body.position) || servicesCount + 1,
+        position: Number(req.body.position) || list.length + 1,
         isPriceCustom: !!req.body.isPriceCustom
       };
-      await setDocument("servicos", id, newService);
+      await setUserDocument(userId, "servicos", id, newService);
       res.status(201).json(newService);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -699,8 +728,9 @@ async function startServer() {
 
   app.put("/api/servicos/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<Servico>("servicos", id);
+      const existing = await getUserDocument<Servico>(userId, "servicos", id);
       if (!existing) return res.status(404).json({ error: "Not found" });
       
       const updated = {
@@ -711,7 +741,7 @@ async function startServer() {
         position: req.body.position !== undefined ? Number(req.body.position) : existing.position,
         isPriceCustom: req.body.isPriceCustom !== undefined ? !!req.body.isPriceCustom : existing.isPriceCustom
       };
-      await setDocument("servicos", id, updated);
+      await setUserDocument(userId, "servicos", id, updated);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -720,17 +750,19 @@ async function startServer() {
 
   app.delete("/api/servicos/:id", async (req, res) => {
     try {
-      await deleteDocument("servicos", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "servicos", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Produtos REST
+  // Produtos REST (Scoped to current user)
   app.get("/api/produtos", async (req, res) => {
     try {
-      const list = await getCollection<Produto>("produtos");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Produto>(userId, "produtos");
       res.json(list.sort((a, b) => a.position - b.position));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -739,10 +771,9 @@ async function startServer() {
 
   app.post("/api/produtos", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "p-" + Date.now();
-      const colRef = collection(db, "produtos");
-      const snapshot = await getDocs(colRef);
-      const count = snapshot.size;
+      const list = await getUserCollection<Produto>(userId, "produtos");
       
       const newProduct: Produto = {
         id,
@@ -753,10 +784,13 @@ async function startServer() {
         stock: Number(req.body.stock) || 0,
         minStockAlert: Number(req.body.minStockAlert) || 0,
         barcode: req.body.barcode || "",
-        position: Number(req.body.position) || count + 1,
-        imageUrl: req.body.imageUrl || ""
+        position: Number(req.body.position) || list.length + 1,
+        imageUrl: req.body.imageUrl || "",
+        targetStock: req.body.targetStock !== undefined ? Number(req.body.targetStock) : undefined,
+        supplier: req.body.supplier || "",
+        supplierPhone: req.body.supplierPhone || ""
       };
-      await setDocument("produtos", id, newProduct);
+      await setUserDocument(userId, "produtos", id, newProduct);
       res.status(201).json(newProduct);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -765,8 +799,9 @@ async function startServer() {
 
   app.put("/api/produtos/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<Produto>("produtos", id);
+      const existing = await getUserDocument<Produto>(userId, "produtos", id);
       if (!existing) return res.status(404).json({ error: "Not found" });
       
       const updated = {
@@ -779,9 +814,12 @@ async function startServer() {
         minStockAlert: req.body.minStockAlert !== undefined ? Number(req.body.minStockAlert) : existing.minStockAlert,
         barcode: req.body.barcode ?? existing.barcode,
         position: req.body.position !== undefined ? Number(req.body.position) : existing.position,
-        imageUrl: req.body.imageUrl !== undefined ? req.body.imageUrl : existing.imageUrl
+        imageUrl: req.body.imageUrl !== undefined ? req.body.imageUrl : existing.imageUrl,
+        targetStock: req.body.targetStock !== undefined ? Number(req.body.targetStock) : existing.targetStock,
+        supplier: req.body.supplier !== undefined ? req.body.supplier : existing.supplier,
+        supplierPhone: req.body.supplierPhone !== undefined ? req.body.supplierPhone : existing.supplierPhone
       };
-      await setDocument("produtos", id, updated);
+      await setUserDocument(userId, "produtos", id, updated);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -790,17 +828,19 @@ async function startServer() {
 
   app.delete("/api/produtos/:id", async (req, res) => {
     try {
-      await deleteDocument("produtos", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "produtos", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Despesas REST
+  // Despesas REST (Scoped to current user)
   app.get("/api/despesas", async (req, res) => {
     try {
-      const list = await getCollection<Despesa>("despesas");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Despesa>(userId, "despesas");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -809,6 +849,7 @@ async function startServer() {
 
   app.post("/api/despesas", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "d-" + Date.now();
       const newDespesa: Despesa = {
         id,
@@ -816,7 +857,7 @@ async function startServer() {
         amount: Number(req.body.amount) || 0,
         date: req.body.date || new Date().toISOString()
       };
-      await setDocument("despesas", id, newDespesa);
+      await setUserDocument(userId, "despesas", id, newDespesa);
       res.status(201).json(newDespesa);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -825,17 +866,19 @@ async function startServer() {
 
   app.delete("/api/despesas/:id", async (req, res) => {
     try {
-      await deleteDocument("despesas", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "despesas", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Convenios REST
+  // Convenios REST (Scoped to current user)
   app.get("/api/convenios", async (req, res) => {
     try {
-      const list = await getCollection<Convenio>("convenios");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Convenio>(userId, "convenios");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -844,13 +887,14 @@ async function startServer() {
 
   app.post("/api/convenios", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "cov-" + Date.now();
       const newConvenio: Convenio = {
         id,
         name: req.body.name,
         discountPercent: Number(req.body.discountPercent) || 0
       };
-      await setDocument("convenios", id, newConvenio);
+      await setUserDocument(userId, "convenios", id, newConvenio);
       res.status(201).json(newConvenio);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -859,17 +903,19 @@ async function startServer() {
 
   app.delete("/api/convenios/:id", async (req, res) => {
     try {
-      await deleteDocument("convenios", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "convenios", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Agendamentos REST
+  // Agendamentos REST (Scoped to current user)
   app.get("/api/agendamentos", async (req, res) => {
     try {
-      const list = await getCollection<Agendamento>("agendamentos");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Agendamento>(userId, "agendamentos");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -878,6 +924,7 @@ async function startServer() {
 
   app.post("/api/agendamentos", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "ag-" + Date.now();
       const newAg: Agendamento = {
         id,
@@ -887,7 +934,7 @@ async function startServer() {
         service: req.body.service,
         notes: req.body.notes || ""
       };
-      await setDocument("agendamentos", id, newAg);
+      await setUserDocument(userId, "agendamentos", id, newAg);
       res.status(201).json(newAg);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -896,17 +943,19 @@ async function startServer() {
 
   app.delete("/api/agendamentos/:id", async (req, res) => {
     try {
-      await deleteDocument("agendamentos", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "agendamentos", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Marcas REST
+  // Marcas REST (Scoped to current user)
   app.get("/api/marcas", async (req, res) => {
     try {
-      const list = await getCollection<Marca>("marcas");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Marca>(userId, "marcas");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -915,12 +964,13 @@ async function startServer() {
 
   app.post("/api/marcas", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "m-" + Date.now();
       const newMarca: Marca = {
         id,
         name: req.body.name
       };
-      await setDocument("marcas", id, newMarca);
+      await setUserDocument(userId, "marcas", id, newMarca);
       res.status(201).json(newMarca);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -929,17 +979,19 @@ async function startServer() {
 
   app.delete("/api/marcas/:id", async (req, res) => {
     try {
-      await deleteDocument("marcas", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "marcas", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Itens REST
+  // Itens REST (Scoped to current user)
   app.get("/api/itens", async (req, res) => {
     try {
-      const list = await getCollection<Item>("itens");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Item>(userId, "itens");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -948,12 +1000,13 @@ async function startServer() {
 
   app.post("/api/itens", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "i-" + Date.now();
       const newItem: Item = {
         id,
         name: req.body.name
       };
-      await setDocument("itens", id, newItem);
+      await setUserDocument(userId, "itens", id, newItem);
       res.status(201).json(newItem);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -962,18 +1015,30 @@ async function startServer() {
 
   app.delete("/api/itens/:id", async (req, res) => {
     try {
-      await deleteDocument("itens", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "itens", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Funcionários (Users REST for admin management)
+  // Funcionários / Users REST (Scoped to current manager)
   app.get("/api/users", async (req, res) => {
     try {
-      const list = await getCollection<User>("users");
-      res.json(list);
+      const userId = getUserIdFromReq(req);
+      const userEmployees = await getUserCollection<User>(userId, "employees");
+      
+      // Also get manager profile
+      const managerDoc = await getDoc(doc(db, "users", userId));
+      const managerData = managerDoc.exists() ? { id: managerDoc.id, ...convertFromFirestore(managerDoc.data()) } : null;
+
+      const combined = [...userEmployees];
+      if (managerData && !combined.some(u => u.id === managerData.id)) {
+        combined.unshift(managerData);
+      }
+
+      res.json(combined);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -981,6 +1046,7 @@ async function startServer() {
 
   app.post("/api/users", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = "u-" + Date.now();
       const newUser: User = {
         id,
@@ -989,7 +1055,11 @@ async function startServer() {
         password: req.body.password || "123456",
         role: req.body.role || "employee"
       };
-      await setDocument("users", id, newUser);
+
+      // Save in manager's employees subcollection and in root users
+      await setUserDocument(userId, "employees", id, newUser);
+      await setDoc(doc(db, "users", id), convertToFirestore({ ...newUser, managerId: userId }));
+      
       res.status(201).json(newUser);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -998,20 +1068,22 @@ async function startServer() {
 
   app.put("/api/users/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<User>("users", id);
-      if (!existing) return res.status(404).json({ error: "Not found" });
+      const existing = await getUserDocument<User>(userId, "employees", id);
       
-      const updated = {
-        ...existing,
-        name: req.body.name ?? existing.name,
-        email: req.body.email ?? existing.email,
-        role: req.body.role ?? existing.role
+      const updated: any = {
+        ...(existing || {}),
+        name: req.body.name,
+        email: req.body.email,
+        role: req.body.role || "employee"
       };
       if (req.body.password) {
         updated.password = req.body.password;
       }
-      await setDocument("users", id, updated);
+
+      await setUserDocument(userId, "employees", id, updated);
+      await setDoc(doc(db, "users", id), convertToFirestore(updated), { merge: true });
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1020,10 +1092,12 @@ async function startServer() {
 
   app.delete("/api/users/:id", async (req, res) => {
     try {
-      if (req.params.id === "u-1") {
-        return res.status(400).json({ error: "O Administrador padrão não pode ser excluído!" });
+      const userId = getUserIdFromReq(req);
+      if (req.params.id === userId) {
+        return res.status(400).json({ error: "Você não pode excluir sua própria conta de Administrador!" });
       }
-      await deleteDocument("users", req.params.id);
+      await deleteUserDocument(userId, "employees", req.params.id);
+      await deleteDoc(doc(db, "users", req.params.id));
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1031,9 +1105,9 @@ async function startServer() {
   });
 
   // Helper to schedule feedback for an atendimento
-  async function scheduleFeedbackForAtendimento(at: Atendimento): Promise<any | null> {
+  async function scheduleFeedbackForAtendimento(userId: string, at: Atendimento): Promise<any | null> {
     try {
-      let config = await getDocument<any>("config", "feedback");
+      let config = await getUserDocument<any>(userId, "config", "feedback");
       if (!config) {
         config = {
           enabled: true,
@@ -1044,25 +1118,23 @@ async function startServer() {
         };
       }
 
-      // Check if feedback already exists for this atendimento
-      const allFeedbacks = await getCollection<any>("feedbacks");
+      const allFeedbacks = await getUserCollection<any>(userId, "feedbacks");
       const existing = allFeedbacks.find(fb => fb.atendimentoId === at.id);
       if (existing) {
         return existing;
       }
 
-      // Find client info cleanly
       let clientName = "Cliente";
       let clientPhone = "";
       if (at.clienteId) {
-        const client = await getDocument<Cliente>("clientes", at.clienteId);
+        const client = await getUserDocument<Cliente>(userId, "clientes", at.clienteId);
         if (client) {
           clientName = client.name || clientName;
           clientPhone = client.phone || clientPhone;
         }
       }
       if (!clientPhone) {
-        const allClients = await getCollection<Cliente>("clientes");
+        const allClients = await getUserCollection<Cliente>(userId, "clientes");
         const cleanTarget = String(at.clienteId || "").trim().toLowerCase();
         const found = allClients.find(c => 
           (c.id && String(c.id).trim().toLowerCase() === cleanTarget) ||
@@ -1106,7 +1178,7 @@ async function startServer() {
         createdAt: new Date().toISOString()
       };
 
-      await setDocument("feedbacks", fbId, newFeedback);
+      await setUserDocument(userId, "feedbacks", fbId, newFeedback);
       return newFeedback;
     } catch (fbErr) {
       console.error("Error scheduling feedback for atendimento:", fbErr);
@@ -1115,23 +1187,23 @@ async function startServer() {
   }
 
   // Helper to schedule feedback for a direct sale
-  async function scheduleFeedbackForVenda(v: Venda): Promise<any | null> {
+  async function scheduleFeedbackForVenda(userId: string, v: Venda): Promise<any | null> {
     try {
       if (!v.clienteName || v.clienteName === "Consumidor Final") return null;
-      let config = await getDocument<any>("config", "feedback");
+      let config = await getUserDocument<any>(userId, "config", "feedback");
       if (!config || config.enabled === false) return null;
 
-      const allFeedbacks = await getCollection<any>("feedbacks");
+      const allFeedbacks = await getUserCollection<any>(userId, "feedbacks");
       const existing = allFeedbacks.find(fb => fb.vendaId === v.id);
       if (existing) return existing;
 
       let clientPhone = "";
       if (v.clienteId) {
-        const client = await getDocument<Cliente>("clientes", v.clienteId);
+        const client = await getUserDocument<Cliente>(userId, "clientes", v.clienteId);
         if (client) clientPhone = client.phone || "";
       }
       if (!clientPhone && v.clienteName) {
-        const allClients = await getCollection<Cliente>("clientes");
+        const allClients = await getUserCollection<Cliente>(userId, "clientes");
         const found = allClients.find(c => c.name?.toLowerCase() === v.clienteName?.toLowerCase());
         if (found) clientPhone = found.phone || "";
       }
@@ -1160,7 +1232,7 @@ async function startServer() {
         createdAt: new Date().toISOString()
       };
 
-      await setDocument("feedbacks", fbId, newFeedback);
+      await setUserDocument(userId, "feedbacks", fbId, newFeedback);
       return newFeedback;
     } catch (err) {
       console.error("Error in scheduleFeedbackForVenda:", err);
@@ -1168,12 +1240,13 @@ async function startServer() {
     }
   }
 
-  // Payments & Exit finalization
+  // Payments & Exit finalization (Scoped to current user)
   app.post("/api/pagamentos", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const { atendimentoId, totalAmount, receivedAmount, change, method, notesFin } = req.body;
 
-      const at = await getDocument<Atendimento>("atendimentos", atendimentoId);
+      const at = await getUserDocument<Atendimento>(userId, "atendimentos", atendimentoId);
       if (!at) {
         return res.status(404).json({ message: "Atendimento não encontrado." });
       }
@@ -1189,28 +1262,24 @@ async function startServer() {
         date: new Date().toISOString()
       };
 
-      // Store payment
-      await setDocument("pagamentos", payId, newPayment);
+      await setUserDocument(userId, "pagamentos", payId, newPayment);
 
-      // Update Atendimento status
       at.status = "finalizado";
       at.exitDate = new Date().toISOString();
       at.paymentId = payId;
       at.notesFin = notesFin || "";
-      await setDocument("atendimentos", at.id, at);
+      await setUserDocument(userId, "atendimentos", at.id, at);
 
-      // Deduct inventory stock for products used
       const products = at.products || [];
       for (const atProd of products) {
-        const p = await getDocument<Produto>("produtos", atProd.productId);
+        const p = await getUserDocument<Produto>(userId, "produtos", atProd.productId);
         if (p) {
           p.stock = Math.max(0, p.stock - atProd.quantity);
-          await setDocument("produtos", p.id, p);
+          await setUserDocument(userId, "produtos", p.id, p);
         }
       }
 
-      // Schedule Feedback Automation
-      await scheduleFeedbackForAtendimento(at);
+      await scheduleFeedbackForAtendimento(userId, at);
 
       res.status(201).json({ payment: newPayment, atendimento: at });
     } catch (error: any) {
@@ -1219,10 +1288,11 @@ async function startServer() {
     }
   });
 
-  // Get Feedback config
+  // Get Feedback config (Scoped to current user)
   app.get("/api/config/feedback", async (req, res) => {
     try {
-      let config = await getDocument<any>("config", "feedback");
+      const userId = getUserIdFromReq(req);
+      let config = await getUserDocument<any>(userId, "config", "feedback");
       if (!config) {
         config = {
           enabled: true,
@@ -1232,13 +1302,6 @@ async function startServer() {
           entryMessageTemplate: "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
           googleReviewUrl: ""
         };
-      } else {
-        if (!config.readyMessageTemplate) {
-          config.readyMessageTemplate = "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!";
-        }
-        if (!config.entryMessageTemplate) {
-          config.entryMessageTemplate = "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!";
-        }
       }
       res.json(config);
     } catch (error: any) {
@@ -1246,9 +1309,10 @@ async function startServer() {
     }
   });
 
-  // Save Feedback config
+  // Save Feedback config (Scoped to current user)
   app.post("/api/config/feedback", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const config = {
         enabled: req.body.enabled !== undefined ? !!req.body.enabled : true,
         delayHours: Number(req.body.delayHours) >= 0 ? Number(req.body.delayHours) : 3,
@@ -1257,18 +1321,18 @@ async function startServer() {
         entryMessageTemplate: req.body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
         googleReviewUrl: req.body.googleReviewUrl || ""
       };
-      await setDocument("config", "feedback", config);
+      await setUserDocument(userId, "config", "feedback", config);
       res.json(config);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-
-  // Get Custom Statuses
+  // Get Custom Statuses (Scoped to current user)
   app.get("/api/config/status", async (req, res) => {
     try {
-      let docData = await getDocument<any>("config", "status");
+      const userId = getUserIdFromReq(req);
+      let docData = await getUserDocument<any>(userId, "config", "status");
       const defaultStatuses = [
         "Aguardando técnico",
         "Em avaliação",
@@ -1285,7 +1349,7 @@ async function startServer() {
       ];
       if (!docData || !docData.list) {
         docData = { list: defaultStatuses };
-        await setDocument("config", "status", docData);
+        await setUserDocument(userId, "config", "status", docData);
       }
       res.json(docData.list);
     } catch (error: any) {
@@ -1293,15 +1357,16 @@ async function startServer() {
     }
   });
 
-  // Add Custom Status
+  // Add Custom Status (Scoped to current user)
   app.post("/api/config/status", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const newStatus = req.body.status;
       if (!newStatus || typeof newStatus !== "string" || !newStatus.trim()) {
         return res.status(400).json({ error: "Status inválido" });
       }
       
-      let docData = await getDocument<any>("config", "status");
+      let docData = await getUserDocument<any>(userId, "config", "status");
       const defaultStatuses = [
         "Aguardando técnico",
         "Em avaliação",
@@ -1321,7 +1386,7 @@ async function startServer() {
       const trimmed = newStatus.trim();
       if (!list.includes(trimmed)) {
         list.push(trimmed);
-        await setDocument("config", "status", { list });
+        await setUserDocument(userId, "config", "status", { list });
       }
       res.json(list);
     } catch (error: any) {
@@ -1329,38 +1394,41 @@ async function startServer() {
     }
   });
 
-  // Delete Custom Status
+  // Delete Custom Status (Scoped to current user)
   app.delete("/api/config/status", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const statusToDelete = req.body.status;
       if (!statusToDelete || typeof statusToDelete !== "string") {
         return res.status(400).json({ error: "Status inválido" });
       }
-      let docData = await getDocument<any>("config", "status");
+      let docData = await getUserDocument<any>(userId, "config", "status");
       if (!docData || !docData.list) {
         return res.status(404).json({ error: "Configuração não encontrada" });
       }
       const updatedList = docData.list.filter((s: string) => s !== statusToDelete);
-      await setDocument("config", "status", { list: updatedList });
+      await setUserDocument(userId, "config", "status", { list: updatedList });
       res.json(updatedList);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Get Scheduled feedbacks
+  // Get Scheduled feedbacks (Scoped to current user)
   app.get("/api/feedbacks", async (req, res) => {
     try {
-      const list = await getCollection<any>("feedbacks");
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<any>(userId, "feedbacks");
       res.json(list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Create manual or custom feedback
+  // Create manual or custom feedback (Scoped to current user)
   app.post("/api/feedbacks", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const { clienteName, clientePhone, clienteId, atendimentoId, vendaId, item, brand, model, controlNumber, messageText, scheduledTime } = req.body;
       const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const newFeedback = {
@@ -1379,27 +1447,27 @@ async function startServer() {
         messageText: messageText || "",
         createdAt: new Date().toISOString()
       };
-      await setDocument("feedbacks", fbId, newFeedback);
+      await setUserDocument(userId, "feedbacks", fbId, newFeedback);
       res.status(201).json(newFeedback);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Sync / Backfill post-sale feedback for all finalized atendimentos and sales
+  // Sync / Backfill post-sale feedback for finalized atendimentos and sales (Scoped to current user)
   app.post("/api/feedbacks/sync", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const [atendimentos, existingFeedbacks, vendas] = await Promise.all([
-        getCollection<Atendimento>("atendimentos"),
-        getCollection<any>("feedbacks"),
-        getCollection<Venda>("vendas")
+        getUserCollection<Atendimento>(userId, "atendimentos"),
+        getUserCollection<any>(userId, "feedbacks"),
+        getUserCollection<Venda>(userId, "vendas")
       ]);
 
       const existingAtendimentoIds = new Set(existingFeedbacks.map(f => f.atendimentoId).filter(Boolean));
       const existingVendaIds = new Set(existingFeedbacks.map(f => f.vendaId).filter(Boolean));
 
       let createdCount = 0;
-      // 1. Process finalized atendimentos
       const finalizedList = atendimentos.filter(a => 
         a.status === "finalizado" || 
         a.detailedStatus === "Pronto para entrega" || 
@@ -1408,7 +1476,7 @@ async function startServer() {
 
       for (const at of finalizedList) {
         if (!existingAtendimentoIds.has(at.id)) {
-          const created = await scheduleFeedbackForAtendimento(at);
+          const created = await scheduleFeedbackForAtendimento(userId, at);
           if (created) {
             createdCount++;
             existingAtendimentoIds.add(at.id);
@@ -1416,7 +1484,6 @@ async function startServer() {
         }
       }
 
-      // 2. Process vendas with client name
       const eligibleVendas = vendas.filter(v => 
         v.status !== "estornada" && 
         v.clienteName && 
@@ -1425,7 +1492,7 @@ async function startServer() {
 
       for (const v of eligibleVendas) {
         if (!existingVendaIds.has(v.id)) {
-          const created = await scheduleFeedbackForVenda(v);
+          const created = await scheduleFeedbackForVenda(userId, v);
           if (created) {
             createdCount++;
             existingVendaIds.add(v.id);
@@ -1433,7 +1500,7 @@ async function startServer() {
         }
       }
 
-      const updatedFeedbacks = await getCollection<any>("feedbacks");
+      const updatedFeedbacks = await getUserCollection<any>(userId, "feedbacks");
       res.json({
         success: true,
         syncedCount: createdCount,
@@ -1446,11 +1513,12 @@ async function startServer() {
     }
   });
 
-  // Update feedback status or text
+  // Update feedback status or text (Scoped to current user)
   app.put("/api/feedbacks/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<any>("feedbacks", id);
+      const existing = await getUserDocument<any>(userId, "feedbacks", id);
       if (!existing) return res.status(404).json({ error: "Feedback não encontrado." });
 
       const updated = {
@@ -1458,35 +1526,37 @@ async function startServer() {
         ...req.body,
         sentAt: req.body.status === "sent" ? (existing.sentAt || new Date().toISOString()) : existing.sentAt
       };
-      await setDocument("feedbacks", id, updated);
+      await setUserDocument(userId, "feedbacks", id, updated);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Delete feedback
+  // Delete feedback (Scoped to current user)
   app.delete("/api/feedbacks/:id", async (req, res) => {
     try {
-      await deleteDocument("feedbacks", req.params.id);
+      const userId = getUserIdFromReq(req);
+      await deleteUserDocument(userId, "feedbacks", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // History / Reports
+  // History / Reports (Scoped to current user)
   app.get("/api/reports", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const { type, date, startDate, endDate, offset } = req.query;
       const offsetQuery = offset ? Number(offset) : null;
 
       const [pagamentos, despesas, atendimentos, vendas, produtos] = await Promise.all([
-        getCollection<Pagamento>("pagamentos"),
-        getCollection<Despesa>("despesas"),
-        getCollection<Atendimento>("atendimentos"),
-        getCollection<Venda>("vendas"),
-        getCollection<Produto>("produtos")
+        getUserCollection<Pagamento>(userId, "pagamentos"),
+        getUserCollection<Despesa>(userId, "despesas"),
+        getUserCollection<Atendimento>(userId, "atendimentos"),
+        getUserCollection<Venda>(userId, "vendas"),
+        getUserCollection<Produto>(userId, "produtos")
       ]);
 
       const productCostMap = new Map<string, number>();
@@ -1497,13 +1567,12 @@ async function startServer() {
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
         if (offsetQuery === null) return isoString.substring(0, 10);
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString.substring(0, 10);
-        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        const dateObj = new Date(isoString);
+        if (isNaN(dateObj.getTime())) return isoString.substring(0, 10);
+        const localTime = new Date(dateObj.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
       };
 
-      let filteredPayments: Pagamento[] = [];
       let startLimitStr: string;
       let endLimitStr: string;
 
@@ -1525,22 +1594,16 @@ async function startServer() {
                (rawDate >= startLimitStr && rawDate <= endLimitStr);
       };
 
-      // Filter payments in the range
-      filteredPayments = pagamentos.filter(p => matchDateRange(p.date));
-
-      // Filter expenses in the range
+      const filteredPayments = pagamentos.filter(p => matchDateRange(p.date));
       const filteredExpenses = despesas.filter(d => matchDateRange(d.date));
 
-      // Detailed service orders closed in this range
       const closedOrders = atendimentos.filter(a => {
         if (a.status !== "finalizado" || !a.exitDate) return false;
         return matchDateRange(a.exitDate);
       });
 
-      // Filter direct sales in the range
       const filteredVendas = vendas.filter(v => matchDateRange(v.date));
 
-      // Direct sales product financials
       let directSalesRevenue = 0;
       let directSalesCost = 0;
       filteredVendas.forEach(v => {
@@ -1555,7 +1618,6 @@ async function startServer() {
         });
       });
 
-      // Service orders product financials
       let serviceProductsRevenue = 0;
       let serviceProductsCost = 0;
       closedOrders.forEach(a => {
@@ -1574,7 +1636,6 @@ async function startServer() {
       const productCost = directSalesCost + serviceProductsCost;
       const productGrossProfit = productRevenue - productCost;
 
-      // Totals
       let totalCash = 0;
       let totalCard = 0;
       filteredPayments.forEach(p => {
@@ -1586,9 +1647,7 @@ async function startServer() {
       const totalExpense = filteredExpenses.reduce((acc, d) => acc + d.amount, 0);
       const grossProfit = totalRevenue - productCost;
       const netProfit = totalRevenue - productCost - totalExpense;
-      const balance = netProfit;
 
-      // Calculate Top Sold Products
       const productSalesMap = new Map<string, {
         productId: string;
         name: string;
@@ -1652,7 +1711,6 @@ async function startServer() {
 
       const topSoldProducts = Array.from(productSalesMap.values()).sort((a, b) => b.quantitySold - a.quantitySold);
 
-      // Calculate Inventory Summary
       let totalStockUnits = 0;
       let totalStockValueCost = 0;
       let totalStockValuePrice = 0;
@@ -1707,11 +1765,11 @@ async function startServer() {
     }
   });
 
-  // Vendas Directas REST
+  // Vendas Directas REST (Scoped to current user)
   app.get("/api/vendas", async (req, res) => {
     try {
-      const list = await getCollection<Venda>("vendas");
-      // Sort sales by date descending
+      const userId = getUserIdFromReq(req);
+      const list = await getUserCollection<Venda>(userId, "vendas");
       list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       res.json(list);
     } catch (error: any) {
@@ -1722,15 +1780,15 @@ async function startServer() {
 
   app.post("/api/vendas", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName, observations, garantia } = req.body;
 
       if (!items || items.length === 0) {
         return res.status(400).json({ message: "A venda deve conter pelo menos um item." });
       }
 
-      // Check stock
       for (const item of items) {
-        const p = await getDocument<Produto>("produtos", item.productId);
+        const p = await getUserDocument<Produto>(userId, "produtos", item.productId);
         if (!p) {
           return res.status(400).json({ message: `Produto ${item.name} não encontrado.` });
         }
@@ -1739,12 +1797,11 @@ async function startServer() {
         }
       }
 
-      // Decrement stock for each item sold
       for (const item of items) {
-        const p = await getDocument<Produto>("produtos", item.productId);
+        const p = await getUserDocument<Produto>(userId, "produtos", item.productId);
         if (p) {
           p.stock = Math.max(0, p.stock - item.quantity);
-          await setDocument("produtos", p.id, p);
+          await setUserDocument(userId, "produtos", p.id, p);
         }
       }
 
@@ -1766,10 +1823,8 @@ async function startServer() {
         status: "finalizada"
       };
 
-      // Save venda document
-      await setDocument("vendas", vendaId, newVenda);
+      await setUserDocument(userId, "vendas", vendaId, newVenda);
 
-      // Create matching payment entry so it registers in dashboard statistics, caixa flow, and financial summaries
       const payId = "pay-venda-" + Date.now();
       const newPayment: Pagamento = {
         id: payId,
@@ -1781,10 +1836,9 @@ async function startServer() {
         method,
         date: new Date().toISOString()
       };
-      await setDocument("pagamentos", payId, newPayment);
+      await setUserDocument(userId, "pagamentos", payId, newPayment);
 
-      // Schedule feedback for direct sale if customer info is present
-      await scheduleFeedbackForVenda(newVenda);
+      await scheduleFeedbackForVenda(userId, newVenda);
 
       res.status(201).json({ success: true, venda: newVenda, payment: newPayment });
     } catch (error: any) {
@@ -1795,53 +1849,52 @@ async function startServer() {
 
   app.put("/api/vendas/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
-      const existing = await getDocument<Venda>("vendas", id);
+      const existing = await getUserDocument<Venda>(userId, "vendas", id);
       if (!existing) return res.status(404).json({ message: "Venda não encontrada" });
 
       const updated = {
         ...existing,
         ...req.body
       };
-      await setDocument("vendas", id, updated);
+      await setUserDocument(userId, "vendas", id, updated);
       res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Estorno / Devolução de Venda
+  // Estorno / Devolução de Venda (Scoped to current user)
   app.post("/api/vendas/:id/estorno", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
       const { reason = "Devolução de Mercadoria", returnStock = true, createSangria = true } = req.body;
-      const venda = await getDocument<Venda>("vendas", id);
+      const venda = await getUserDocument<Venda>(userId, "vendas", id);
       if (!venda) return res.status(404).json({ error: "Venda não encontrada" });
 
       if (venda.status === "estornada") {
         return res.status(400).json({ error: "Esta venda já foi estornada anteriormente." });
       }
 
-      // 1. Return stock if requested
       if (returnStock && venda.items && venda.items.length > 0) {
         for (const item of venda.items) {
           if (item.productId) {
-            const p = await getDocument<Produto>("produtos", item.productId);
+            const p = await getUserDocument<Produto>(userId, "produtos", item.productId);
             if (p) {
               p.stock = (Number(p.stock) || 0) + (Number(item.quantity) || 1);
-              await setDocument("produtos", p.id, p);
+              await setUserDocument(userId, "produtos", p.id, p);
             }
           }
         }
       }
 
-      // 2. Mark venda as estornada
       venda.status = "estornada";
       venda.estornoReason = reason;
       venda.estornoDate = new Date().toISOString();
-      await setDocument("vendas", id, venda);
+      await setUserDocument(userId, "vendas", id, venda);
 
-      // 3. Create cash outflow / sangria / despesa if requested so cash balance matches
       let createdDespesa: Despesa | null = null;
       if (createSangria) {
         const despId = "d-estorno-" + Date.now();
@@ -1851,7 +1904,7 @@ async function startServer() {
           amount: Number(venda.totalAmount) || 0,
           date: new Date().toISOString()
         };
-        await setDocument("despesas", despId, createdDespesa);
+        await setUserDocument(userId, "despesas", despId, createdDespesa);
       }
 
       res.json({
@@ -1866,35 +1919,37 @@ async function startServer() {
     }
   });
 
-  // Delete Venda (Hard delete with stock restoration if needed)
+  // Delete Venda (Hard delete with stock restoration if needed, scoped to current user)
   app.delete("/api/vendas/:id", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const id = req.params.id;
       const { returnStock = true } = req.body || {};
-      const venda = await getDocument<Venda>("vendas", id);
+      const venda = await getUserDocument<Venda>(userId, "vendas", id);
       
       if (venda && returnStock && venda.status !== "estornada" && venda.items) {
         for (const item of venda.items) {
           if (item.productId) {
-            const p = await getDocument<Produto>("produtos", item.productId);
+            const p = await getUserDocument<Produto>(userId, "produtos", item.productId);
             if (p) {
               p.stock = (Number(p.stock) || 0) + (Number(item.quantity) || 1);
-              await setDocument("produtos", p.id, p);
+              await setUserDocument(userId, "produtos", p.id, p);
             }
           }
         }
       }
 
-      await deleteDocument("vendas", id);
+      await deleteUserDocument(userId, "vendas", id);
       res.json({ success: true, message: "Venda removida com sucesso!" });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Admin clear test data endpoint
+  // Admin clear test data endpoint (Scoped to current user)
   app.post("/api/admin/clear-test-data", async (req, res) => {
     try {
+      const userId = getUserIdFromReq(req);
       const collections = [
         "clientes",
         "atendimentos",
@@ -1905,29 +1960,29 @@ async function startServer() {
         "marcas",
         "itens",
         "pagamentos",
-        "vendas"
+        "vendas",
+        "feedbacks"
       ];
       
       for (const col of collections) {
-        const colRef = collection(db, col);
+        const colRef = collection(db, "users", userId, col);
         const snapshot = await getDocs(colRef);
         for (const docSnap of snapshot.docs) {
-          await deleteDoc(doc(db, col, docSnap.id));
+          await deleteDoc(doc(db, "users", userId, col, docSnap.id));
         }
       }
       
-      // Reset config
-      const configRef = doc(db, "config", "main");
+      const configRef = doc(db, "users", userId, "config", "main");
       await setDoc(configRef, convertToFirestore({
         nextControlNumber: 1,
         printerConfigured: false,
         hasBeenCleared: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-        createdBy: "system"
+        createdBy: userId
       }));
       
-      res.json({ success: true, message: "Todos os dados de teste foram removidos! O sistema agora está limpo e o contador de OS foi resetado para 0001." });
+      res.json({ success: true, message: "Todos os dados de teste deste usuário foram removidos! O contador de OS foi resetado para 0001." });
     } catch (error: any) {
       console.error("Error clearing database:", error);
       res.status(500).json({ error: error.message });
