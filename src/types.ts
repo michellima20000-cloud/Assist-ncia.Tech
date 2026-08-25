@@ -85,6 +85,10 @@ export interface Produto {
   position: number;
   imageUrl?: string;
   warranty?: string;
+  autoRestock?: boolean; // Flag to indicate product should be tracked for automated shopping/replenishment
+  targetStock?: number; // Ideal/target quantity in stock after restock
+  supplier?: string; // Preferred supplier or distributor name
+  supplierPhone?: string; // Supplier WhatsApp/phone for direct ordering
 }
 
 export interface Despesa {

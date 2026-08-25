@@ -20,6 +20,7 @@ import ReceiptModal from "./components/ReceiptModal";
 import ProductScanner from "./components/ProductScanner";
 import Vendas from "./components/Vendas";
 import FeedbackAutomation from "./components/FeedbackAutomation";
+import ListaReposicao from "./components/ListaReposicao";
 
 type ActiveTab =
   | "dashboard"
@@ -33,7 +34,8 @@ type ActiveTab =
   | "admin"
   | "printer"
   | "vendas"
-  | "feedback";
+  | "feedback"
+  | "reposicao";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -550,6 +552,20 @@ ________________________`;
                   </div>
                 </button>
 
+                {/* REPOSIÇÃO & COMPRAS (índigo / azul escuro) */}
+                <button
+                  onClick={() => setActiveTab("reposicao")}
+                  className="p-5 bg-white border border-slate-100 hover:border-indigo-200 hover:bg-indigo-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-indigo-100 text-indigo-700 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
+                    <ShoppingBag className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-indigo-900">REPOSIÇÃO</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Lista de Compras</p>
+                  </div>
+                </button>
+
                 {/* ADMIN OR IMPRESSORA SELECTOR */}
                 {isAdmin ? (
                   <button
@@ -740,6 +756,14 @@ TERMO: Autorizo o diagnóstico.`;
         {/* FEEDBACK & CUSTOMER RELATIONSHIP MANAGEMENT */}
         {activeTab === "feedback" && (
           <FeedbackAutomation onBack={() => setActiveTab("dashboard")} />
+        )}
+
+        {/* LISTA DE REPOSIÇÃO E COMPRAS AUTOMATIZADA */}
+        {activeTab === "reposicao" && (
+          <ListaReposicao
+            onBack={() => setActiveTab("dashboard")}
+            onPrintReceipt={(content) => triggerReceiptPreview("Lista de Reposição", content)}
+          />
         )}
       </main>
 
