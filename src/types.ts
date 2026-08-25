@@ -61,7 +61,6 @@ export interface Atendimento {
   fimServico?: string;
   numeroSerie?: string;
   detailedStatus?: string;
-  assignedTo?: string;
   garantia?: string;
 }
 

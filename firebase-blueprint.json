@@ -230,57 +230,53 @@
       "schema": "User",
       "description": "System users"
     },
-    "/users/{userId}/clientes/{clienteId}": {
+    "/clientes/{clienteId}": {
       "schema": "Cliente",
-      "description": "Customers list per user"
+      "description": "Customers list"
     },
-    "/users/{userId}/atendimentos/{atendimentoId}": {
+    "/atendimentos/{atendimentoId}": {
       "schema": "Atendimento",
-      "description": "Service orders per user"
+      "description": "Service orders"
     },
-    "/users/{userId}/servicos/{servicoId}": {
+    "/servicos/{servicoId}": {
       "schema": "Servico",
-      "description": "List of typical services per user"
+      "description": "List of typical services"
     },
-    "/users/{userId}/produtos/{produtoId}": {
+    "/produtos/{produtoId}": {
       "schema": "Produto",
-      "description": "Shop and replacement parts inventory per user"
+      "description": "Shop and replacement parts inventory"
     },
-    "/users/{userId}/despesas/{despesaId}": {
+    "/despesas/{despesaId}": {
       "schema": "Despesa",
-      "description": "Logged expenses per user"
+      "description": "Logged expenses"
     },
-    "/users/{userId}/convenios/{convenioId}": {
+    "/convenios/{convenioId}": {
       "schema": "Convenio",
-      "description": "Agreed discounts and contracts per user"
+      "description": "Agreed discounts and contracts"
     },
-    "/users/{userId}/agendamentos/{agendamentoId}": {
+    "/agendamentos/{agendamentoId}": {
       "schema": "Agendamento",
-      "description": "Scheduled appointments calendar per user"
+      "description": "Scheduled appointments calendar"
     },
-    "/users/{userId}/pagamentos/{pagamentoId}": {
+    "/pagamentos/{pagamentoId}": {
       "schema": "Pagamento",
-      "description": "Financial payment receipts per user"
+      "description": "Financial payment receipts"
     },
-    "/users/{userId}/vendas/{vendaId}": {
+    "/vendas/{vendaId}": {
       "schema": "Venda",
-      "description": "Direct sales receipts per user"
+      "description": "Direct sales receipts"
     },
-    "/users/{userId}/marcas/{marcaId}": {
+    "/marcas/{marcaId}": {
       "schema": "Marca",
-      "description": "Device brands list per user"
+      "description": "Device brands list"
     },
-    "/users/{userId}/itens/{itemId}": {
+    "/itens/{itemId}": {
       "schema": "Item",
-      "description": "Device item categories per user"
+      "description": "Device item categories"
     },
-    "/users/{userId}/feedbacks/{feedbackId}": {
-      "schema": "Feedback",
-      "description": "Feedback and post-sale messages per user"
-    },
-    "/users/{userId}/config/{configId}": {
+    "/config/main": {
       "schema": "Config",
-      "description": "User configuration parameters"
+      "description": "Global shop variables"
     }
   }
 }
