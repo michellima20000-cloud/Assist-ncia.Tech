@@ -262,34 +262,72 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
   const exitDateStr = exitDateObj.toLocaleDateString("pt-BR");
   const exitTimeStr = exitDateObj.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
 
-  const getFormattedMessage = (type: "entry" | "ready" | "feedback", customTemplate?: string, customAtendimento?: Atendimento) => {
+  const getFormattedMessage = (type: "entry" | "ready" | "feedback" | "status" = "status", customTemplate?: string, customAtendimento?: Atendimento, customStatus?: string) => {
     if (!client) return "";
     const activeAt = customAtendimento || atendimento;
+    const currentStatus = customStatus || activeAt?.detailedStatus || "Aguardando técnico";
     
-    let template = customTemplate;
+    let template = typeof customTemplate === "string" ? customTemplate : undefined;
     if (!template) {
       if (type === "entry") {
         template = feedbackConfig?.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!";
       } else if (type === "ready") {
         template = feedbackConfig?.readyMessageTemplate || "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!";
-      } else {
+      } else if (type === "feedback") {
         template = feedbackConfig?.messageTemplate || "Olá, {cliente}! Tudo bem? Passando para saber se deu tudo certo com o seu {aparelho} ({marca} {modelo}). O que você achou do nosso atendimento e da manutenção? Seu feedback é muito importante para nós! 👇";
+      } else {
+        if (currentStatus === "Aguardando aprovação do cliente") {
+          template = "Olá, {cliente}! O orçamento do seu {aparelho} ({marca} {modelo}) sob OS número {numero_os} está pronto e aguardando sua aprovação. Valor total: R$ {valor}.";
+        } else if (currentStatus === "Aprovado pelo cliente") {
+          template = "Olá, {cliente}! Confirmamos a aprovação do orçamento para o {aparelho} ({marca} {modelo}) sob OS número {numero_os}. Já estamos dando andamento ao serviço!";
+        } else if (currentStatus === "Reprovado pelo cliente") {
+          template = "Olá, {cliente}! Registramos que o orçamento para o {aparelho} ({marca} {modelo}) sob OS número {numero_os} foi reprovado. O aparelho está disponível para retirada.";
+        } else if (currentStatus === "Em manutenção") {
+          template = "Olá, {cliente}! Seu {aparelho} ({marca} {modelo}) sob OS número {numero_os} está em processo de manutenção por nossa equipe técnica.";
+        } else if (currentStatus === "Aguardando peça(s)") {
+          template = "Olá, {cliente}! Informamos que estamos aguardando a chegada de peças para concluir a manutenção do seu {aparelho} ({marca} {modelo}) sob OS número {numero_os}.";
+        } else if (currentStatus === "Peça(s) na assistência") {
+          template = "Olá, {cliente}! As peças para o conserto do seu {aparelho} ({marca} {modelo}) sob OS número {numero_os} já chegaram e o serviço foi retomado.";
+        } else if (currentStatus === "Sem conserto") {
+          template = "Olá, {cliente}! A avaliação técnica do seu {aparelho} ({marca} {modelo}) sob OS número {numero_os} foi concluída. Infelizmente o equipamento não possui viabilidade de reparo e já está disponível para retirada.";
+        } else if (currentStatus === "Pronto para entrega") {
+          template = feedbackConfig?.readyMessageTemplate || "Olá, {cliente}! O seu aparelho ({aparelho} {marca} {modelo}) sob OS número {numero_os} já está PRONTO para retirada em nossa assistência!\n\nValor total do serviço: R$ {valor}.\n\nEstamos te aguardando!";
+        } else if (currentStatus === "Aguardando pagamento") {
+          template = "Olá, {cliente}! O serviço do seu {aparelho} ({marca} {modelo}) sob OS número {numero_os} foi concluído e está aguardando confirmação de pagamento. Valor: R$ {valor}.";
+        } else {
+          template = "Olá, {cliente}! Atualização sobre o seu {aparelho} ({marca} {modelo}) sob a OS {numero_os}:\nStatus atual: {status}.\nQualquer dúvida, estamos à disposição!";
+        }
       }
     }
     
+    const valorFormatted = Number(activeAt?.totalAmount || 0).toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
     return template
-      .replace(/{cliente}/g, client.name || "Cliente")
-      .replace(/{aparelho}/g, activeAt.item || "aparelho")
-      .replace(/{marca}/g, activeAt.brand || "")
-      .replace(/{modelo}/g, activeAt.model || "")
-      .replace(/{numero_os}/g, activeAt.controlNumber || "")
-      .replace(/{valor}/g, activeAt.totalAmount.toFixed(2));
+      .replace(/{cliente}/g, client?.name || "Cliente")
+      .replace(/{aparelho}/g, activeAt?.item || "aparelho")
+      .replace(/{marca}/g, activeAt?.brand || "")
+      .replace(/{modelo}/g, activeAt?.model || "")
+      .replace(/{numero_os}/g, activeAt?.controlNumber || "")
+      .replace(/{status}/g, currentStatus)
+      .replace(/{valor}/g, valorFormatted);
   };
 
-  const handleSendWhatsApp = (type: "entry" | "ready" | "feedback" = "ready", customText?: string) => {
-    if (!client) return;
+  const handleSendWhatsApp = (typeOrEvent?: any, customText?: string) => {
+    if (!client || !client.phone) {
+      alert("Cliente não possui telefone cadastrado!");
+      return;
+    }
     const cleanPhone = client.phone.replace(/\D/g, "");
-    const text = customText || getFormattedMessage(type);
+    if (!cleanPhone) {
+      alert("Telefone do cliente inválido!");
+      return;
+    }
+
+    const resolvedType = (typeof typeOrEvent === "string" && (typeOrEvent === "entry" || typeOrEvent === "ready" || typeOrEvent === "feedback" || typeOrEvent === "status"))
+      ? typeOrEvent
+      : (atendimento.detailedStatus === "Pronto para entrega" ? "ready" : "status");
+
+    const text = customText || getFormattedMessage(resolvedType);
     const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const baseUrl = isMobile ? "https://api.whatsapp.com/send" : "https://web.whatsapp.com/send";
     const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : "55" + cleanPhone;
@@ -414,6 +452,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
     const parentStatus = (val === "Pronto para entrega" || val === "Aguardando pagamento") ? "entrega" : "na_assistencia";
     
     try {
+      setUpdatingStatus(true);
       const res = await fetch(`/api/atendimentos/${atendimento.id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -429,18 +468,22 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
         }
 
         // Auto-trigger WhatsApp if marked as "Pronto para entrega"
-        if (val === "Pronto para entrega" && client) {
+        if (val === "Pronto para entrega" && client?.phone) {
           const cleanPhone = client.phone.replace(/\D/g, "");
-          const text = getFormattedMessage(feedbackConfig?.readyMessageTemplate, updated);
-          const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-          const baseUrl = isMobile ? "https://api.whatsapp.com/send" : "https://web.whatsapp.com/send";
-          const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : "55" + cleanPhone;
-          const url = `${baseUrl}?phone=${formattedPhone}&text=${encodeURIComponent(text)}`;
-          window.open(url, "_blank");
+          if (cleanPhone) {
+            const text = getFormattedMessage("ready", feedbackConfig?.readyMessageTemplate, updated, val);
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            const baseUrl = isMobile ? "https://api.whatsapp.com/send" : "https://web.whatsapp.com/send";
+            const formattedPhone = cleanPhone.startsWith("55") ? cleanPhone : "55" + cleanPhone;
+            const url = `${baseUrl}?phone=${formattedPhone}&text=${encodeURIComponent(text)}`;
+            window.open(url, "_blank");
+          }
         }
       }
     } catch (err) {
-      console.error(err);
+      console.error("Erro ao atualizar status:", err);
+    } finally {
+      setUpdatingStatus(false);
     }
   };
 
@@ -713,7 +756,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                 (atendimento.services || []).map((s, idx) => (
                   <div key={idx} className="flex justify-between items-center py-0.5">
                     <span className="font-semibold text-slate-700">{s.name}</span>
-                    <span className="font-mono text-slate-500 font-medium">R$ {s.price.toFixed(2)}</span>
+                    <span className="font-mono text-slate-500 font-medium">R$ {(Number(s.price) || 0).toFixed(2)}</span>
                   </div>
                 ))
               )}
@@ -726,7 +769,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
             <div className="space-y-1">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide block">Total</span>
               <div className="p-3 bg-blue-50/30 border border-blue-100 rounded-xl font-mono text-sm font-bold text-[#1E88E5]">
-                R$ {atendimento.totalAmount.toFixed(2)}
+                R$ {(Number(atendimento.totalAmount) || 0).toFixed(2)}
               </div>
             </div>
 
@@ -742,7 +785,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                 </button>
               </div>
               <div className="p-3 bg-red-50/20 border border-red-100/40 rounded-xl font-mono text-sm font-bold text-red-700 flex justify-between items-center">
-                <span>R$ {totalProductsPrice.toFixed(2)}</span>
+                <span>R$ {(Number(totalProductsPrice) || 0).toFixed(2)}</span>
                 <span className="text-[10px] bg-red-100 text-red-800 px-1.5 py-0.5 rounded-full font-sans">
                   {(atendimento.products || []).reduce((acc, curr) => acc + curr.quantity, 0)} itens
                 </span>

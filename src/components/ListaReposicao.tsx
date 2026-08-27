@@ -10,12 +10,13 @@ import { Produto, Venda, Atendimento, Despesa } from "../types";
 interface ListaReposicaoProps {
   onBack: () => void;
   onPrintReceipt?: (content: string) => void;
+  initialView?: 'sold' | 'select' | 'shopping_list' | 'low_stock' | 'flagged' | 'all';
 }
 
 type PeriodFilter = 'today' | '7days' | 'month' | '30days' | 'all' | 'custom';
-type StatusFilter = 'flagged' | 'need_buy' | 'low_stock' | 'out_of_stock' | 'sold_only' | 'all_catalog';
+type StatusFilter = 'sold_only' | 'flagged' | 'need_buy' | 'low_stock' | 'out_of_stock' | 'all_catalog';
 
-export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposicaoProps) {
+export default function ListaReposicao({ onBack, onPrintReceipt, initialView = 'sold' }: ListaReposicaoProps) {
   const [products, setProducts] = useState<Produto[]>([]);
   const [sales, setSales] = useState<Venda[]>([]);
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
@@ -29,7 +30,15 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
     return d.toISOString().split("T")[0];
   });
   const [endDate, setEndDate] = useState(() => new Date().toISOString().split("T")[0]);
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('flagged');
+  
+  // Status Filter initialization based on initialView prop
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(() => {
+    if (initialView === 'select') return 'all_catalog';
+    if (initialView === 'shopping_list') return 'need_buy';
+    if (initialView === 'low_stock') return 'low_stock';
+    if (initialView === 'flagged') return 'flagged';
+    return 'sold_only'; // Default for "REPOSIÇÃO" dashboard button (O que vendi)
+  });
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedSupplier, setSelectedSupplier] = useState<string>("all");
 
@@ -177,19 +186,17 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
       const unitPrice = Number(p.price) || 0;
 
       // Smart recommended buy calculation:
-      // If stock is below minStock, we need at least (targetStock - currentStock) or (minStock - currentStock + stats.quantitySold)
       let recommendedBuy = 0;
+      if (stats.quantitySold > 0) {
+        recommendedBuy = stats.quantitySold;
+      }
       if (isAutoRestock) {
         if (currentStock <= minStock) {
-          // Bring up to targetStock, or at least replenish what was sold + deficit
           const deficit = Math.max(0, targetStock - currentStock);
-          recommendedBuy = Math.max(deficit, stats.quantitySold);
+          recommendedBuy = Math.max(deficit, stats.quantitySold, recommendedBuy);
           if (recommendedBuy === 0 && currentStock <= minStock) {
             recommendedBuy = Math.max(1, minStock - currentStock);
           }
-        } else if (stats.quantitySold > 0) {
-          // If stock is not yet below minimum, but items were sold and autoRestock is on, replenish the sold amount
-          recommendedBuy = stats.quantitySold;
         }
       }
 
@@ -243,11 +250,14 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
       }
 
       // Status filter
+      if (statusFilter === 'sold_only') {
+        return item.hasSales;
+      }
       if (statusFilter === 'flagged') {
         return item.isAutoRestock;
       }
       if (statusFilter === 'need_buy') {
-        return item.isAutoRestock && item.buyQty > 0;
+        return item.buyQty > 0 && (item.isAutoRestock || item.hasSales || item.isLowStock || item.isOutOfStock);
       }
       if (statusFilter === 'low_stock') {
         return item.isLowStock || item.isOutOfStock;
@@ -255,16 +265,16 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
       if (statusFilter === 'out_of_stock') {
         return item.isOutOfStock;
       }
-      if (statusFilter === 'sold_only') {
-        return item.hasSales;
-      }
       if (statusFilter === 'all_catalog') {
         return true;
       }
 
       return true;
     }).sort((a, b) => {
-      // Sort priority: Out of stock first, then low stock, then highest sales, then name
+      // Sort priority: Sold items first if in sold tab, out of stock first if in low stock tab
+      if (statusFilter === 'sold_only') {
+        if (b.quantitySold !== a.quantitySold) return b.quantitySold - a.quantitySold;
+      }
       if (a.isOutOfStock && !b.isOutOfStock) return -1;
       if (!a.isOutOfStock && b.isOutOfStock) return 1;
       if (a.isLowStock && !b.isLowStock) return -1;
@@ -276,24 +286,32 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
 
   // Overall Statistics for Replenishment
   const replenishmentStats = useMemo(() => {
+    const soldItems = computedItems.filter(i => i.quantitySold > 0);
     const flaggedItems = computedItems.filter(i => i.isAutoRestock);
-    const toBuyItems = computedItems.filter(i => i.isAutoRestock && i.buyQty > 0);
+    const toBuyItems = computedItems.filter(i => i.buyQty > 0 && (i.isAutoRestock || i.hasSales || i.isLowStock || i.isOutOfStock));
     const totalUnitsToBuy = toBuyItems.reduce((acc, i) => acc + i.buyQty, 0);
     const totalEstimatedBudget = toBuyItems.reduce((acc, i) => acc + i.totalEstimatedCost, 0);
     const totalSoldUnitsInPeriod = computedItems.reduce((acc, i) => acc + i.quantitySold, 0);
-    const outOfStockFlagged = flaggedItems.filter(i => i.isOutOfStock).length;
-    const lowStockFlagged = flaggedItems.filter(i => i.isLowStock).length;
+    const totalSoldRevenue = computedItems.reduce((acc, i) => acc + i.salesRevenue, 0);
+    const outOfStockFlagged = products.filter(p => Number(p.stock) === 0).length;
+    const lowStockFlagged = products.filter(p => {
+      const s = Number(p.stock) || 0;
+      const min = p.minStockAlert !== undefined && p.minStockAlert !== null ? Number(p.minStockAlert) : 5;
+      return s > 0 && s <= min;
+    }).length;
 
     return {
+      soldCount: soldItems.length,
       flaggedCount: flaggedItems.length,
       toBuyCount: toBuyItems.length,
       totalUnitsToBuy,
       totalEstimatedBudget,
       totalSoldUnitsInPeriod,
+      totalSoldRevenue,
       outOfStockFlagged,
       lowStockFlagged
     };
-  }, [computedItems]);
+  }, [computedItems, products]);
 
   // Toggle Auto Restock Flag for a product
   const handleToggleAutoRestock = async (product: Produto, currentFlag: boolean) => {
@@ -348,6 +366,52 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
         body: JSON.stringify(updated)
       }).catch(console.error);
     }
+    fetchData();
+  };
+
+  // Quick flag all sold items
+  const handleFlagAllSold = async () => {
+    const unflaggedSold = computedItems.filter(i => i.quantitySold > 0 && !i.isAutoRestock);
+    if (unflaggedSold.length === 0) {
+      alert("Todos os produtos com vendas já estão sinalizados para reposição!");
+      return;
+    }
+
+    if (!window.confirm(`Deseja sinalizar ${unflaggedSold.length} produto(s) vendidos para reposição automática?`)) return;
+
+    for (const item of unflaggedSold) {
+      const updated = { ...item.product, autoRestock: true };
+      await fetch(`/api/produtos/${item.product.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated)
+      }).catch(console.error);
+    }
+    alert(`✅ ${unflaggedSold.length} produtos vendidos foram sinalizados para reposição!`);
+    fetchData();
+  };
+
+  // Quick toggle all catalog items
+  const handleToggleAllCatalog = async (flag: boolean) => {
+    const targets = products.filter(p => !!p.autoRestock !== flag);
+    if (targets.length === 0) {
+      alert(flag ? "Todos os produtos já estão sinalizados!" : "Nenhum produto está sinalizado.");
+      return;
+    }
+
+    if (!window.confirm(`Deseja ${flag ? "marcar TODOS" : "desmarcar TODOS"} os ${targets.length} produtos para reposição automática?`)) {
+      return;
+    }
+
+    for (const p of targets) {
+      const updated = { ...p, autoRestock: flag };
+      await fetch(`/api/produtos/${p.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updated)
+      }).catch(console.error);
+    }
+    alert(`✅ ${targets.length} produtos atualizados com sucesso!`);
     fetchData();
   };
 
@@ -410,7 +474,7 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
 
   // Generate WhatsApp Order Message
   const generateWhatsAppMessage = () => {
-    const itemsToOrder = computedItems.filter(i => i.isAutoRestock && i.buyQty > 0);
+    const itemsToOrder = computedItems.filter(i => i.buyQty > 0 && (i.isAutoRestock || statusFilter === 'sold_only' || statusFilter === 'need_buy' || i.hasSales));
     if (itemsToOrder.length === 0) return "Nenhum item com quantidade para compra.";
 
     const nowStr = new Date().toLocaleDateString("pt-BR");
@@ -450,7 +514,7 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
 
   // Export CSV
   const handleExportCSV = () => {
-    const itemsToExport = computedItems.filter(i => i.isAutoRestock && i.buyQty > 0);
+    const itemsToExport = computedItems.filter(i => i.buyQty > 0 && (i.isAutoRestock || statusFilter === 'sold_only' || statusFilter === 'need_buy' || i.hasSales));
     if (itemsToExport.length === 0) {
       alert("Nenhum item com quantidade a comprar selecionado.");
       return;
@@ -475,7 +539,7 @@ export default function ListaReposicao({ onBack, onPrintReceipt }: ListaReposica
 
   // Print Thermal Shopping List
   const handlePrintShoppingList = () => {
-    const itemsToPrint = computedItems.filter(i => i.isAutoRestock && i.buyQty > 0);
+    const itemsToPrint = computedItems.filter(i => i.buyQty > 0 && (i.isAutoRestock || statusFilter === 'sold_only' || statusFilter === 'need_buy' || i.hasSales));
     if (itemsToPrint.length === 0) {
       alert("Nenhum item na lista para comprar!");
       return;
@@ -511,7 +575,7 @@ Minha Assistência.Tech`;
 
   // Receive / Check-in Goods into Stock
   const handleConfirmReceiveStock = async () => {
-    const itemsToReceive = computedItems.filter(i => i.isAutoRestock && i.buyQty > 0);
+    const itemsToReceive = computedItems.filter(i => i.buyQty > 0 && (i.isAutoRestock || statusFilter === 'sold_only' || statusFilter === 'need_buy' || i.hasSales));
     if (itemsToReceive.length === 0) return;
 
     setReceivingItems(true);
@@ -807,57 +871,175 @@ Minha Assistência.Tech`;
         )}
 
         {/* Row 2: Status Category Tabs */}
-        <div className="flex p-1 bg-slate-100 rounded-2xl gap-1 overflow-x-auto">
-          <button
-            onClick={() => setStatusFilter('flagged')}
-            className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              statusFilter === 'flagged' ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <RefreshCw className="w-3.5 h-3.5" />
-            <span>Sinalizados p/ Reposição ({replenishmentStats.flaggedCount})</span>
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('need_buy')}
-            className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              statusFilter === 'need_buy' ? "bg-white text-emerald-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
-            <span>Necessitam Compra ({replenishmentStats.toBuyCount})</span>
-          </button>
-
-          <button
-            onClick={() => setStatusFilter('low_stock')}
-            className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              statusFilter === 'low_stock' ? "bg-white text-amber-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
-            <span>Estoque Baixo / Esgotado</span>
-          </button>
-
+        <div className="flex p-1 bg-slate-100/90 rounded-2xl gap-1 overflow-x-auto">
+          {/* Tab 1: O Que Vendi */}
           <button
             onClick={() => setStatusFilter('sold_only')}
             className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              statusFilter === 'sold_only' ? "bg-white text-blue-700 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+              statusFilter === 'sold_only'
+                ? "bg-white text-blue-800 shadow-sm ring-1 ring-blue-200"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <TrendingUp className="w-3.5 h-3.5 text-blue-500" />
-            <span>Com Vendas no Período</span>
+            <TrendingUp className="w-3.5 h-3.5 text-blue-600" />
+            <span>O Que Vendi</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+              statusFilter === 'sold_only' ? "bg-blue-600 text-white" : "bg-slate-200 text-slate-700"
+            }`}>
+              {replenishmentStats.soldCount}
+            </span>
           </button>
 
+          {/* Tab 2: Lista de Compras Pronta */}
+          <button
+            onClick={() => setStatusFilter('need_buy')}
+            className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              statusFilter === 'need_buy'
+                ? "bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-200"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <ShoppingBag className="w-3.5 h-3.5 text-emerald-600" />
+            <span>Lista de Compras</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+              statusFilter === 'need_buy' ? "bg-emerald-600 text-white" : "bg-slate-200 text-slate-700"
+            }`}>
+              {replenishmentStats.toBuyCount}
+            </span>
+          </button>
+
+          {/* Tab 3: Selecionar Produtos (Catálogo) */}
           <button
             onClick={() => setStatusFilter('all_catalog')}
             className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
-              statusFilter === 'all_catalog' ? "bg-white text-slate-900 shadow-2xs" : "text-slate-600 hover:text-slate-900"
+              statusFilter === 'all_catalog'
+                ? "bg-white text-indigo-900 shadow-sm ring-1 ring-indigo-200"
+                : "text-slate-600 hover:text-slate-900"
             }`}
           >
-            <Layers className="w-3.5 h-3.5" />
-            <span>Catálogo Geral ({products.length})</span>
+            <Layers className="w-3.5 h-3.5 text-indigo-600" />
+            <span>Selecionar Produtos (Catálogo)</span>
+            <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+              statusFilter === 'all_catalog' ? "bg-indigo-600 text-white" : "bg-slate-200 text-slate-700"
+            }`}>
+              {products.length}
+            </span>
+          </button>
+
+          {/* Tab 4: Estoque Baixo / Crítico */}
+          <button
+            onClick={() => setStatusFilter('low_stock')}
+            className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              statusFilter === 'low_stock'
+                ? "bg-white text-amber-800 shadow-sm ring-1 ring-amber-200"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+            <span>Estoque Baixo</span>
+            {(replenishmentStats.outOfStockFlagged + replenishmentStats.lowStockFlagged) > 0 && (
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-black ${
+                statusFilter === 'low_stock' ? "bg-amber-600 text-white" : "bg-amber-100 text-amber-800"
+              }`}>
+                {replenishmentStats.outOfStockFlagged + replenishmentStats.lowStockFlagged}
+              </span>
+            )}
+          </button>
+
+          {/* Tab 5: Sinalizados para Reposição */}
+          <button
+            onClick={() => setStatusFilter('flagged')}
+            className={`flex-1 py-2 px-3 text-xs font-extrabold rounded-xl transition flex items-center justify-center gap-1.5 whitespace-nowrap ${
+              statusFilter === 'flagged'
+                ? "bg-white text-slate-900 shadow-sm ring-1 ring-slate-300"
+                : "text-slate-600 hover:text-slate-900"
+            }`}
+          >
+            <RefreshCw className="w-3.5 h-3.5 text-slate-600" />
+            <span>Sinalizados ({replenishmentStats.flaggedCount})</span>
           </button>
         </div>
+
+        {/* Contextual Guidance & Quick Action Banner */}
+        {statusFilter === 'sold_only' && (
+          <div className="p-3 bg-blue-50/70 border border-blue-100 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center shrink-0">
+                <TrendingUp className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-black text-blue-950">Visualizando: Itens Vendidos no Período ({replenishmentStats.soldCount} produtos)</p>
+                <p className="text-[11px] text-blue-700">Tudo o que saiu nas Vendas e Ordens de Serviço. As quantidades sugeridas repõem exatamente o que foi vendido.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleFlagAllSold}
+                className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-[11px] rounded-xl shadow-xs transition flex items-center gap-1"
+              >
+                <Sparkles className="w-3.5 h-3.5" />
+                <span>Sinalizar Todos os Vendidos p/ Reposição</span>
+              </button>
+            </div>
+          </div>
+        )}
+
+        {statusFilter === 'all_catalog' && (
+          <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                <Layers className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-black text-indigo-950">Visualizando: Catálogo Completo ({products.length} produtos)</p>
+                <p className="text-[11px] text-indigo-700">Ative ou desative a chave "Sinalizar Reposição" nos produtos que você quer manter na rotina de compras.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                onClick={() => handleToggleAllCatalog(true)}
+                className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[10px] rounded-xl shadow-xs transition"
+              >
+                Marcar Todos
+              </button>
+              <button
+                onClick={handleFlagAllLowStock}
+                className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold text-[10px] rounded-xl shadow-xs transition"
+              >
+                Marcar Só Estoque Baixo
+              </button>
+              <button
+                onClick={() => handleToggleAllCatalog(false)}
+                className="px-2.5 py-1 bg-slate-200 hover:bg-slate-300 text-slate-700 font-bold text-[10px] rounded-xl transition"
+              >
+                Desmarcar Todos
+              </button>
+            </div>
+          </div>
+        )}
+
+        {statusFilter === 'need_buy' && (
+          <div className="p-3 bg-emerald-50/70 border border-emerald-100 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center shrink-0">
+                <ShoppingBag className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-black text-emerald-950">Visualizando: Pedido Consolidado de Compras ({replenishmentStats.toBuyCount} produtos • {replenishmentStats.totalUnitsToBuy} peças)</p>
+                <p className="text-[11px] text-emerald-700">Total estimado: <strong>R$ {replenishmentStats.totalEstimatedBudget.toFixed(2)}</strong>. Envie por WhatsApp, imprima na bobina térmica ou receba no estoque.</p>
+              </div>
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={handleCopyWhatsApp}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[11px] rounded-xl shadow-xs transition flex items-center gap-1"
+              >
+                <Send className="w-3.5 h-3.5" />
+                <span>WhatsApp Pedido</span>
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Row 3: Search Bar & Supplier filter */}
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1275,7 +1457,7 @@ Minha Assistência.Tech`;
 
               <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 max-h-48 overflow-y-auto space-y-1.5 divide-y divide-slate-100">
                 {computedItems
-                  .filter(i => i.isAutoRestock && i.buyQty > 0)
+                  .filter(i => i.buyQty > 0 && (i.isAutoRestock || statusFilter === 'sold_only' || statusFilter === 'need_buy' || i.hasSales))
                   .map(i => (
                     <div key={i.product.id} className="flex justify-between items-center pt-1.5 first:pt-0">
                       <div>

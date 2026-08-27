@@ -16,9 +16,10 @@ import { compressImage } from "../lib/imageCompressor";
 interface AdminPanelProps {
   onBack: () => void;
   onPrintReceipt: (content: string) => void;
+  onDataChange?: () => void;
 }
 
-export default function AdminPanel({ onBack, onPrintReceipt }: AdminPanelProps) {
+export default function AdminPanel({ onBack, onPrintReceipt, onDataChange }: AdminPanelProps) {
   const [activeMenu, setActiveMenu] = useState<'main' | 'reports' | 'history' | 'services' | 'products' | 'expenses' | 'users' | 'auxiliary' | 'replenishment'>('main');
 
   // Relatórios States
@@ -508,6 +509,7 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
       if (res.ok) {
         fetchExpenses();
         setExpenseForm({ description: "", amount: "", date: new Date().toISOString().split("T")[0] });
+        if (onDataChange) onDataChange();
       }
     } catch (err) { console.error(err); }
   };
@@ -516,7 +518,10 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
     if (!window.confirm("Remover esta despesa?")) return;
     try {
       const res = await fetch(`/api/despesas/${id}`, { method: "DELETE" });
-      if (res.ok) fetchExpenses();
+      if (res.ok) {
+        fetchExpenses();
+        if (onDataChange) onDataChange();
+      }
     } catch (err) { console.error(err); }
   };
 
@@ -803,6 +808,7 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
       {/* REPLENISHMENT / LISTA DE COMPRAS SUB-PANEL */}
       {activeMenu === 'replenishment' && (
         <ListaReposicao
+          initialView="select"
           onBack={() => setActiveMenu('main')}
           onPrintReceipt={onPrintReceipt}
         />
@@ -2193,7 +2199,11 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
               <div key={e.id} className="p-2.5 flex justify-between items-center text-xs hover:bg-slate-50 transition">
                 <div>
                   <p className="font-bold text-slate-800">{e.description}</p>
-                  <p className="text-[10px] text-slate-400 font-mono">{new Date(e.date).toLocaleDateString()}</p>
+                  <p className="text-[10px] text-slate-400 font-mono">
+                    {e.date && e.date.includes('-') && e.date.length === 10 
+                      ? `${e.date.split('-')[2]}/${e.date.split('-')[1]}/${e.date.split('-')[0]}`
+                      : new Date(e.date).toLocaleDateString('pt-BR')}
+                  </p>
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-bold font-mono text-red-600">- R$ {e.amount.toFixed(2)}</span>

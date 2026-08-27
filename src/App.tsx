@@ -651,6 +651,7 @@ ________________________`;
             onBack={() => setActiveTab("atendimento")}
             onUpdateAtendimento={(updated) => {
               setSelectedAtendimento(updated);
+              fetchStats();
             }}
             onGoToPayment={(at, notes) => {
               setSelectedAtendimento(at);
@@ -739,6 +740,7 @@ TERMO: Autorizo o diagnóstico.`;
           <AdminPanel
             onBack={() => setActiveTab("dashboard")}
             onPrintReceipt={(content) => triggerReceiptPreview("Cupom de Relatório", content)}
+            onDataChange={fetchStats}
           />
         )}
 
@@ -761,6 +763,7 @@ TERMO: Autorizo o diagnóstico.`;
         {/* LISTA DE REPOSIÇÃO E COMPRAS AUTOMATIZADA */}
         {activeTab === "reposicao" && (
           <ListaReposicao
+            initialView="sold"
             onBack={() => setActiveTab("dashboard")}
             onPrintReceipt={(content) => triggerReceiptPreview("Lista de Reposição", content)}
           />

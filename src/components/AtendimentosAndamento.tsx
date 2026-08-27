@@ -237,10 +237,16 @@ export default function AtendimentosAndamento({ onBack, onSelectAtendimento, flo
                       }`}
                     >
                       {/* Badge indicator on card top right */}
-                      <span className={`absolute top-3 right-3 text-[9px] font-bold px-2 py-0.5 rounded-full ${
-                        isReady ? "bg-emerald-50 text-emerald-700 border border-emerald-100" : "bg-blue-50 text-blue-700 border border-blue-100"
+                      <span className={`absolute top-3 right-3 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        isReady 
+                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200" 
+                          : (a.detailedStatus === "Aguardando aprovação do cliente" || a.detailedStatus === "Aguardando peça(s)")
+                            ? "bg-amber-50 text-amber-700 border border-amber-200"
+                            : (a.detailedStatus === "Sem conserto" || a.detailedStatus === "Reprovado pelo cliente")
+                              ? "bg-red-50 text-red-700 border border-red-200"
+                              : "bg-blue-50 text-blue-700 border border-blue-100"
                       }`}>
-                        {isReady ? "PRONTO PARA ENTREGA" : "EM MANUTENÇÃO"}
+                        {a.detailedStatus || (isReady ? "PRONTO PARA ENTREGA" : "EM MANUTENÇÃO")}
                       </span>
 
                       <div className="flex gap-3">

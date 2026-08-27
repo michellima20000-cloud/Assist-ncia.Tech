@@ -459,11 +459,24 @@ async function startServer() {
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
-        if (offsetQuery === null) return isoString.substring(0, 10);
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const str = String(isoString).trim();
+        // If already pure YYYY-MM-DD string, return as is
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+          return str;
+        }
+        if (offsetQuery === null) return str.substring(0, 10);
+        const date = new Date(str);
+        if (isNaN(date.getTime())) return str.substring(0, 10);
         const localTime = new Date(date.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
+      };
+
+      const isDateMatchToday = (dateVal: any) => {
+        if (!dateVal) return false;
+        const str = String(dateVal).trim();
+        if (str === todayStr || str.substring(0, 10) === todayStr) return true;
+        if (getLocalDateStr(str) === todayStr) return true;
+        return false;
       };
 
       // Financial calculations
@@ -471,23 +484,23 @@ async function startServer() {
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p.date && getLocalDateStr(p.date) === todayStr);
+      const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
 
       todayPagamentos.forEach(p => {
         if (p.method === "cash") {
-          cash += p.totalAmount;
+          cash += Number(p.totalAmount) || 0;
         } else {
-          card += p.totalAmount; // Debit/Credit grouped into Card
+          card += Number(p.totalAmount) || 0; // Debit/Credit/Pix grouped into Card/Digital
         }
-        totalCollected += p.totalAmount;
+        totalCollected += Number(p.totalAmount) || 0;
       });
 
       const pending = atendimentos
         .filter(a => a.status !== "finalizado")
-        .reduce((acc, a) => acc + (a.totalAmount || 0), 0);
+        .reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0);
 
-      const todayDespesas = despesas.filter(d => d.date && getLocalDateStr(d.date) === todayStr);
-      const expenses = todayDespesas.reduce((acc, d) => acc + (d.amount || 0), 0);
+      const todayDespesas = despesas.filter(d => d.date && isDateMatchToday(d.date));
+      const expenses = todayDespesas.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
 
       res.json({
         naAssistenciaCount,
@@ -1496,9 +1509,13 @@ async function startServer() {
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
-        if (offsetQuery === null) return isoString.substring(0, 10);
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const str = String(isoString).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+          return str;
+        }
+        if (offsetQuery === null) return str.substring(0, 10);
+        const date = new Date(str);
+        if (isNaN(date.getTime())) return str.substring(0, 10);
         const localTime = new Date(date.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
       };
