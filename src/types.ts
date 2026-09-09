@@ -200,3 +200,14 @@ export interface FeedbackConfig {
   entryMessageTemplate?: string;
   googleReviewUrl?: string;
 }
+
+export type ThemeMode = 'light' | 'black' | 'pure_black';
+
+export interface ThemeConfig {
+  mode: ThemeMode;
+  primaryColor: string;
+  headerColor: string;
+  headerStyle: 'primary' | 'black' | 'gradient';
+  cardContrast?: 'normal' | 'high';
+  updatedAt?: string;
+}

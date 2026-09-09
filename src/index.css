@@ -1,1 +1,208 @@
 @import "tailwindcss";
+
+:root {
+  --theme-primary: #1E88E5;
+  --theme-header: #1E88E5;
+  --theme-header-bg: #1E88E5;
+}
+
+/* ==========================================================================
+   TEMA MODO BLACK (TÉCNICO / BANCADA / GRAFITE ESCURO)
+   ========================================================================== */
+html.theme-black,
+html.theme-black body,
+body.theme-black {
+  background-color: #0b0f17 !important;
+  color: #f1f5f9 !important;
+}
+
+.theme-black .bg-slate-50,
+.theme-black .bg-gray-50,
+.theme-black .bg-zinc-50 {
+  background-color: #0b0f17 !important;
+}
+
+/* Cards e superfícies */
+.theme-black .bg-white {
+  background-color: #131b2a !important;
+  border-color: #1e293b !important;
+  color: #f1f5f9 !important;
+}
+
+.theme-black .border-slate-100,
+.theme-black .border-slate-200,
+.theme-black .border-gray-100,
+.theme-black .border-gray-200 {
+  border-color: #1e293b !important;
+}
+
+/* Textos e contrastes no modo Black */
+.theme-black .text-slate-800,
+.theme-black .text-slate-900,
+.theme-black .text-gray-800,
+.theme-black .text-gray-900 {
+  color: #f8fafc !important;
+}
+
+.theme-black .text-slate-700,
+.theme-black .text-gray-700 {
+  color: #e2e8f0 !important;
+}
+
+.theme-black .text-slate-600,
+.theme-black .text-slate-500,
+.theme-black .text-gray-600,
+.theme-black .text-gray-500 {
+  color: #94a3b8 !important;
+}
+
+.theme-black .text-slate-400,
+.theme-black .text-gray-400 {
+  color: #64748b !important;
+}
+
+/* Títulos dos Atalhos de Acesso Rápido no Modo Black */
+.theme-black .text-emerald-800 { color: #34d399 !important; }
+.theme-black .text-blue-800, .theme-black .text-blue-900 { color: #60a5fa !important; }
+.theme-black .text-red-800 { color: #f87171 !important; }
+.theme-black .text-indigo-800, .theme-black .text-indigo-900 { color: #818cf8 !important; }
+.theme-black .text-purple-800 { color: #c084fc !important; }
+.theme-black .text-rose-800 { color: #fb7185 !important; }
+.theme-black .text-orange-800 { color: #fb923c !important; }
+
+/* Ícones dos atalhos no Modo Black */
+.theme-black .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.2) !important; color: #34d399 !important; }
+.theme-black .bg-blue-100 { background-color: rgba(59, 130, 246, 0.2) !important; color: #60a5fa !important; }
+.theme-black .bg-red-100 { background-color: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; }
+.theme-black .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.2) !important; color: #818cf8 !important; }
+.theme-black .bg-purple-100 { background-color: rgba(168, 85, 247, 0.2) !important; color: #c084fc !important; }
+.theme-black .bg-rose-100 { background-color: rgba(244, 63, 94, 0.2) !important; color: #fb7185 !important; }
+.theme-black .bg-orange-100 { background-color: rgba(249, 115, 22, 0.2) !important; color: #fb923c !important; }
+.theme-black .bg-slate-100 { background-color: rgba(148, 163, 184, 0.15) !important; color: #cbd5e1 !important; }
+
+.theme-black .bg-amber-50 { background-color: rgba(245, 158, 11, 0.15) !important; color: #fbbf24 !important; }
+.theme-black .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.15) !important; color: #34d399 !important; }
+.theme-black .bg-blue-50 { background-color: rgba(59, 130, 246, 0.15) !important; color: #60a5fa !important; }
+.theme-black .bg-red-50 { background-color: rgba(239, 68, 68, 0.15) !important; color: #f87171 !important; }
+.theme-black .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.15) !important; color: #818cf8 !important; }
+.theme-black .bg-purple-50 { background-color: rgba(168, 85, 247, 0.15) !important; color: #c084fc !important; }
+.theme-black .bg-teal-50 { background-color: rgba(20, 184, 166, 0.15) !important; color: #2dd4bf !important; }
+
+/* Entradas e formulários no modo Black */
+.theme-black input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.theme-black select,
+.theme-black textarea {
+  background-color: #0b111c !important;
+  color: #f8fafc !important;
+  border-color: #334155 !important;
+}
+
+.theme-black input::placeholder,
+.theme-black textarea::placeholder {
+  color: #64748b !important;
+}
+
+.theme-black .hover\:bg-slate-50:hover,
+.theme-black .hover\:bg-gray-50:hover {
+  background-color: #1a2336 !important;
+}
+
+/* ==========================================================================
+   TEMA MODO BLACK OLED (100% PRETO ABSOLUTO)
+   ========================================================================== */
+html.theme-pure-black,
+html.theme-pure-black body,
+body.theme-pure-black {
+  background-color: #000000 !important;
+  color: #fafafa !important;
+}
+
+.theme-pure-black .bg-slate-50,
+.theme-pure-black .bg-gray-50,
+.theme-pure-black .bg-zinc-50 {
+  background-color: #000000 !important;
+}
+
+/* Cards no Pure Black */
+.theme-pure-black .bg-white {
+  background-color: #09090b !important;
+  border-color: #27272a !important;
+  color: #fafafa !important;
+}
+
+.theme-pure-black .border-slate-100,
+.theme-pure-black .border-slate-200,
+.theme-pure-black .border-gray-100,
+.theme-pure-black .border-gray-200 {
+  border-color: #27272a !important;
+}
+
+.theme-pure-black .text-slate-800,
+.theme-pure-black .text-slate-900,
+.theme-pure-black .text-gray-800,
+.theme-pure-black .text-gray-900 {
+  color: #ffffff !important;
+}
+
+.theme-pure-black .text-slate-700,
+.theme-pure-black .text-gray-700 {
+  color: #e4e4e7 !important;
+}
+
+.theme-pure-black .text-slate-600,
+.theme-pure-black .text-slate-500,
+.theme-pure-black .text-gray-600,
+.theme-pure-black .text-gray-500 {
+  color: #a1a1aa !important;
+}
+
+.theme-pure-black .text-slate-400,
+.theme-pure-black .text-gray-400 {
+  color: #71717a !important;
+}
+
+/* Títulos dos atalhos no Pure Black */
+.theme-pure-black .text-emerald-800 { color: #34d399 !important; }
+.theme-pure-black .text-blue-800, .theme-pure-black .text-blue-900 { color: #60a5fa !important; }
+.theme-pure-black .text-red-800 { color: #f87171 !important; }
+.theme-pure-black .text-indigo-800, .theme-pure-black .text-indigo-900 { color: #818cf8 !important; }
+.theme-pure-black .text-purple-800 { color: #c084fc !important; }
+.theme-pure-black .text-rose-800 { color: #fb7185 !important; }
+.theme-pure-black .text-orange-800 { color: #fb923c !important; }
+
+/* Ícones dos atalhos no Pure Black */
+.theme-pure-black .bg-emerald-100 { background-color: rgba(16, 185, 129, 0.25) !important; color: #34d399 !important; }
+.theme-pure-black .bg-blue-100 { background-color: rgba(59, 130, 246, 0.25) !important; color: #60a5fa !important; }
+.theme-pure-black .bg-red-100 { background-color: rgba(239, 68, 68, 0.25) !important; color: #f87171 !important; }
+.theme-pure-black .bg-indigo-100 { background-color: rgba(99, 102, 241, 0.25) !important; color: #818cf8 !important; }
+.theme-pure-black .bg-purple-100 { background-color: rgba(168, 85, 247, 0.25) !important; color: #c084fc !important; }
+.theme-pure-black .bg-rose-100 { background-color: rgba(244, 63, 94, 0.25) !important; color: #fb7185 !important; }
+.theme-pure-black .bg-orange-100 { background-color: rgba(249, 115, 22, 0.25) !important; color: #fb923c !important; }
+.theme-pure-black .bg-slate-100 { background-color: rgba(255, 255, 255, 0.1) !important; color: #f4f4f5 !important; }
+
+.theme-pure-black .bg-amber-50 { background-color: rgba(245, 158, 11, 0.2) !important; color: #fbbf24 !important; }
+.theme-pure-black .bg-emerald-50 { background-color: rgba(16, 185, 129, 0.2) !important; color: #34d399 !important; }
+.theme-pure-black .bg-blue-50 { background-color: rgba(59, 130, 246, 0.2) !important; color: #60a5fa !important; }
+.theme-pure-black .bg-red-50 { background-color: rgba(239, 68, 68, 0.2) !important; color: #f87171 !important; }
+.theme-pure-black .bg-indigo-50 { background-color: rgba(99, 102, 241, 0.2) !important; color: #818cf8 !important; }
+.theme-pure-black .bg-purple-50 { background-color: rgba(168, 85, 247, 0.2) !important; color: #c084fc !important; }
+.theme-pure-black .bg-teal-50 { background-color: rgba(20, 184, 166, 0.2) !important; color: #2dd4bf !important; }
+
+/* Entradas e formulários no Pure Black */
+.theme-pure-black input:not([type="checkbox"]):not([type="radio"]):not([type="color"]),
+.theme-pure-black select,
+.theme-pure-black textarea {
+  background-color: #000000 !important;
+  color: #ffffff !important;
+  border-color: #3f3f46 !important;
+}
+
+.theme-pure-black input::placeholder,
+.theme-pure-black textarea::placeholder {
+  color: #71717a !important;
+}
+
+.theme-pure-black .hover\:bg-slate-50:hover,
+.theme-pure-black .hover\:bg-gray-50:hover {
+  background-color: #18181b !important;
+}

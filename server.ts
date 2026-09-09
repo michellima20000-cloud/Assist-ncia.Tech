@@ -1277,6 +1277,43 @@ async function startServer() {
     }
   });
 
+  // Get Theme config
+  app.get("/api/config/theme", async (req, res) => {
+    try {
+      let config = await getDocument<any>("config", "theme");
+      if (!config) {
+        config = {
+          mode: "light",
+          primaryColor: "#1E88E5",
+          headerColor: "#1E88E5",
+          headerStyle: "primary",
+          cardContrast: "normal"
+        };
+      }
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Save Theme config
+  app.post("/api/config/theme", async (req, res) => {
+    try {
+      const config = {
+        mode: req.body.mode || "light",
+        primaryColor: req.body.primaryColor || "#1E88E5",
+        headerColor: req.body.headerColor || req.body.primaryColor || "#1E88E5",
+        headerStyle: req.body.headerStyle || "primary",
+        cardContrast: req.body.cardContrast || "normal",
+        updatedAt: new Date().toISOString()
+      };
+      await setDocument("config", "theme", config);
+      res.json(config);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
 
   // Get Custom Statuses
   app.get("/api/config/status", async (req, res) => {

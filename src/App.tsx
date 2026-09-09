@@ -2,9 +2,10 @@ import React, { useState, useEffect } from "react";
 import {
   Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
   Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode,
-  ShoppingBag, MessageSquare, Eye, EyeOff
+  ShoppingBag, MessageSquare, Eye, EyeOff, Moon, Sun, Palette
 } from "lucide-react";
-import { User, Atendimento, DashboardStats } from "./types";
+import { User, Atendimento, DashboardStats, ThemeConfig } from "./types";
+import { getStoredTheme, applyThemeToDOM, persistTheme, getHeaderBackground } from "./lib/theme";
 
 // Component imports
 import Login from "./components/Login";
@@ -21,6 +22,7 @@ import ProductScanner from "./components/ProductScanner";
 import Vendas from "./components/Vendas";
 import FeedbackAutomation from "./components/FeedbackAutomation";
 import ListaReposicao from "./components/ListaReposicao";
+import Personalizacao from "./components/Personalizacao";
 
 type ActiveTab =
   | "dashboard"
@@ -35,7 +37,8 @@ type ActiveTab =
   | "printer"
   | "vendas"
   | "feedback"
-  | "reposicao";
+  | "reposicao"
+  | "personalizacao";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -56,6 +59,39 @@ export default function App() {
     financials: { cash: 0, card: 0, pending: 0, expenses: 0, totalCollected: 0 }
   });
   const [readyFeedbackCount, setReadyFeedbackCount] = useState<number>(0);
+
+  // Theme & Appearance Management
+  const [theme, setTheme] = useState<ThemeConfig>(() => getStoredTheme());
+
+  useEffect(() => {
+    applyThemeToDOM(theme);
+    fetch("/api/config/theme")
+      .then(res => res.json())
+      .then(data => {
+        if (data && data.mode) {
+          setTheme(data);
+          applyThemeToDOM(data);
+          localStorage.setItem("tech_system_theme", JSON.stringify(data));
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  const handleThemeChange = (newTheme: ThemeConfig) => {
+    setTheme(newTheme);
+    applyThemeToDOM(newTheme);
+  };
+
+  const handleToggleThemeMode = () => {
+    const nextMode = theme.mode === "light" ? "black" : "light";
+    const updated: ThemeConfig = {
+      ...theme,
+      mode: nextMode,
+      headerColor: nextMode === "black" && theme.headerColor === "#1E88E5" ? "#111827" : (nextMode === "light" && theme.headerColor === "#111827" ? "#1E88E5" : theme.headerColor)
+    };
+    setTheme(updated);
+    persistTheme(updated);
+  };
 
   // Selected Order for Saida / Payment flows
   const [selectedAtendimento, setSelectedAtendimento] = useState<Atendimento | null>(null);
@@ -286,9 +322,14 @@ ________________________`;
   const isAdmin = currentUser.role === "admin";
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col font-sans text-slate-800">
+    <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
+      theme.mode === "pure_black" ? "bg-black text-white" : theme.mode === "black" ? "bg-[#0b0f17] text-slate-100" : "bg-slate-50 text-slate-800"
+    }`}>
       {/* HEADER SECTION */}
-      <header className="bg-[#1E88E5] text-white shadow-md select-none">
+      <header
+        style={{ background: getHeaderBackground(theme) }}
+        className="text-white shadow-md select-none transition-colors duration-200"
+      >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center font-bold text-lg text-white border border-white/20">
@@ -319,6 +360,38 @@ ________________________`;
                 {hideValues ? <EyeOff className="w-5 h-5 text-amber-300" /> : <Eye className="w-5 h-5 text-slate-100" />}
                 <span className="text-xs font-extrabold hidden lg:inline">
                   {hideValues ? "VALORES OCULTOS" : "OCULTAR VALORES"}
+                </span>
+              </button>
+              <button
+                onClick={handleToggleThemeMode}
+                className={`p-2 rounded-xl text-white transition flex items-center justify-center gap-1.5 ${
+                  theme.mode !== "light"
+                    ? "bg-amber-400/25 text-amber-200 border border-amber-300/40"
+                    : "hover:bg-white/10 active:bg-white/15"
+                }`}
+                title={theme.mode === "light" ? "Mudar para Modo Black (Bancada)" : "Mudar para Modo Claro"}
+              >
+                {theme.mode === "light" ? (
+                  <Moon className="w-5 h-5 text-amber-200" />
+                ) : (
+                  <Sun className="w-5 h-5 text-amber-300" />
+                )}
+                <span className="text-xs font-extrabold hidden xl:inline">
+                  {theme.mode === "light" ? "MODO BLACK" : "MODO CLARO"}
+                </span>
+              </button>
+              <button
+                onClick={() => setActiveTab("personalizacao")}
+                className={`p-2 rounded-xl text-white transition flex items-center justify-center gap-1.5 ${
+                  activeTab === "personalizacao"
+                    ? "bg-white/25 text-white ring-2 ring-white/50"
+                    : "hover:bg-white/10 active:bg-white/15"
+                }`}
+                title="Personalizar Cores e Layout"
+              >
+                <Palette className="w-5 h-5 text-amber-200" />
+                <span className="text-xs font-extrabold hidden xl:inline">
+                  CORES
                 </span>
               </button>
               <button
@@ -594,6 +667,20 @@ ________________________`;
                     </div>
                   </button>
                 )}
+
+                {/* PERSONALIZAÇÃO (CORES & MODO BLACK) */}
+                <button
+                  onClick={() => setActiveTab("personalizacao")}
+                  className="p-5 bg-white border border-slate-100 hover:border-amber-300 hover:bg-amber-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                >
+                  <div className="w-12 h-12 bg-slate-900 text-amber-300 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200 shadow-xs">
+                    <Palette className="w-6 h-6" />
+                  </div>
+                  <div>
+                    <span className="font-extrabold text-sm text-slate-800">PERSONALIZAÇÃO</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Modo Black & Cores</p>
+                  </div>
+                </button>
               </div>
             </div>
 
@@ -741,6 +828,17 @@ TERMO: Autorizo o diagnóstico.`;
             onBack={() => setActiveTab("dashboard")}
             onPrintReceipt={(content) => triggerReceiptPreview("Cupom de Relatório", content)}
             onDataChange={fetchStats}
+            currentTheme={theme}
+            onThemeChange={handleThemeChange}
+          />
+        )}
+
+        {/* PERSONALIZAÇÃO DE CORES & MODO BLACK */}
+        {activeTab === "personalizacao" && (
+          <Personalizacao
+            currentTheme={theme}
+            onThemeChange={handleThemeChange}
+            onBack={() => setActiveTab("dashboard")}
           />
         )}
 

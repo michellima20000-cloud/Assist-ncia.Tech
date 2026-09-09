@@ -3,24 +3,28 @@ import FinancialChart from "./FinancialChart";
 import WeeklySalesChart from "./WeeklySalesChart";
 import ExtratoVendasReport from "./ExtratoVendasReport";
 import ListaReposicao from "./ListaReposicao";
+import Personalizacao from "./Personalizacao";
 import {
   FileText, History, Settings, ShieldAlert, Award, ArrowLeft, Plus, Trash2, Edit, Save,
   Users, DollarSign, Tag, ListPlus, FileSpreadsheet, Printer, Search, RefreshCw, Barcode, Eye, QrCode, X,
-  Camera, Image, TrendingUp, AlertTriangle, Package, PackageCheck, PackageX, Flame, ShoppingBag, Clock, Receipt
+  Camera, Image, TrendingUp, AlertTriangle, Package, PackageCheck, PackageX, Flame, ShoppingBag, Clock, Receipt, Palette
 } from "lucide-react";
 import {
-  Servico, Produto, Despesa, Convenio, Marca, Item, User, Atendimento, Cliente
+  Servico, Produto, Despesa, Convenio, Marca, Item, User, Atendimento, Cliente, ThemeConfig
 } from "../types";
 import { compressImage } from "../lib/imageCompressor";
+import { getStoredTheme } from "../lib/theme";
 
 interface AdminPanelProps {
   onBack: () => void;
   onPrintReceipt: (content: string) => void;
   onDataChange?: () => void;
+  currentTheme?: ThemeConfig;
+  onThemeChange?: (newTheme: ThemeConfig) => void;
 }
 
-export default function AdminPanel({ onBack, onPrintReceipt, onDataChange }: AdminPanelProps) {
-  const [activeMenu, setActiveMenu] = useState<'main' | 'reports' | 'history' | 'services' | 'products' | 'expenses' | 'users' | 'auxiliary' | 'replenishment'>('main');
+export default function AdminPanel({ onBack, onPrintReceipt, onDataChange, currentTheme, onThemeChange }: AdminPanelProps) {
+  const [activeMenu, setActiveMenu] = useState<'main' | 'reports' | 'history' | 'services' | 'products' | 'expenses' | 'users' | 'auxiliary' | 'replenishment' | 'customization'>('main');
 
   // Relatórios States
   const [reportType, setReportType] = useState<'daily' | 'range' | 'annual'>('daily');
@@ -786,6 +790,16 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
             </button>
 
             <button
+              onClick={() => setActiveMenu('customization')}
+              className="p-5 bg-white border border-slate-100 hover:border-slate-300 rounded-2xl shadow-sm text-center flex flex-col items-center gap-2 transition group"
+            >
+              <div className="w-10 h-10 bg-slate-900 text-amber-300 rounded-xl flex items-center justify-center mx-auto shadow-xs group-hover:scale-105 transition-transform">
+                <Palette className="w-5 h-5" />
+              </div>
+              <span className="font-bold text-xs text-slate-700">Personalização (Cores & Modo Black)</span>
+            </button>
+
+            <button
               onClick={() => {
                 if (window.confirm("ATENÇÃO: Isso irá apagar DEFINITIVAMENTE todos os clientes, serviços, produtos, marcas, itens, despesas e ordens de serviço de teste, e irá zerar o contador de OS para 0001.\n\nDeseja continuar e limpar o sistema para uso real?")) {
                   if (window.confirm("Confirmação final: Tem certeza absoluta? Essa ação NÃO pode ser desfeita.")) {
@@ -803,6 +817,17 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
           </div>
           <WeeklySalesChart />
         </div>
+      )}
+
+      {/* PERSONALIZAÇÃO DE CORES & MODO BLACK */}
+      {activeMenu === 'customization' && (
+        <Personalizacao
+          currentTheme={currentTheme || getStoredTheme()}
+          onThemeChange={(newTheme) => {
+            if (onThemeChange) onThemeChange(newTheme);
+          }}
+          onBack={() => setActiveMenu('main')}
+        />
       )}
 
       {/* REPLENISHMENT / LISTA DE COMPRAS SUB-PANEL */}
