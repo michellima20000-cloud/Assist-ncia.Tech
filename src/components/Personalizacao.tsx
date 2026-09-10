@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import {
   Palette, Sun, Moon, Check, RotateCcw, Sparkles, Monitor,
   Sliders, ShieldCheck, CheckCircle, Clock, PlusCircle, Hammer,
-  ArrowRight, ShoppingBag
+  ArrowRight, ShoppingBag, Upload, Image as ImageIcon, Trash2,
+  Building2, Eye, RefreshCw, AlertCircle
 } from "lucide-react";
 import { ThemeConfig, ThemeMode } from "../types";
 import { THEME_COLOR_PRESETS, DEFAULT_THEME, persistTheme, getHeaderBackground } from "../lib/theme";
@@ -17,6 +18,9 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
   const [theme, setTheme] = useState<ThemeConfig>(currentTheme);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [customHex, setCustomHex] = useState(theme.primaryColor || "#1E88E5");
+  const [isDragging, setIsDragging] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const updateConfig = (partial: Partial<ThemeConfig>) => {
     const updated: ThemeConfig = { ...theme, ...partial };
@@ -46,6 +50,93 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
     }
   };
 
+  // Image optimization and conversion helper
+  const processImageFile = (file: File) => {
+    setUploadError(null);
+    if (!file.type.startsWith("image/")) {
+      setUploadError("Por favor, selecione um arquivo de imagem válido (PNG, JPG, WEBP ou SVG).");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const dataUrl = e.target?.result as string;
+      if (!dataUrl) return;
+
+      const img = new Image();
+      img.onload = () => {
+        // Limit max dimensions to 512px to keep it sharp but lightweight
+        const maxDim = 512;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > maxDim || height > maxDim) {
+          if (width > height) {
+            height = Math.round((height * maxDim) / width);
+            width = maxDim;
+          } else {
+            width = Math.round((width * maxDim) / height);
+            height = maxDim;
+          }
+        }
+
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(img, 0, 0, width, height);
+          const isPng = file.type.includes("png") || file.type.includes("svg");
+          const optimized = canvas.toDataURL(isPng ? "image/png" : "image/jpeg", 0.92);
+          updateConfig({
+            logoUrl: optimized,
+            showLogoInHeader: true,
+            showLogoAsBackground: true,
+            backgroundLogoOpacity: theme.backgroundLogoOpacity || 0.07
+          });
+        } else {
+          updateConfig({
+            logoUrl: dataUrl,
+            showLogoInHeader: true,
+            showLogoAsBackground: true,
+            backgroundLogoOpacity: theme.backgroundLogoOpacity || 0.07
+          });
+        }
+      };
+      img.onerror = () => {
+        setUploadError("Não foi possível processar a imagem. Tente outro arquivo.");
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) {
+      processImageFile(file);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    updateConfig({
+      logoUrl: "",
+      showLogoAsBackground: false
+    });
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSave = async () => {
     await persistTheme(theme);
     setSaveSuccess(true);
@@ -55,7 +146,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
   };
 
   const handleReset = async () => {
-    if (window.confirm("Deseja restaurar as cores e layout para o padrão original do sistema?")) {
+    if (window.confirm("Deseja restaurar as cores, logo e layout para o padrão original do sistema?")) {
       setTheme(DEFAULT_THEME);
       setCustomHex(DEFAULT_THEME.primaryColor);
       onThemeChange(DEFAULT_THEME);
@@ -66,6 +157,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
   };
 
   const headerBgPreview = getHeaderBackground(theme);
+  const currentOpacity = typeof theme.backgroundLogoOpacity === "number" ? theme.backgroundLogoOpacity : 0.07;
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-12">
@@ -83,10 +175,10 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
               <div className="w-8 h-8 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 text-white flex items-center justify-center shadow-sm">
                 <Palette className="w-4 h-4" />
               </div>
-              <h2 className="text-lg font-black text-slate-800 tracking-tight">Personalização & Cores do Sistema</h2>
+              <h2 className="text-lg font-black text-slate-800 tracking-tight">Personalização, Logotipo & Cores</h2>
             </div>
             <p className="text-xs text-slate-500 mt-0.5">
-              Escolha o <strong>Modo Black</strong> para uso em bancada ou personalize as cores de cabeçalho e destaques.
+              Adicione a <strong>logo da sua assistência</strong> para cabeçalho e plano de fundo (marca d'água), e escolha o <strong>Modo Black</strong> para bancada.
             </p>
           </div>
         </div>
@@ -112,7 +204,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
             ) : (
               <>
                 <Sparkles className="w-4 h-4" />
-                <span>Salvar Tema</span>
+                <span>Salvar Tema & Logo</span>
               </>
             )}
           </button>
@@ -122,15 +214,238 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
       {saveSuccess && (
         <div className="p-4 bg-emerald-500/10 border border-emerald-500/30 text-emerald-700 rounded-2xl flex items-center gap-3 text-xs font-bold animate-fadeIn">
           <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
-          <span>Tema e preferências de cores atualizados e salvos com sucesso no sistema!</span>
+          <span>Tema, logotipo e preferências de exibição atualizados e sincronizados com sucesso no sistema!</span>
         </div>
       )}
 
-      {/* Grid: Modes and Colors */}
+      {/* Grid: Settings and Simulator */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        {/* Left column: Mode and Colors (7 cols) */}
+        {/* Left column: Controls (7 cols) */}
         <div className="lg:col-span-7 space-y-6">
-          {/* SEÇÃO 1: MODO DO SISTEMA */}
+          
+          {/* SEÇÃO PRINCIPAL: LOGOTIPO & MARCA DA ASSISTÊNCIA */}
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="text-sm font-extrabold text-slate-800 flex items-center gap-2">
+                  <ImageIcon className="w-4 h-4 text-[#1E88E5]" />
+                  Logotipo da Assistência & Plano de Fundo
+                </h3>
+                <p className="text-[11px] text-slate-500">
+                  Carregue a imagem da sua marca para exibir no cabeçalho e como marca d'água no fundo do sistema
+                </p>
+              </div>
+              {theme.logoUrl && (
+                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full flex items-center gap-1">
+                  <Check className="w-3 h-3" /> Logo Ativa
+                </span>
+              )}
+            </div>
+
+            {uploadError && (
+              <div className="p-3 bg-red-50 border border-red-200 text-red-700 rounded-xl text-xs flex items-center gap-2">
+                <AlertCircle className="w-4 h-4 shrink-0" />
+                <span>{uploadError}</span>
+              </div>
+            )}
+
+            {/* Upload or Current Logo Display */}
+            {!theme.logoUrl ? (
+              <div
+                onDragOver={(e) => { e.preventDefault(); setIsDragging(true); }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`border-2 border-dashed rounded-2xl p-6 text-center transition cursor-pointer flex flex-col items-center justify-center gap-3 ${
+                  isDragging
+                    ? "border-blue-500 bg-blue-50/50 scale-[0.99]"
+                    : "border-slate-200 hover:border-blue-400 hover:bg-slate-50/70 bg-slate-50/30"
+                }`}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                  className="hidden"
+                />
+                <div className="w-12 h-12 rounded-2xl bg-blue-50 text-[#1E88E5] flex items-center justify-center shadow-xs">
+                  <Upload className="w-6 h-6" />
+                </div>
+                <div>
+                  <p className="text-xs font-bold text-slate-800">
+                    Clique para selecionar ou arraste o logotipo aqui
+                  </p>
+                  <p className="text-[10px] text-slate-400 mt-1">
+                    Formatos recomendados: PNG com fundo transparente, JPG ou SVG (até 5MB)
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-100 rounded-xl text-xs font-bold text-slate-700 shadow-2xs transition"
+                >
+                  Procurar Imagem no Computador
+                </button>
+              </div>
+            ) : (
+              <div className="p-4 border border-slate-200 rounded-2xl bg-slate-50/50 space-y-4">
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* Logo Thumbnail with checkerboard for transparency */}
+                  <div className="w-24 h-24 rounded-2xl border border-slate-200 bg-white p-2 flex items-center justify-center shrink-0 shadow-xs relative overflow-hidden group">
+                    <img
+                      src={theme.logoUrl}
+                      alt="Logotipo da Loja"
+                      className="max-w-full max-h-full object-contain"
+                    />
+                  </div>
+
+                  <div className="flex-1 space-y-1.5 text-center sm:text-left">
+                    <p className="text-xs font-extrabold text-slate-800">Logotipo Carregado</p>
+                    <p className="text-[11px] text-slate-500 leading-snug">
+                      Sua imagem está configurada e pronta para ser usada como marca visual do sistema.
+                    </p>
+                    <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => fileInputRef.current?.click()}
+                        className="px-3 py-1.5 bg-white border border-slate-200 hover:bg-slate-100 text-slate-700 font-bold text-[11px] rounded-lg transition flex items-center gap-1.5"
+                      >
+                        <RefreshCw className="w-3 h-3" />
+                        Trocar Logo
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemoveLogo}
+                        className="px-3 py-1.5 bg-white border border-red-200 hover:bg-red-50 text-red-600 font-bold text-[11px] rounded-lg transition flex items-center gap-1.5"
+                      >
+                        <Trash2 className="w-3 h-3" />
+                        Remover
+                      </button>
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileChange}
+                        accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                        className="hidden"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Logo Display Options */}
+                <div className="pt-3 border-t border-slate-200/80 space-y-3">
+                  {/* Option 1: Header Toggle */}
+                  <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 transition cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={theme.showLogoInHeader !== false}
+                      onChange={(e) => updateConfig({ showLogoInHeader: e.target.checked })}
+                      className="w-4 h-4 rounded text-[#1E88E5] focus:ring-blue-500 mt-0.5 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-xs font-extrabold text-slate-800 block">
+                        Exibir logotipo no cabeçalho superior
+                      </span>
+                      <span className="text-[10px] text-slate-500 leading-tight block mt-0.5">
+                        Substitui o ícone padrão "M" pela sua logo oficial no topo de todas as telas.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Option 2: Background Watermark Toggle */}
+                  <label className="flex items-start gap-3 p-3 bg-white rounded-xl border border-slate-200/80 hover:border-slate-300 transition cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={theme.showLogoAsBackground !== false}
+                      onChange={(e) => updateConfig({ showLogoAsBackground: e.target.checked })}
+                      className="w-4 h-4 rounded text-[#1E88E5] focus:ring-blue-500 mt-0.5 cursor-pointer"
+                    />
+                    <div className="flex-1">
+                      <span className="text-xs font-extrabold text-slate-800 block">
+                        Colocar logotipo como Plano de Fundo (Marca d'água)
+                      </span>
+                      <span className="text-[10px] text-slate-500 leading-tight block mt-0.5">
+                        O sistema posiciona automaticamente a sua logo centralizada no fundo da tela, atrás dos cartões e tabelas, com acabamento refinado.
+                      </span>
+                    </div>
+                  </label>
+
+                  {/* Option 2.1: Watermark Opacity Slider */}
+                  {theme.showLogoAsBackground !== false && (
+                    <div className="p-3.5 bg-white rounded-xl border border-slate-200/80 space-y-2.5">
+                      <div className="flex items-center justify-between">
+                        <label className="text-[11px] font-extrabold text-slate-700 flex items-center gap-1.5">
+                          <Eye className="w-3.5 h-3.5 text-[#1E88E5]" />
+                          Intensidade / Opacidade do Plano de Fundo
+                        </label>
+                        <span className="text-xs font-black font-mono text-[#1E88E5] bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">
+                          {Math.round(currentOpacity * 100)}%
+                        </span>
+                      </div>
+
+                      <input
+                        type="range"
+                        min="0.03"
+                        max="0.25"
+                        step="0.01"
+                        value={currentOpacity}
+                        onChange={(e) => updateConfig({ backgroundLogoOpacity: parseFloat(e.target.value) })}
+                        className="w-full accent-[#1E88E5] cursor-pointer"
+                      />
+
+                      {/* Opacity quick presets */}
+                      <div className="flex flex-wrap gap-1.5 pt-1">
+                        {[
+                          { label: "Muito Discreto", val: 0.04 },
+                          { label: "Recomendado (7%)", val: 0.07 },
+                          { label: "Médio (12%)", val: 0.12 },
+                          { label: "Marcante (20%)", val: 0.20 },
+                        ].map((preset) => (
+                          <button
+                            key={preset.label}
+                            type="button"
+                            onClick={() => updateConfig({ backgroundLogoOpacity: preset.val })}
+                            className={`px-2 py-1 text-[10px] font-bold rounded-lg transition border ${
+                              Math.abs(currentOpacity - preset.val) < 0.015
+                                ? "bg-blue-500 text-white border-blue-500 shadow-2xs"
+                                : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100"
+                            }`}
+                          >
+                            {preset.label}
+                          </button>
+                        ))}
+                      </div>
+
+                      <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
+                        A marca d'água fica no fundo do sistema sem bloquear o clique e sem atrapalhar a visualização das ordens e dados.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* Store / Business Name Input */}
+            <div className="pt-2 border-t border-slate-100">
+              <label className="text-xs font-bold text-slate-700 block mb-1">
+                Nome da Assistência no Cabeçalho:
+              </label>
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <Building2 className="w-4 h-4" />
+                </div>
+                <input
+                  type="text"
+                  value={theme.companyName || ""}
+                  onChange={(e) => updateConfig({ companyName: e.target.value })}
+                  placeholder="Ex: Minha Assistência.Tech ou Conserta Celulares"
+                  className="flex-1 px-3 py-2 text-xs font-bold text-slate-800 rounded-xl border border-slate-200 focus:outline-none focus:border-[#1E88E5] focus:ring-1 focus:ring-blue-500/20 transition bg-white"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* SEÇÃO 1: MODO DO SISTEMA (CLARO / BLACK) */}
           <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between">
               <div>
@@ -200,22 +515,22 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
                 onClick={() => handleModeSelect("pure_black")}
                 className={`p-4 rounded-xl border-2 text-left transition flex flex-col justify-between gap-3 relative ${
                   theme.mode === "pure_black"
-                    ? "border-white bg-black text-white shadow-md ring-2 ring-white/20"
-                    : "border-slate-300 hover:border-slate-500 bg-black text-slate-300"
+                    ? "border-emerald-400 bg-black text-white shadow-md ring-2 ring-emerald-400/20"
+                    : "border-zinc-800 hover:border-zinc-600 bg-black text-zinc-300"
                 }`}
               >
                 {theme.mode === "pure_black" && (
-                  <span className="absolute top-2.5 right-2.5 w-5 h-5 bg-white text-black rounded-full flex items-center justify-center font-bold">
+                  <span className="absolute top-2.5 right-2.5 w-5 h-5 bg-emerald-400 text-slate-950 rounded-full flex items-center justify-center font-bold">
                     <Check className="w-3 h-3" />
                   </span>
                 )}
-                <div className="w-9 h-9 rounded-xl bg-zinc-900 text-white flex items-center justify-center border border-zinc-800">
-                  <span className="text-[11px] font-mono font-black">OLED</span>
+                <div className="w-9 h-9 rounded-xl bg-zinc-900 text-emerald-400 flex items-center justify-center border border-zinc-800">
+                  <Moon className="w-5 h-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-1">
-                    <p className="text-xs font-black text-white">Black Total</p>
-                    <span className="text-[8px] bg-zinc-800 text-zinc-300 px-1 py-0.2 rounded font-bold uppercase">100%</span>
+                    <p className="text-xs font-black text-white">Pure Black</p>
+                    <span className="text-[8px] bg-emerald-400/20 text-emerald-300 px-1 py-0.2 rounded font-bold uppercase">OLED</span>
                   </div>
                   <p className="text-[10px] text-zinc-400 mt-0.5 leading-snug">Preto absoluto para contraste máximo</p>
                 </div>
@@ -348,7 +663,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
 
         {/* Right column: Interactive Live Preview (5 cols) */}
         <div className="lg:col-span-5 space-y-4">
-          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3">
+          <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm space-y-3 sticky top-4">
             <div className="flex items-center justify-between">
               <h3 className="text-xs font-black uppercase tracking-wider text-slate-400">Pré-visualização em Tempo Real</h3>
               <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full">
@@ -358,7 +673,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
 
             {/* Simulated Desktop Preview Frame */}
             <div
-              className={`rounded-2xl border overflow-hidden shadow-inner transition-colors duration-200 ${
+              className={`rounded-2xl border overflow-hidden shadow-inner transition-colors duration-200 relative ${
                 theme.mode === "light"
                   ? "bg-slate-100 border-slate-200"
                   : theme.mode === "black"
@@ -368,28 +683,53 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
             >
               {/* Simulated Header */}
               <div
-                className="px-3.5 py-2.5 text-white flex items-center justify-between shadow-xs transition-colors"
+                className="px-3.5 py-2.5 text-white flex items-center justify-between shadow-xs transition-colors relative z-10"
                 style={{ background: headerBgPreview }}
               >
                 <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center font-bold text-xs">
-                    M
-                  </div>
+                  {theme.logoUrl && theme.showLogoInHeader !== false ? (
+                    <img
+                      src={theme.logoUrl}
+                      alt="Logo da Loja"
+                      className="w-6 h-6 rounded-md object-contain bg-white/10 p-0.5 border border-white/20 shadow-2xs"
+                    />
+                  ) : (
+                    <div className="w-6 h-6 rounded-lg bg-white/15 flex items-center justify-center font-bold text-xs">
+                      M
+                    </div>
+                  )}
                   <div>
-                    <p className="text-xs font-extrabold leading-none">Minha Assistência.Tech</p>
-                    <p className="text-[8px] opacity-80 uppercase tracking-wider">Módulos Conectados</p>
+                    <p className="text-xs font-extrabold leading-none">
+                      {theme.companyName || "Minha Assistência.Tech"}
+                    </p>
+                    <p className="text-[8px] text-blue-200 font-semibold uppercase tracking-wider">Módulos Conectados</p>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2">
-                  <span className="text-[8px] bg-white/20 px-1.5 py-0.5 rounded font-bold uppercase">
+                  <span className="text-[8px] bg-white/25 px-1.5 py-0.5 rounded font-bold uppercase text-white">
                     Administrador
                   </span>
                 </div>
               </div>
 
-              {/* Simulated Content Area */}
-              <div className="p-3.5 space-y-3">
+              {/* Simulated Background Watermark (Center) */}
+              {theme.logoUrl && theme.showLogoAsBackground !== false && (
+                <div
+                  className="absolute inset-0 pointer-events-none flex items-center justify-center z-0 overflow-hidden"
+                  style={{ opacity: currentOpacity }}
+                  aria-hidden="true"
+                >
+                  <img
+                    src={theme.logoUrl}
+                    alt="Marca d'água simulada"
+                    className="max-w-[140px] max-h-[140px] w-3/4 h-auto object-contain select-none filter contrast-125"
+                  />
+                </div>
+              )}
+
+              {/* Simulated Content Area (Above Watermark) */}
+              <div className="p-3.5 space-y-3 relative z-10">
                 {/* Simulated Stats Row */}
                 <div className="grid grid-cols-2 gap-2">
                   <div
@@ -406,7 +746,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
                         <Clock className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="text-[8px] font-bold opacity-60 uppercase">Na Assistência</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase">Na Assistência</p>
                         <p className="text-xs font-black">2 aparelhos</p>
                       </div>
                     </div>
@@ -426,7 +766,7 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
                         <CheckCircle className="w-3.5 h-3.5" />
                       </div>
                       <div>
-                        <p className="text-[8px] font-bold opacity-60 uppercase">Prontos</p>
+                        <p className="text-[8px] font-bold text-slate-400 uppercase">Prontos</p>
                         <p className="text-xs font-black">4 ordens</p>
                       </div>
                     </div>
@@ -498,10 +838,13 @@ export default function Personalizacao({ currentTheme, onThemeChange, onBack }: 
               </div>
             </div>
 
-            <div className="p-3 bg-blue-50/40 rounded-xl border border-blue-100/50 flex items-start gap-2.5 text-[11px] text-slate-600">
+            {/* Status overview chip */}
+            <div className="p-3 bg-blue-50/60 rounded-xl border border-blue-100 flex items-start gap-2.5 text-[11px] text-slate-600">
               <ShieldCheck className="w-4 h-4 text-[#1E88E5] shrink-0 mt-0.5" />
               <span>
-                As alterações no tema são aplicadas instantaneamente em toda a tela e ficam gravadas mesmo após fechar o navegador.
+                {theme.logoUrl
+                  ? `Logotipo ativo no ${theme.showLogoInHeader !== false ? 'cabeçalho' : ''} ${theme.showLogoAsBackground !== false ? 'e plano de fundo' : ''}.`
+                  : "Nenhum logotipo configurado. Carregue sua imagem ao lado para personalizar o sistema."}
               </span>
             </div>
 

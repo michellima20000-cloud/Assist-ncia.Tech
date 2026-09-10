@@ -1287,7 +1287,12 @@ async function startServer() {
           primaryColor: "#1E88E5",
           headerColor: "#1E88E5",
           headerStyle: "primary",
-          cardContrast: "normal"
+          cardContrast: "normal",
+          companyName: "Minha Assistência.Tech",
+          logoUrl: "",
+          showLogoInHeader: true,
+          showLogoAsBackground: true,
+          backgroundLogoOpacity: 0.07
         };
       }
       res.json(config);
@@ -1305,6 +1310,11 @@ async function startServer() {
         headerColor: req.body.headerColor || req.body.primaryColor || "#1E88E5",
         headerStyle: req.body.headerStyle || "primary",
         cardContrast: req.body.cardContrast || "normal",
+        companyName: req.body.companyName || "Minha Assistência.Tech",
+        logoUrl: req.body.logoUrl || "",
+        showLogoInHeader: req.body.showLogoInHeader !== undefined ? req.body.showLogoInHeader : true,
+        showLogoAsBackground: req.body.showLogoAsBackground !== undefined ? req.body.showLogoAsBackground : true,
+        backgroundLogoOpacity: typeof req.body.backgroundLogoOpacity === "number" ? req.body.backgroundLogoOpacity : 0.07,
         updatedAt: new Date().toISOString()
       };
       await setDocument("config", "theme", config);

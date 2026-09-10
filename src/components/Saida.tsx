@@ -1659,9 +1659,9 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
               </div>
 
               {/* Add manual section */}
-              <div className="p-3.5 bg-slate-50/60 rounded-2xl border border-slate-100 space-y-2">
+              <div className="p-3.5 bg-slate-50/60 dark-box rounded-2xl border border-slate-100 space-y-2">
                 <div className="flex justify-between items-center mb-1">
-                  <span className="text-xs font-bold text-slate-700">Novo Item / Serviço</span>
+                  <span className="text-xs font-extrabold text-slate-800">Novo Item / Serviço</span>
                   <button
                     type="button"
                     onClick={() => setScannerOpen(true)}
@@ -1678,7 +1678,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                     placeholder="Nome do Serviço ou Peça..."
                     value={manualItemName}
                     onChange={(e) => setManualItemName(e.target.value)}
-                    className="flex-1 p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-blue-400 font-semibold"
+                    className="flex-1 p-2 bg-white border border-slate-200 rounded-xl text-xs outline-none focus:ring-1 focus:ring-blue-400 font-semibold text-slate-800"
                   />
                   <div className="relative w-20">
                     <span className="absolute left-1.5 top-2 text-slate-400 text-xs font-bold">R$</span>
@@ -1687,7 +1687,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                       placeholder="0,00"
                       value={manualItemPrice}
                       onChange={(e) => setManualItemPrice(e.target.value)}
-                      className="w-full pl-6 pr-1 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none text-center font-bold font-mono"
+                      className="w-full pl-6 pr-1 py-2 bg-white border border-slate-200 rounded-xl text-xs outline-none text-center font-bold font-mono text-slate-800"
                     />
                   </div>
                 </div>
@@ -1714,7 +1714,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
 
               {/* Suggested quick select lists */}
               <div className="space-y-2">
-                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Sugestões Rápidas (Clique p/ preencher)</span>
+                <span className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wide">Sugestões Rápidas (Clique p/ preencher)</span>
                 <div className="flex flex-wrap gap-1.5 max-h-[160px] overflow-y-auto pr-1">
                   {allServices.map(s => (
                     <button
@@ -1724,11 +1724,11 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                         setManualItemName(s.name);
                         setManualItemPrice(s.price > 0 ? s.price.toString() : "");
                       }}
-                      className="px-2 py-1.5 bg-blue-50 border border-blue-100 hover:bg-blue-100 text-[#1E88E5] rounded-xl text-[10px] font-bold transition flex items-center gap-1"
+                      className="quick-chip-service px-2.5 py-1.5 bg-blue-50 border border-blue-200/70 hover:bg-blue-100 text-[#1E88E5] rounded-xl text-[10px] font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
                       <span>🛠️</span>
-                      <span>{s.name}</span>
-                      <span className="text-[9px] font-mono text-slate-400">({s.isPriceCustom ? "Var" : `${s.price} R$`})</span>
+                      <span className="chip-name font-bold">{s.name}</span>
+                      <span className="chip-price text-[9px] font-mono font-bold text-slate-600">({s.isPriceCustom ? "Var" : `${s.price} R$`})</span>
                     </button>
                   ))}
                   {allProducts.map(p => (
@@ -1739,11 +1739,11 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
                         setManualItemName(p.name);
                         setManualItemPrice(p.price > 0 ? p.price.toString() : "");
                       }}
-                      className="px-2 py-1.5 bg-red-50 border border-red-100 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-bold transition flex items-center gap-1"
+                      className="quick-chip-product px-2.5 py-1.5 bg-red-50 border border-red-200/70 hover:bg-red-100 text-red-600 rounded-xl text-[10px] font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
                       <span>📦</span>
-                      <span>{p.name}</span>
-                      <span className="text-[9px] font-mono text-slate-400">({p.price} R$)</span>
+                      <span className="chip-name font-bold">{p.name}</span>
+                      <span className="chip-price text-[9px] font-mono font-bold text-slate-600">({p.price} R$)</span>
                     </button>
                   ))}
                 </div>

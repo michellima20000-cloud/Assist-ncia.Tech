@@ -662,9 +662,9 @@ TERMO: Autorizo o diagnóstico.`;
             {/* Upgraded Unified Manual Input Form */}
             <div className="space-y-4">
               {/* Form inputs */}
-              <div className="p-4 bg-slate-50/70 rounded-2xl border border-slate-100 space-y-3">
+              <div className="p-4 bg-slate-50/70 dark-box rounded-2xl border border-slate-100 space-y-3">
                 <div className="flex justify-between items-center">
-                  <span className="text-xs font-bold text-slate-700">Novo Item / Serviço</span>
+                  <span className="text-xs font-extrabold text-slate-800">Novo Item / Serviço</span>
                   <button
                     type="button"
                     onClick={() => setScannerOpen(true)}
@@ -724,7 +724,7 @@ TERMO: Autorizo o diagnóstico.`;
               {/* Suggestions chips section */}
               <div className="space-y-2">
                 <div className="flex justify-between items-center">
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Sugestões Rápidas (Clique p/ preencher)</p>
+                  <p className="text-[10px] font-extrabold text-slate-500 uppercase tracking-wider">Sugestões Rápidas (Clique p/ preencher)</p>
                 </div>
                 <div className="flex flex-wrap gap-1.5 max-h-[160px] overflow-y-auto pr-1">
                   {allServices.map(s => (
@@ -735,11 +735,11 @@ TERMO: Autorizo o diagnóstico.`;
                         setManualItemName(s.name);
                         setManualItemPrice(s.price > 0 ? s.price.toString() : "");
                       }}
-                      className="px-2.5 py-1.5 bg-blue-50/50 hover:bg-blue-100/70 text-[#1E88E5] border border-blue-100/50 rounded-xl text-[10px] font-bold transition flex items-center gap-1"
+                      className="quick-chip-service px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-[#1E88E5] border border-blue-200/70 rounded-xl text-[10px] font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
                       <span>🛠️</span>
-                      <span>{s.name}</span>
-                      {s.price > 0 && <span className="text-slate-500 font-normal">({s.price} R$)</span>}
+                      <span className="chip-name font-bold">{s.name}</span>
+                      {s.price > 0 && <span className="chip-price text-slate-600 font-bold">({s.price} R$)</span>}
                     </button>
                   ))}
                   {allProducts.map(p => (
@@ -750,11 +750,11 @@ TERMO: Autorizo o diagnóstico.`;
                         setManualItemName(p.name);
                         setManualItemPrice(p.price > 0 ? p.price.toString() : "");
                       }}
-                      className="px-2.5 py-1.5 bg-red-50/50 hover:bg-red-100/70 text-red-600 border border-red-100/50 rounded-xl text-[10px] font-bold transition flex items-center gap-1"
+                      className="quick-chip-product px-2.5 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 border border-red-200/70 rounded-xl text-[10px] font-bold transition flex items-center gap-1.5 shadow-2xs"
                     >
                       <span>📦</span>
-                      <span>{p.name}</span>
-                      {p.price > 0 && <span className="text-slate-500 font-normal">({p.price} R$)</span>}
+                      <span className="chip-name font-bold">{p.name}</span>
+                      {p.price > 0 && <span className="chip-price text-slate-600 font-bold">({p.price} R$)</span>}
                     </button>
                   ))}
                   {allServices.length === 0 && allProducts.length === 0 && (

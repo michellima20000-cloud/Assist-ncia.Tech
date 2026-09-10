@@ -331,12 +331,22 @@ ________________________`;
         className="text-white shadow-md select-none transition-colors duration-200"
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center font-bold text-lg text-white border border-white/20">
-              M
-            </div>
+          <div className="flex items-center gap-2.5">
+            {theme.logoUrl && theme.showLogoInHeader !== false ? (
+              <img
+                src={theme.logoUrl}
+                alt="Logo da Loja"
+                className="w-9 h-9 rounded-xl object-contain bg-white/10 p-0.5 border border-white/20 shadow-xs"
+              />
+            ) : (
+              <div className="w-9 h-9 rounded-xl bg-white/10 flex items-center justify-center font-bold text-lg text-white border border-white/20">
+                M
+              </div>
+            )}
             <div>
-              <h1 className="text-base font-extrabold tracking-tight">Minha Assistência.Tech</h1>
+              <h1 className="text-base font-extrabold tracking-tight">
+                {theme.companyName || "Minha Assistência.Tech"}
+              </h1>
               <p className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">Módulos Conectados</p>
             </div>
           </div>
@@ -422,7 +432,25 @@ ________________________`;
       </header>
 
       {/* WORKSPACE AREA */}
-      <main className="flex-1 max-w-6xl w-full mx-auto p-4">
+      <main className="flex-1 max-w-6xl w-full mx-auto p-4 relative">
+        {/* Background Logo Watermark / Wallpaper */}
+        {theme.logoUrl && theme.showLogoAsBackground !== false && (
+          <div
+            className="fixed inset-0 pointer-events-none flex items-center justify-center z-0 overflow-hidden"
+            style={{
+              opacity: typeof theme.backgroundLogoOpacity === "number" ? theme.backgroundLogoOpacity : 0.07,
+            }}
+            aria-hidden="true"
+          >
+            <img
+              src={theme.logoUrl}
+              alt="Plano de fundo logotipo"
+              className="max-w-[480px] max-h-[480px] w-4/5 h-auto object-contain select-none filter contrast-125"
+            />
+          </div>
+        )}
+
+        <div className="relative z-10">
         {activeTab === "dashboard" && (
           <div className="space-y-6">
             {/* Realtime Stats Grid */}
@@ -678,7 +706,7 @@ ________________________`;
                   </div>
                   <div>
                     <span className="font-extrabold text-sm text-slate-800">PERSONALIZAÇÃO</span>
-                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Modo Black & Cores</p>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Logo, Fundo & Cores</p>
                   </div>
                 </button>
               </div>
@@ -866,6 +894,7 @@ TERMO: Autorizo o diagnóstico.`;
             onPrintReceipt={(content) => triggerReceiptPreview("Lista de Reposição", content)}
           />
         )}
+        </div>
       </main>
 
       {/* FOOTER METADATA */}

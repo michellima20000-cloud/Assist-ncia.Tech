@@ -209,5 +209,10 @@ export interface ThemeConfig {
   headerColor: string;
   headerStyle: 'primary' | 'black' | 'gradient';
   cardContrast?: 'normal' | 'high';
+  companyName?: string;
+  logoUrl?: string;
+  showLogoInHeader?: boolean;
+  showLogoAsBackground?: boolean;
+  backgroundLogoOpacity?: number; // e.g., 0.04 to 0.25 (default 0.07)
   updatedAt?: string;
 }

@@ -814,16 +814,16 @@ TERMO: Autorizo o diagnóstico.`;
                 )}
 
                 {/* Quick stats badges */}
-                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-50 text-center">
-                  <div className="p-2.5 bg-slate-50/70 rounded-xl">
+                <div className="grid grid-cols-3 gap-3 pt-3 border-t border-slate-100 text-center">
+                  <div className="p-2.5 bg-slate-50 dark-box rounded-xl">
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total Gasto</p>
                     <p className="text-xs font-black text-[#1E88E5] font-mono mt-0.5">R$ {selectedClient.totalSpent.toFixed(2)}</p>
                   </div>
-                  <div className="p-2.5 bg-slate-50/70 rounded-xl">
+                  <div className="p-2.5 bg-slate-50 dark-box rounded-xl">
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Ordens de Serviço</p>
                     <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedClient.atendimentosCount}</p>
                   </div>
-                  <div className="p-2.5 bg-slate-50/70 rounded-xl">
+                  <div className="p-2.5 bg-slate-50 dark-box rounded-xl">
                     <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Vendas Rápidas</p>
                     <p className="text-xs font-black text-slate-800 font-mono mt-0.5">{selectedClient.vendasCount}</p>
                   </div>
@@ -892,13 +892,13 @@ TERMO: Autorizo o diagnóstico.`;
 
                           {/* Expanded content details */}
                           {isExpanded && (
-                            <div className="px-4 pb-4 pt-1 border-t border-slate-50 bg-slate-50/30 text-xs space-y-3.5 animate-fade-in">
+                            <div className="px-4 pb-4 pt-1 border-t border-slate-100 bg-slate-50 dark-box text-xs space-y-3.5 animate-fade-in">
                               
                               {/* Warranty Section */}
                               {warranty && (
                                 <div className="space-y-2">
                                   {editingWarrantyItemId === item.id ? (
-                                    <div className="p-3.5 bg-blue-50/70 border border-blue-200 rounded-xl space-y-3 shadow-xs">
+                                    <div className="p-3.5 bg-blue-50 border border-blue-200 rounded-xl space-y-3 shadow-xs">
                                       <div className="flex items-center justify-between">
                                         <div className="flex items-center gap-2">
                                           <ShieldCheck className="w-4 h-4 text-blue-600" />
@@ -990,10 +990,10 @@ TERMO: Autorizo o diagnóstico.`;
                                   ) : (
                                     <div className={`p-3 rounded-xl border flex items-start justify-between gap-3 transition ${
                                       warranty.status === "active" 
-                                        ? "bg-emerald-50/50 border-emerald-100 text-emerald-800" 
+                                        ? "bg-emerald-50 border-emerald-200 text-emerald-800" 
                                         : warranty.status === "expired"
-                                        ? "bg-slate-50 border-slate-200 text-slate-500"
-                                        : "bg-blue-50/50 border-blue-100 text-blue-800"
+                                        ? "bg-slate-100 border-slate-200 text-slate-500"
+                                        : "bg-blue-50 border-blue-200 text-blue-800"
                                     }`}>
                                       <div className="flex items-start gap-3 min-w-0 flex-1">
                                         {warranty.status === "active" ? (
@@ -1007,7 +1007,7 @@ TERMO: Autorizo o diagnóstico.`;
                                           <div className="flex items-center gap-2">
                                             <p className="font-extrabold text-xs">Garantia & Termos de Troca</p>
                                             {warranty.status === "active" && (
-                                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-100/80 text-emerald-700 rounded-full">
+                                              <span className="text-[9px] font-bold px-1.5 py-0.2 bg-emerald-100 text-emerald-700 rounded-full">
                                                 Ativa
                                               </span>
                                             )}

@@ -5,7 +5,12 @@ export const DEFAULT_THEME: ThemeConfig = {
   primaryColor: "#1E88E5",
   headerColor: "#1E88E5",
   headerStyle: "primary",
-  cardContrast: "normal"
+  cardContrast: "normal",
+  companyName: "Minha Assistência.Tech",
+  logoUrl: "",
+  showLogoInHeader: true,
+  showLogoAsBackground: true,
+  backgroundLogoOpacity: 0.07
 };
 
 export const THEME_COLOR_PRESETS = [
@@ -30,7 +35,12 @@ export function getStoredTheme(): ThemeConfig {
         primaryColor: parsed.primaryColor || "#1E88E5",
         headerColor: parsed.headerColor || parsed.primaryColor || "#1E88E5",
         headerStyle: parsed.headerStyle || "primary",
-        cardContrast: parsed.cardContrast || "normal"
+        cardContrast: parsed.cardContrast || "normal",
+        companyName: parsed.companyName || "Minha Assistência.Tech",
+        logoUrl: parsed.logoUrl || "",
+        showLogoInHeader: parsed.showLogoInHeader !== undefined ? parsed.showLogoInHeader : true,
+        showLogoAsBackground: parsed.showLogoAsBackground !== undefined ? parsed.showLogoAsBackground : true,
+        backgroundLogoOpacity: typeof parsed.backgroundLogoOpacity === "number" ? parsed.backgroundLogoOpacity : 0.07
       };
     }
   } catch (e) {
