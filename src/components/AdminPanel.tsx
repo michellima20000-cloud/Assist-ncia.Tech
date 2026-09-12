@@ -2147,6 +2147,28 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
             </div>
           </div>
 
+          {/* Cards de Resumo de Saídas */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="bg-red-50 border border-red-200 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-red-700">Total Saídas Hoje ({expenses.filter(e => e.date && (e.date === new Date().toLocaleDateString('sv-SE') || e.date.substring(0, 10) === new Date().toLocaleDateString('sv-SE'))).length})</p>
+                <p className="text-xl font-black text-red-600 font-mono mt-0.5">
+                  R$ {expenses.filter(e => e.date && (e.date === new Date().toLocaleDateString('sv-SE') || e.date.substring(0, 10) === new Date().toLocaleDateString('sv-SE'))).reduce((acc, e) => acc + (Number(e.amount) || 0), 0).toFixed(2)}
+                </p>
+              </div>
+              <span className="text-xs bg-white text-red-700 px-2.5 py-1 rounded-lg font-bold border border-red-200 shadow-2xs">Hoje</span>
+            </div>
+            <div className="bg-slate-50 border border-slate-200 rounded-xl p-3.5 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Total Geral Lançado ({expenses.length})</p>
+                <p className="text-xl font-black text-slate-800 font-mono mt-0.5">
+                  R$ {expenses.reduce((acc, e) => acc + (Number(e.amount) || 0), 0).toFixed(2)}
+                </p>
+              </div>
+              <span className="text-xs bg-white text-slate-600 px-2.5 py-1 rounded-lg font-bold border border-slate-200 shadow-2xs">Geral</span>
+            </div>
+          </div>
+
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Atalhos Rápidos:</span>
             <button
@@ -2231,7 +2253,9 @@ GARANTIA: ${at.garantia || "Garantia de 90 dias (3 meses)"}`;
                   </p>
                 </div>
                 <div className="flex items-center gap-3">
-                  <span className="font-bold font-mono text-red-600">- R$ {e.amount.toFixed(2)}</span>
+                  <span className="font-bold font-mono text-red-600 bg-red-50/80 px-2 py-0.5 rounded-lg border border-red-100">
+                    - R$ {(Number(e.amount) || 0).toFixed(2)}
+                  </span>
                   <button onClick={() => handleDeleteExpense(e.id)} className="p-1 hover:bg-red-50 text-red-500 rounded">
                     <Trash2 className="w-4 h-4" />
                   </button>

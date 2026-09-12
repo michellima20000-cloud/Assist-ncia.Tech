@@ -23,6 +23,7 @@ import Vendas from "./components/Vendas";
 import FeedbackAutomation from "./components/FeedbackAutomation";
 import ListaReposicao from "./components/ListaReposicao";
 import Personalizacao from "./components/Personalizacao";
+import { ExpensesModal } from "./components/ExpensesModal";
 
 type ActiveTab =
   | "dashboard"
@@ -43,11 +44,28 @@ type ActiveTab =
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<ActiveTab>("dashboard");
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() => {
+    try {
+      const savedTab = sessionStorage.getItem("active_tab") as ActiveTab;
+      const hasDraft = localStorage.getItem("os_entrada_draft");
+      if (hasDraft && (!savedTab || savedTab === "entrada")) {
+        return "entrada";
+      }
+      if (savedTab) return savedTab;
+    } catch (_) {}
+    return "dashboard";
+  });
+
+  useEffect(() => {
+    try {
+      sessionStorage.setItem("active_tab", activeTab);
+    } catch (_) {}
+  }, [activeTab]);
   const [atendimentoFlowMode, setAtendimentoFlowMode] = useState<"atendimento" | "saida">("atendimento");
   const [hideValues, setHideValues] = useState<boolean>(() => {
     return localStorage.getItem("hideValues") === "true";
   });
+  const [isExpensesModalOpen, setIsExpensesModalOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("hideValues", String(hideValues));
@@ -490,7 +508,13 @@ ________________________`;
                     </div>
                   </div>
 
-                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
+                  <div
+                    onClick={() => setIsExpensesModalOpen(true)}
+                    className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 cursor-pointer hover:border-red-200 transition"
+                    title="Clique para abrir o controle de despesas"
+                    role="button"
+                    tabIndex={0}
+                  >
                     <div className="w-10 h-10 rounded-xl bg-red-50 text-red-500 flex items-center justify-center shrink-0">
                       <PlusCircle className="w-5 h-5" />
                     </div>
@@ -911,6 +935,14 @@ TERMO: Autorizo o diagnóstico.`;
         content={receiptContent}
         phone={receiptPhone}
         clientName={receiptClientName}
+      />
+
+      {/* EXPENSES & CASH OUTFLOW MODAL */}
+      <ExpensesModal
+        isOpen={isExpensesModalOpen}
+        onClose={() => setIsExpensesModalOpen(false)}
+        onExpenseSaved={fetchStats}
+        initialTodayTotal={stats?.financials?.expenses ?? 0}
       />
 
       {/* GLOBAL PRODUCT SCANNER OVERLAY */}

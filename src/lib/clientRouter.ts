@@ -483,22 +483,38 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
-        if (offsetQuery === null) return isoString.substring(0, 10);
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const str = String(isoString).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+          return str;
+        }
+        if (offsetQuery === null) return str.substring(0, 10);
+        const date = new Date(str);
+        if (isNaN(date.getTime())) return str.substring(0, 10);
         const localTime = new Date(date.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
+      };
+
+      const isDateMatchToday = (dateVal: any) => {
+        if (!dateVal) return false;
+        const str = String(dateVal).trim();
+        if (str === todayStr || str.substring(0, 10) === todayStr) return true;
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str === todayStr;
+        if (getLocalDateStr(str) === todayStr) return true;
+        return false;
       };
 
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p.date && getLocalDateStr(p.date) === todayStr);
+      const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
 
       todayPagamentos.forEach(p => {
         const amount = Number(p.totalAmount || 0);
-        if (p.method === "cash") {
+        if (p.splitPayments) {
+          cash += Number(p.splitPayments.cash || 0);
+          card += Number(p.splitPayments.pix || 0) + Number(p.splitPayments.debit || 0) + Number(p.splitPayments.credit || 0);
+        } else if (p.method === "cash") {
           cash += amount;
         } else {
           card += amount;
@@ -510,7 +526,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         .filter(a => a.status !== "finalizado")
         .reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0);
 
-      const todayDespesas = despesas.filter(d => d.date && getLocalDateStr(d.date) === todayStr);
+      const todayDespesas = despesas.filter(d => d.date && isDateMatchToday(d.date));
       const expenses = todayDespesas.reduce((acc, d) => acc + (Number(d.amount) || 0), 0);
 
       return new Response(JSON.stringify({
@@ -560,9 +576,13 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
-        if (offsetQuery === null) return isoString.substring(0, 10);
-        const date = new Date(isoString);
-        if (isNaN(date.getTime())) return isoString.substring(0, 10);
+        const str = String(isoString).trim();
+        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
+          return str;
+        }
+        if (offsetQuery === null) return str.substring(0, 10);
+        const date = new Date(str);
+        if (isNaN(date.getTime())) return str.substring(0, 10);
         const localTime = new Date(date.getTime() - (offsetQuery * 60000));
         return localTime.toISOString().substring(0, 10);
       };
@@ -638,8 +658,14 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       let totalCard = 0;
       filteredPayments.forEach(p => {
         const amount = Number(p.totalAmount || 0);
-        if (p.method === "cash") totalCash += amount;
-        else totalCard += amount;
+        if (p.splitPayments) {
+          totalCash += Number(p.splitPayments.cash || 0);
+          totalCard += Number(p.splitPayments.pix || 0) + Number(p.splitPayments.debit || 0) + Number(p.splitPayments.credit || 0);
+        } else if (p.method === "cash") {
+          totalCash += amount;
+        } else {
+          totalCard += amount;
+        }
       });
 
       const totalRevenue = totalCash + totalCard;
@@ -827,7 +853,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
     // 5. Payments finalization route
     if (path === "/api/pagamentos" && method === "POST") {
-      const { atendimentoId, totalAmount, receivedAmount, change, method: payMethod, notesFin } = body;
+      const { atendimentoId, totalAmount, receivedAmount, change, method: payMethod, splitPayments, notesFin } = body;
 
       const atRef = doc(db, "atendimentos", atendimentoId);
       const atSnap = await getDoc(atRef);
@@ -847,6 +873,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         receivedAmount,
         change,
         method: payMethod,
+        splitPayments: splitPayments || null,
         date: new Date().toISOString()
       };
 
@@ -890,7 +917,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
     }
 
     if (path === "/api/vendas" && method === "POST") {
-      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method: payMethod, sellerId, sellerName } = body;
+      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method: payMethod, splitPayments, sellerId, sellerName, observations, garantia } = body;
 
       if (!items || items.length === 0) {
         return new Response(JSON.stringify({ message: "A venda deve conter pelo menos um item." }), {
@@ -939,9 +966,13 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         receivedAmount,
         change,
         method: payMethod,
+        splitPayments: splitPayments || null,
         date: new Date().toISOString(),
         sellerId: sellerId || null,
-        sellerName: sellerName || "Balcão"
+        sellerName: sellerName || "Balcão",
+        observations: observations || "",
+        garantia: garantia || "Garantia de 90 dias (3 meses)",
+        status: "finalizada"
       };
 
       // Save venda document
@@ -957,12 +988,52 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         receivedAmount,
         change,
         method: payMethod,
+        splitPayments: splitPayments || null,
         date: new Date().toISOString()
       };
       await setDoc(doc(db, "pagamentos", payId), newPayment);
 
       return new Response(JSON.stringify({ success: true, venda: newVenda, payment: newPayment }), {
         status: 201,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // 5.8 Despesas dedicated routes
+    if (path === "/api/despesas" && method === "GET") {
+      const snap = await getDocs(collection(db, "despesas"));
+      const list = getDocsData(snap);
+      list.sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
+      return new Response(JSON.stringify(list), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path === "/api/despesas" && method === "POST") {
+      const id = "des-" + Date.now();
+      const newDespesa = {
+        id,
+        description: String(body.description || "Despesa").trim(),
+        amount: Number(body.amount) || 0,
+        date: body.date || new Date().toISOString().substring(0, 10)
+      };
+      await setDoc(doc(db, "despesas", id), newDespesa);
+      return new Response(JSON.stringify(newDespesa), {
+        status: 201,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    if (path.startsWith("/api/despesas/") && method === "DELETE") {
+      const id = path.replace("/api/despesas/", "");
+      await deleteDoc(doc(db, "despesas", id));
+      return new Response(JSON.stringify({ success: true, id }), {
+        status: 200,
         headers: { "Content-Type": "application/json" }
       });
     }

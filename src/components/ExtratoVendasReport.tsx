@@ -47,6 +47,10 @@ export const formatPaymentMethodLabel = (method: string): string => {
       return "Cartão de Débito";
     case "credit":
       return "Cartão de Crédito";
+    case "misto":
+    case "split":
+    case "multiple":
+      return "Misto / Dividido";
     default:
       return method ? method.charAt(0).toUpperCase() + method.slice(1) : "Dinheiro";
   }
@@ -672,6 +676,7 @@ Minha Assistência.Tech`;
               <option value="cash">Apenas Dinheiro</option>
               <option value="credit">Cartão de Crédito</option>
               <option value="debit">Cartão de Débito</option>
+              <option value="misto">Misto / Dividido</option>
             </select>
           </div>
 

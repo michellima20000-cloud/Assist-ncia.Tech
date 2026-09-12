@@ -487,7 +487,10 @@ async function startServer() {
       const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
 
       todayPagamentos.forEach(p => {
-        if (p.method === "cash") {
+        if (p.splitPayments) {
+          cash += Number(p.splitPayments.cash) || 0;
+          card += (Number(p.splitPayments.pix) || 0) + (Number(p.splitPayments.debit) || 0) + (Number(p.splitPayments.credit) || 0);
+        } else if (p.method === "cash") {
           cash += Number(p.totalAmount) || 0;
         } else {
           card += Number(p.totalAmount) || 0; // Debit/Credit/Pix grouped into Card/Digital
@@ -814,6 +817,11 @@ async function startServer() {
   app.get("/api/despesas", async (req, res) => {
     try {
       const list = await getCollection<Despesa>("despesas");
+      list.sort((a, b) => {
+        const dateA = a.date ? new Date(a.date).getTime() : 0;
+        const dateB = b.date ? new Date(b.date).getTime() : 0;
+        return dateB - dateA;
+      });
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -822,12 +830,12 @@ async function startServer() {
 
   app.post("/api/despesas", async (req, res) => {
     try {
-      const id = "d-" + Date.now();
+      const id = "des-" + Date.now();
       const newDespesa: Despesa = {
         id,
-        description: req.body.description,
+        description: String(req.body.description || "Despesa").trim(),
         amount: Number(req.body.amount) || 0,
-        date: req.body.date || new Date().toISOString()
+        date: req.body.date || new Date().toISOString().substring(0, 10)
       };
       await setDocument("despesas", id, newDespesa);
       res.status(201).json(newDespesa);
@@ -1184,7 +1192,7 @@ async function startServer() {
   // Payments & Exit finalization
   app.post("/api/pagamentos", async (req, res) => {
     try {
-      const { atendimentoId, totalAmount, receivedAmount, change, method, notesFin } = req.body;
+      const { atendimentoId, totalAmount, receivedAmount, change, method, splitPayments, notesFin } = req.body;
 
       const at = await getDocument<Atendimento>("atendimentos", atendimentoId);
       if (!at) {
@@ -1199,6 +1207,7 @@ async function startServer() {
         receivedAmount,
         change,
         method,
+        splitPayments: splitPayments || null,
         date: new Date().toISOString()
       };
 
@@ -1786,7 +1795,7 @@ async function startServer() {
 
   app.post("/api/vendas", async (req, res) => {
     try {
-      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, sellerId, sellerName, observations, garantia } = req.body;
+      const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, splitPayments, sellerId, sellerName, observations, garantia } = req.body;
 
       if (!items || items.length === 0) {
         return res.status(400).json({ message: "A venda deve conter pelo menos um item." });
@@ -1822,6 +1831,7 @@ async function startServer() {
         receivedAmount,
         change,
         method,
+        splitPayments: splitPayments || null,
         date: new Date().toISOString(),
         sellerId: sellerId || null,
         sellerName: sellerName || "Balcão",
@@ -1843,6 +1853,7 @@ async function startServer() {
         receivedAmount,
         change,
         method,
+        splitPayments: splitPayments || null,
         date: new Date().toISOString()
       };
       await setDocument("pagamentos", payId, newPayment);

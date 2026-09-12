@@ -113,6 +113,16 @@ export interface Agendamento {
   notes: string;
 }
 
+export interface SplitPaymentDetail {
+  cash?: number;
+  cashGiven?: number;
+  cashChange?: number;
+  pix?: number;
+  debit?: number;
+  credit?: number;
+  total?: number;
+}
+
 export interface Pagamento {
   id: string;
   atendimentoId?: string;
@@ -121,7 +131,9 @@ export interface Pagamento {
   totalAmount: number;
   receivedAmount: number;
   change: number;
-  method: 'cash' | 'debit' | 'credit' | 'pix';
+  method: 'cash' | 'debit' | 'credit' | 'pix' | 'misto' | 'split';
+  splitPayments?: SplitPaymentDetail;
+  notesFin?: string;
   date: string;
 }
 
@@ -141,7 +153,8 @@ export interface Venda {
   totalAmount: number;
   receivedAmount: number;
   change: number;
-  method: 'cash' | 'debit' | 'credit' | 'pix';
+  method: 'cash' | 'debit' | 'credit' | 'pix' | 'misto' | 'split';
+  splitPayments?: SplitPaymentDetail;
   date: string;
   sellerId?: string;
   sellerName?: string;

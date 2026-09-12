@@ -610,14 +610,88 @@ body.theme-pure-black {
   opacity: 1 !important;
 }
 
-/* Remove efeito embaçado de backdrop blur em caixas e cards */
-.theme-black .backdrop-blur-sm,
-.theme-black .backdrop-blur-md,
-.theme-black .backdrop-blur,
-.theme-pure-black .backdrop-blur-sm,
-.theme-pure-black .backdrop-blur-md,
-.theme-pure-black .backdrop-blur {
+/* Remove efeito embaçado de backdrop blur em caixas e cards internos */
+.theme-black .backdrop-blur-sm:not(.fixed),
+.theme-black .backdrop-blur-md:not(.fixed),
+.theme-black .backdrop-blur:not(.fixed),
+.theme-pure-black .backdrop-blur-sm:not(.fixed),
+.theme-pure-black .backdrop-blur-md:not(.fixed),
+.theme-pure-black .backdrop-blur:not(.fixed) {
   backdrop-filter: none !important;
   -webkit-backdrop-filter: none !important;
 }
+
+/* Garante fundo 100% sólido e nítido para todas as caixas de cálculo, formulários e painéis */
+.theme-black .bg-purple-50\/40,
+.theme-black [class*="bg-purple-50/"],
+.theme-black [class*="bg-purple-100/"] {
+  background-color: #240c49 !important;
+  border-color: #7e22ce !important;
+  color: #e9d5ff !important;
+  opacity: 1 !important;
+}
+
+.theme-pure-black .bg-purple-50\/40,
+.theme-pure-black [class*="bg-purple-50/"],
+.theme-pure-black [class*="bg-purple-100/"] {
+  background-color: #1a0833 !important;
+  border-color: #6b21a8 !important;
+  color: #e9d5ff !important;
+  opacity: 1 !important;
+}
+
+.theme-black .bg-amber-50\/50,
+.theme-black [class*="bg-amber-50/"],
+.theme-black [class*="bg-amber-100/"] {
+  background-color: #331f06 !important;
+  border-color: #b45309 !important;
+  color: #fef08a !important;
+  opacity: 1 !important;
+}
+
+.theme-pure-black .bg-amber-50\/50,
+.theme-pure-black [class*="bg-amber-50/"],
+.theme-pure-black [class*="bg-amber-100/"] {
+  background-color: #211303 !important;
+  border-color: #92400e !important;
+  color: #fef08a !important;
+  opacity: 1 !important;
+}
+
+.theme-black .bg-blue-50\/50,
+.theme-black [class*="bg-blue-50/"],
+.theme-black [class*="bg-blue-100/"] {
+  background-color: #10223d !important;
+  border-color: #1d4ed8 !important;
+  color: #bfdbfe !important;
+  opacity: 1 !important;
+}
+
+.theme-pure-black .bg-blue-50\/50,
+.theme-pure-black [class*="bg-blue-50/"],
+.theme-pure-black [class*="bg-blue-100/"] {
+  background-color: #0b172a !important;
+  border-color: #1e40af !important;
+  color: #bfdbfe !important;
+  opacity: 1 !important;
+}
+
+.theme-black .bg-emerald-50\/50,
+.theme-black [class*="bg-emerald-50/"],
+.theme-black [class*="bg-emerald-100/"] {
+  background-color: #06281a !important;
+  border-color: #047857 !important;
+  color: #a7f3d0 !important;
+  opacity: 1 !important;
+}
+
+.theme-pure-black .bg-emerald-50\/50,
+.theme-pure-black [class*="bg-emerald-50/"],
+.theme-pure-black [class*="bg-emerald-100/"] {
+  background-color: #031c12 !important;
+  border-color: #065f46 !important;
+  color: #a7f3d0 !important;
+  opacity: 1 !important;
+}
+
 
