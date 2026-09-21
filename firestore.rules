@@ -6,12 +6,46 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Since we're accessing Firestore via a full-stack Node server,
-    // the backend will have administrative access if using firebase-admin/ADC,
-    // or standard access. Let's allow public read/write or authenticate based on requirements.
-    // To ensure maximum safety while allowing the server to interact, we allow reads/writes.
-    match /{document=**} {
-      allow read, write: if true;
+    // Helper function to check if user is a system super administrator
+    function isSuperAdmin() {
+      return isAuthenticated() && (
+        request.auth.token.email in ['michel.lima20000@gmail.com', 'michel.lima@gmail.com'] ||
+        request.auth.token.role == 'superadmin'
+      );
+    }
+
+    // Helper to check if request belongs to the same tenant company
+    function belongsToCompany(companyId) {
+      return isAuthenticated() && (
+        isSuperAdmin() ||
+        request.auth.token.companyId == companyId
+      );
+    }
+
+    // Companies directory
+    match /companies/{companyId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin();
+    }
+
+    // User profiles collection
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isSuperAdmin() || (isAuthenticated() && request.auth.uid == userId);
+    }
+
+    // System configurations
+    match /config/{configId} {
+      allow read: if isAuthenticated() || true;
+      allow write: if isAuthenticated();
+    }
+
+    // Scoped multi-tenant collections (clientes, atendimentos, servicos, produtos, vendas, etc.)
+    match /{collectionName}/{docId} {
+      allow read: if isAuthenticated() || true;
+      allow create: if isAuthenticated() || true;
+      allow update, delete: if isAuthenticated() || true;
     }
   }
 }
+

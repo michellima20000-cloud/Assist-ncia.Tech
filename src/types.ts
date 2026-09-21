@@ -1,4 +1,23 @@
-export type UserRole = 'admin' | 'employee';
+export type UserRole = 'superadmin' | 'admin' | 'employee';
+
+export interface Company {
+  id: string;
+  name: string;
+  slug?: string;
+  email?: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  phone?: string;
+  document?: string;
+  cnpj?: string;
+  address?: string;
+  plan?: string;
+  active?: boolean;
+  createdAt: string;
+  updatedAt?: string;
+  userCount?: number;
+  osCount?: number;
+}
 
 export interface User {
   id: string;
@@ -6,10 +25,13 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
+  companyId?: string;
+  companyName?: string;
 }
 
 export interface Cliente {
   id: string;
+  companyId?: string;
   name: string;
   email: string;
   phone: string;
@@ -37,6 +59,7 @@ export type AtendimentoStatus = 'na_assistencia' | 'entrega' | 'finalizado';
 
 export interface Atendimento {
   id: string;
+  companyId?: string;
   controlNumber: string;
   status: AtendimentoStatus;
   clienteId: string;
@@ -66,6 +89,7 @@ export interface Atendimento {
 
 export interface Servico {
   id: string;
+  companyId?: string;
   name: string;
   description: string;
   price: number;
@@ -75,6 +99,7 @@ export interface Servico {
 
 export interface Produto {
   id: string;
+  companyId?: string;
   name: string;
   description: string;
   price: number;
@@ -93,6 +118,7 @@ export interface Produto {
 
 export interface Despesa {
   id: string;
+  companyId?: string;
   description: string;
   amount: number;
   date: string;
@@ -100,12 +126,14 @@ export interface Despesa {
 
 export interface Convenio {
   id: string;
+  companyId?: string;
   name: string;
   discountPercent: number;
 }
 
 export interface Agendamento {
   id: string;
+  companyId?: string;
   clienteId: string;
   date: string;
   time: string;
@@ -125,6 +153,7 @@ export interface SplitPaymentDetail {
 
 export interface Pagamento {
   id: string;
+  companyId?: string;
   atendimentoId?: string;
   vendaId?: string;
   isVendaDirecta?: boolean;
@@ -147,6 +176,7 @@ export interface VendaItem {
 
 export interface Venda {
   id: string;
+  companyId?: string;
   clienteId?: string;
   clienteName?: string;
   items: VendaItem[];
@@ -167,11 +197,13 @@ export interface Venda {
 
 export interface Marca {
   id: string;
+  companyId?: string;
   name: string;
 }
 
 export interface Item {
   id: string;
+  companyId?: string;
   name: string;
 }
 
@@ -189,6 +221,7 @@ export interface DashboardStats {
 
 export interface FeedbackItem {
   id: string;
+  companyId?: string;
   clienteId?: string;
   clienteName: string;
   clientePhone: string;
