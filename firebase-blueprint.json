@@ -8,8 +8,13 @@
         "id": { "type": "string" },
         "name": { "type": "string" },
         "email": { "type": "string" },
+        "phone": { "type": "string" },
         "role": { "type": "string", "enum": ["admin", "employee"] },
+        "status": { "type": "string", "enum": ["active", "pending", "rejected", "blocked"] },
         "password": { "type": "string" },
+        "requestedAt": { "type": "string", "format": "date-time" },
+        "approvedAt": { "type": "string", "format": "date-time" },
+        "approvedBy": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" },
         "updatedAt": { "type": "string", "format": "date-time" },
         "createdBy": { "type": "string" }

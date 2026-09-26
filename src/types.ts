@@ -1,4 +1,4 @@
-export type UserRole = 'superadmin' | 'admin' | 'employee';
+export type UserRole = 'superadmin' | 'admin' | 'gerente' | 'tecnico' | 'atendente' | 'employee' | 'barbeiro';
 
 export interface Company {
   id: string;
@@ -25,8 +25,112 @@ export interface User {
   email: string;
   password?: string;
   role: UserRole;
+  status?: 'ativo' | 'inativo' | 'pendente' | 'bloqueado';
+  active?: boolean;
+  avatarIcon?: string;
+  avatarColor?: string;
+  customBadgeTitle?: string;
   companyId?: string;
   companyName?: string;
+  phone?: string;
+  // Assinatura e Controle de Barbeiros / Usuários
+  plan?: string; // "essencial" | "profissional" | "extra" | "mensal_60"
+  planName?: string; // "ESSENCIAL (1 CONTA)" | "PROFISSIONAL (3 CONTAS)"
+  planCapacity?: number; // 1, 3 etc.
+  extraAccounts?: number; // 0, 1, 2 etc.
+  subscriptionStatus?: 'active' | 'trial' | 'pending_pix' | 'expired';
+  trialEndsAt?: string; // Data ISO ex: "2026-10-15"
+  expiresAt?: string; // Data ISO ex: "2026-10-01"
+  daysPaid?: number; // dias pagos
+  lastPaymentDate?: string;
+  lastPaymentAmount?: number;
+  comprovanteUrl?: string;
+  paymentNotes?: string;
+  createdAt?: string;
+  activatedAt?: string;
+  activatedBy?: string;
+}
+
+export interface PixConfig {
+  id?: string;
+  pixKey: string;
+  pixKeyType: 'cpf' | 'cnpj' | 'phone' | 'email' | 'random';
+  pixFormat?: 'standard' | 'qr_emv' | 'simple';
+  receiverName: string;
+  receiverCity?: string;
+  receiverBank?: string;
+  planEssencialPrice?: number;
+  planProfissionalPrice?: number;
+  trialDays?: number;
+  audioUrl?: string;
+  audioTitle?: string;
+  audioBase64?: string;
+  instructionText?: string;
+  updatedAt?: string;
+}
+
+export interface PixSubscriptionRequest {
+  id: string;
+  userId?: string;
+  userName: string;
+  userEmail: string;
+  userPhone?: string;
+  plan: string;
+  planName: string;
+  planInterval: 'monthly' | 'annual';
+  amount: number;
+  extraAccounts?: number;
+  comprovanteUrl?: string;
+  notes?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  createdAt: string;
+  approvedAt?: string;
+  approvedBy?: string;
+}
+
+export interface SubscriptionInvoice {
+  id: string;
+  planName: string;
+  paidAt: string;
+  expiresAt: string;
+  amount: number;
+  status?: string;
+}
+
+export interface SubscriptionConfig {
+  activePlan: 'mensal' | 'anual';
+  status: 'active' | 'trial' | 'expired';
+  validUntil: string;
+  monthlyPrice: number;
+  annualPrice: number;
+  pixKey: string;
+  pixKeyType: string;
+  pixReceiverName: string;
+  pixCity: string;
+  whatsappContact: string;
+  history: SubscriptionInvoice[];
+}
+
+export interface SubscriptionInfo {
+  id: string;
+  companyId: string;
+  companyName: string;
+  planId: string;
+  planName: string;
+  status: "active" | "trial" | "past_due" | "suspended";
+  expiresAt: string;
+  startedAt?: string;
+  maxAccounts: number;
+  maxEmployees: number;
+  price?: number;
+  notes?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  phone?: string;
+  isExpired?: boolean;
+  daysRemaining?: number;
+  ownerName?: string;
+  lastPaymentDate?: string;
 }
 
 export interface Cliente {
@@ -216,6 +320,8 @@ export interface DashboardStats {
     pending: number;
     expenses: number;
     totalCollected: number;
+    directSalesTotal?: number;
+    serviceOrdersTotal?: number;
   };
 }
 

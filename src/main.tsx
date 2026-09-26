@@ -63,48 +63,18 @@ const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
   }
 
   if (pathname.startsWith("/api/")) {
-    const userSessionRaw = localStorage.getItem("user_session");
-    let userSession: any = null;
-    try {
-      if (userSessionRaw) userSession = JSON.parse(userSessionRaw);
-    } catch (_) {}
-
-    const activeCompanyId = sessionStorage.getItem("active_company_id") || userSession?.companyId || "";
-    const userToken = localStorage.getItem("user_token") || "";
-
-    const headers = new Headers(init?.headers || {});
-    if (activeCompanyId && !headers.has("x-company-id")) {
-      headers.set("x-company-id", activeCompanyId);
-    }
-    if (userSession?.id && !headers.has("x-user-id")) {
-      headers.set("x-user-id", userSession.id);
-    }
-    if (userSession?.role && !headers.has("x-user-role")) {
-      headers.set("x-user-role", userSession.role);
-    }
-    if (userToken && !headers.has("Authorization")) {
-      headers.set("Authorization", `Bearer ${userToken}`);
-    }
-
-    const updatedInit: RequestInit = {
-      ...init,
-      headers
-    };
-
-    const isExternalDomain =
-      window.location.hostname !== "localhost" &&
-      !window.location.hostname.includes("us-east1.run.app") &&
-      !window.location.hostname.includes("127.0.0.1") &&
-      !window.location.hostname.includes("0.0.0.0");
-
-    if (isExternalDomain) {
-      return handleClientRoute(urlStr, updatedInit);
-    }
-
-    return originalFetch(input, updatedInit).catch((err) => {
-      console.warn("Backend API fetch failed, falling back to client router:", err);
-      return handleClientRoute(urlStr, updatedInit);
-    });
+    return originalFetch(input, init)
+      .then((res) => {
+        // If the server responded with 404 on an API route, try client fallback
+        if (res.status === 404) {
+          return handleClientRoute(urlStr, init).catch(() => res);
+        }
+        return res;
+      })
+      .catch((err) => {
+        console.warn("Backend API fetch failed, falling back to client router:", err);
+        return handleClientRoute(urlStr, init);
+      });
   }
 
   return originalFetch(input, init);

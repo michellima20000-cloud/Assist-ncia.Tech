@@ -2,9 +2,9 @@ import React, { useState, useEffect } from "react";
 import {
   Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
   Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode,
-  ShoppingBag, MessageSquare, Eye, EyeOff, Moon, Sun, Palette, Building2
+  ShoppingBag, MessageSquare, Eye, EyeOff, Moon, Sun, Palette
 } from "lucide-react";
-import { User, Atendimento, DashboardStats, ThemeConfig, Company } from "./types";
+import { User, Atendimento, DashboardStats, ThemeConfig } from "./types";
 import { getStoredTheme, applyThemeToDOM, persistTheme, getHeaderBackground } from "./lib/theme";
 
 // Component imports
@@ -23,7 +23,6 @@ import Vendas from "./components/Vendas";
 import FeedbackAutomation from "./components/FeedbackAutomation";
 import ListaReposicao from "./components/ListaReposicao";
 import Personalizacao from "./components/Personalizacao";
-import CompanyManager from "./components/CompanyManager";
 import { ExpensesModal } from "./components/ExpensesModal";
 
 type ActiveTab =
@@ -40,8 +39,7 @@ type ActiveTab =
   | "vendas"
   | "feedback"
   | "reposicao"
-  | "personalizacao"
-  | "companies";
+  | "personalizacao";
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<User | null>(null);
@@ -68,33 +66,6 @@ export default function App() {
     return localStorage.getItem("hideValues") === "true";
   });
   const [isExpensesModalOpen, setIsExpensesModalOpen] = useState(false);
-
-  // Multi-Tenant Active Store (SuperAdmin switcher)
-  const [activeCompany, setActiveCompany] = useState<Company | null>(() => {
-    try {
-      const saved = localStorage.getItem("active_company");
-      if (saved) return JSON.parse(saved);
-    } catch (_) {}
-    return null;
-  });
-
-  const isSuperAdmin = currentUser?.role === "superadmin" ||
-    currentUser?.email?.toLowerCase().trim() === "michel.lima20000@gmail.com" ||
-    currentUser?.email?.toLowerCase().trim() === "michel.lima@gmail.com";
-  const isAdmin = currentUser?.role === "admin" || isSuperAdmin;
-
-  useEffect(() => {
-    if (currentUser) {
-      if (!isSuperAdmin) {
-        const compId = currentUser.companyId || "comp-principal";
-        localStorage.setItem("active_company_id", compId);
-        localStorage.removeItem("active_company");
-      } else {
-        const compId = activeCompany?.id || currentUser.companyId || "comp-principal";
-        localStorage.setItem("active_company_id", compId);
-      }
-    }
-  }, [currentUser, activeCompany, isSuperAdmin]);
 
   useEffect(() => {
     localStorage.setItem("hideValues", String(hideValues));
@@ -264,19 +235,14 @@ TOTAL GERAL: R$ ${found.totalAmount.toFixed(2)}`;
     setToken(userToken);
     localStorage.setItem("user_session", JSON.stringify(user));
     localStorage.setItem("user_token", userToken);
-    const compId = user.companyId || "comp-principal";
-    localStorage.setItem("active_company_id", compId);
     setActiveTab("dashboard");
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
     setToken(null);
-    setActiveCompany(null);
     localStorage.removeItem("user_session");
     localStorage.removeItem("user_token");
-    localStorage.removeItem("active_company");
-    localStorage.removeItem("active_company_id");
     setActiveTab("dashboard");
   };
 
@@ -371,6 +337,8 @@ ________________________`;
     return <Login onLoginSuccess={handleLoginSuccess} />;
   }
 
+  const isAdmin = currentUser.role === "admin";
+
   return (
     <div className={`min-h-screen flex flex-col font-sans transition-colors duration-200 ${
       theme.mode === "pure_black" ? "bg-black text-white" : theme.mode === "black" ? "bg-[#0b0f17] text-slate-100" : "bg-slate-50 text-slate-800"
@@ -394,49 +362,22 @@ ________________________`;
               </div>
             )}
             <div>
-              <div className="flex items-center gap-1.5">
-                <h1 className="text-base font-extrabold tracking-tight">
-                  {activeCompany?.name || theme.companyName || currentUser.companyName || "Minha Assistência.Tech"}
-                </h1>
-                {isSuperAdmin && (
-                  <span className="text-[9px] bg-amber-400 text-slate-950 font-black px-1.5 py-0.5 rounded-full uppercase tracking-wider shadow-xs">
-                    SuperAdmin
-                  </span>
-                )}
-              </div>
-              <p className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">
-                {activeCompany ? `Loja Operando: ${activeCompany.name}` : (currentUser.companyName || "Módulos Conectados")}
-              </p>
+              <h1 className="text-base font-extrabold tracking-tight">
+                {theme.companyName || "Minha Assistência.Tech"}
+              </h1>
+              <p className="text-[10px] text-blue-100 font-semibold uppercase tracking-wider">Módulos Conectados</p>
             </div>
           </div>
 
           <div className="flex items-center gap-4">
             <div className="text-right hidden sm:block">
               <p className="text-xs font-bold leading-none">{currentUser.name}</p>
-              <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider inline-block mt-1 ${
-                isSuperAdmin ? "bg-amber-400 text-slate-950 font-black shadow-xs" : "bg-white/15 text-blue-50"
-              }`}>
-                {isSuperAdmin ? "👑 Admin do Sistema" : (isAdmin ? "Admin da Loja" : "Funcionário")}
+              <span className="text-[9px] bg-white/15 px-1.5 py-0.5 rounded-full text-blue-50 font-bold uppercase tracking-wider inline-block mt-1">
+                {isAdmin ? "Administrador" : "Funcionário"}
               </span>
             </div>
 
             <div className="flex items-center gap-1">
-              {isSuperAdmin && (
-                <button
-                  onClick={() => setActiveTab("companies")}
-                  className={`p-2 rounded-xl text-white transition flex items-center justify-center gap-1.5 ${
-                    activeTab === "companies"
-                      ? "bg-amber-400 text-slate-950 font-black shadow-sm"
-                      : "bg-amber-400/20 hover:bg-amber-400/30 text-amber-200 border border-amber-400/30"
-                  }`}
-                  title="Gerenciamento Geral de Lojas & Multi-Empresas"
-                >
-                  <Building2 className="w-5 h-5 text-amber-300" />
-                  <span className="text-xs font-extrabold hidden lg:inline text-amber-200">
-                    LOJAS
-                  </span>
-                </button>
-              )}
               <button
                 onClick={() => setHideValues(prev => !prev)}
                 className={`p-2 rounded-xl text-white transition flex items-center justify-center gap-1.5 ${
@@ -508,43 +449,6 @@ ________________________`;
         </div>
       </header>
 
-      {/* SUPERADMIN MULTI-TENANT BAR */}
-      {isSuperAdmin && (
-        <div className="bg-slate-900 border-b border-amber-500/30 text-slate-200 px-4 py-2 text-xs select-none">
-          <div className="max-w-6xl mx-auto flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-              <span className="font-bold text-amber-300">Painel do Administrador do Sistema:</span>
-              <span>
-                Visualizando dados de: <strong className="text-white underline">{activeCompany?.name || currentUser.companyName || "Loja Principal"}</strong>
-              </span>
-            </div>
-            <div className="flex items-center gap-2">
-              <button
-                onClick={() => setActiveTab("companies")}
-                className="px-2.5 py-1 bg-amber-400 hover:bg-amber-300 text-slate-950 text-xs font-extrabold rounded-lg flex items-center gap-1 transition shadow-xs"
-              >
-                <Building2 className="w-3.5 h-3.5" />
-                {activeTab === "companies" ? "Em Lojas" : "Painel Geral de Lojas"}
-              </button>
-              {activeCompany && (
-                <button
-                  onClick={() => {
-                    setActiveCompany(null);
-                    localStorage.removeItem("active_company");
-                    localStorage.setItem("active_company_id", currentUser.companyId || "comp-principal");
-                    fetchStats();
-                  }}
-                  className="px-2 py-1 bg-white/10 hover:bg-white/20 text-slate-300 text-xs font-medium rounded-lg transition"
-                >
-                  Restaurar Padrão
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* WORKSPACE AREA */}
       <main className="flex-1 max-w-6xl w-full mx-auto p-4 relative">
         {/* Background Logo Watermark / Wallpaper */}
@@ -596,11 +500,22 @@ ________________________`;
                     <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
                       <FileText className="w-5 h-5" />
                     </div>
-                    <div>
+                    <div className="min-w-0">
                       <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento Diário</p>
                       <p className="text-lg font-black text-emerald-600 font-mono">
                         {hideValues ? "R$ ••••" : `R$ ${(stats?.financials?.totalCollected ?? 0).toFixed(2)}`}
                       </p>
+                      {!hideValues && (stats?.financials?.totalCollected ?? 0) > 0 && (
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-500 font-medium truncate mt-0.5">
+                          <span title="Vendas diretas no balcão">
+                            Vendas: <strong className="text-slate-700">R$ {((stats?.financials?.directSalesTotal ?? 0)).toFixed(2)}</strong>
+                          </span>
+                          <span>•</span>
+                          <span title="Ordens de Serviço finalizadas">
+                            OS: <strong className="text-slate-700">R$ {((stats?.financials?.serviceOrdersTotal ?? 0)).toFixed(2)}</strong>
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -829,22 +744,6 @@ ________________________`;
                     <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Logo, Fundo & Cores</p>
                   </div>
                 </button>
-
-                {/* LOJAS MULTI-EMPRESAS (SUPERADMIN ONLY) */}
-                {isSuperAdmin && (
-                  <button
-                    onClick={() => setActiveTab("companies")}
-                    className="p-5 bg-gradient-to-br from-slate-900 to-indigo-950 border border-amber-500/30 hover:border-amber-400 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group text-white"
-                  >
-                    <div className="w-12 h-12 bg-amber-400/20 text-amber-300 border border-amber-400/30 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
-                      <Building2 className="w-6 h-6" />
-                    </div>
-                    <div>
-                      <span className="font-extrabold text-sm text-amber-300">LOJAS & EMPRESAS</span>
-                      <p className="text-[10px] text-slate-300 font-medium mt-0.5">Admin Geral Multi-Lojas</p>
-                    </div>
-                  </button>
-                )}
               </div>
             </div>
 
@@ -994,6 +893,7 @@ TERMO: Autorizo o diagnóstico.`;
             onDataChange={fetchStats}
             currentTheme={theme}
             onThemeChange={handleThemeChange}
+            currentUser={currentUser}
           />
         )}
 
@@ -1028,22 +928,6 @@ TERMO: Autorizo o diagnóstico.`;
             initialView="sold"
             onBack={() => setActiveTab("dashboard")}
             onPrintReceipt={(content) => triggerReceiptPreview("Lista de Reposição", content)}
-          />
-        )}
-
-        {/* GERÊNCIA MULTI-EMPRESAS & LOJAS (SUPERADMIN) */}
-        {activeTab === "companies" && isSuperAdmin && (
-          <CompanyManager
-            currentUser={currentUser}
-            activeCompanyId={activeCompany?.id || currentUser.companyId || "comp-principal"}
-            onSelectCompany={(selectedComp) => {
-              setActiveCompany(selectedComp);
-              localStorage.setItem("active_company", JSON.stringify(selectedComp));
-              localStorage.setItem("active_company_id", selectedComp.id);
-              fetchStats();
-              setActiveTab("dashboard");
-            }}
-            onClose={() => setActiveTab("dashboard")}
           />
         )}
         </div>

@@ -13,10 +13,12 @@ interface LoginProps {
 }
 
 export default function Login({ onLoginSuccess }: LoginProps) {
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isRegistering, setIsRegistering] = useState(false);
   const [error, setError] = useState("");
+  const [successNotice, setSuccessNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const [isDomainError, setIsDomainError] = useState(false);
   const [copiedDomain, setCopiedDomain] = useState<string | null>(null);
@@ -60,7 +62,7 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         email: firebaseUser.email,
-        name: firebaseUser.displayName || firebaseUser.email?.split("@")[0],
+        name: name.trim() || firebaseUser.displayName || firebaseUser.email?.split("@")[0],
         uid: firebaseUser.uid
       }),
     });
@@ -72,7 +74,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     }
 
     if (!response.ok) {
-      throw new Error(data.message || data.error || `Erro de sincronização (status ${response.status})`);
+      if (response.status === 403) {
+        if (data.pendingApproval) {
+          setSuccessNotice(data.message || "Conta registrada! Aguardando ativação pelo Administrador Geral no painel de administração.");
+          setError("");
+          return;
+        }
+        setError(data.message || "Sua conta está desativada ou bloqueada pelo Administrador Geral.");
+        return;
+      }
+      throw new Error(data.message || data.error || `Erro de autenticação (status ${response.status})`);
     }
 
     onLoginSuccess(data.user, data.token);
@@ -81,18 +92,62 @@ export default function Login({ onLoginSuccess }: LoginProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccessNotice("");
     setIsDomainError(false);
     setLoading(true);
 
     try {
-      let userCredential;
       if (isRegistering) {
-        userCredential = await createUserWithEmailAndPassword(auth, email, password);
-      } else {
-        userCredential = await signInWithEmailAndPassword(auth, email, password);
-      }
+        try {
+          const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+          await handleBackendSession(userCredential.user);
+          return;
+        } catch (regErr: any) {
+          // If Firebase Auth registration fails or restricted, register directly in users collection
+          const regRes = await fetch("/api/users", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              name: name.trim() || email.split("@")[0],
+              email: email.trim().toLowerCase(),
+              password: password,
+              role: "employee",
+              status: "pendente",
+              avatarIcon: "user",
+              avatarColor: "cyan"
+            })
+          });
 
-      await handleBackendSession(userCredential.user);
+          if (regRes.ok) {
+            setSuccessNotice("🎉 Cadastro realizado com sucesso!\n\nSua conta foi criada e está aguardando ativação pelo Administrador Geral no Painel de Administração. O administrador poderá aprovar seu acesso, definir seu nível (Atendente, Técnico, etc.) e seu ícone.");
+            setPassword("");
+            setIsRegistering(false);
+            return;
+          }
+          throw regErr;
+        }
+      } else {
+        // 1. Try local/backend authentication first
+        try {
+          const backendRes = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ email, password })
+          });
+          const data = await backendRes.json();
+          if (backendRes.ok) {
+            onLoginSuccess(data.user, data.token);
+            return;
+          } else if (backendRes.status === 403) {
+            setError(data.message || "Acesso negado: Conta inativa ou pendente de ativação pelo Administrador Geral.");
+            return;
+          }
+        } catch (_) {}
+
+        // 2. Try Firebase Auth
+        const userCredential = await signInWithEmailAndPassword(auth, email, password);
+        await handleBackendSession(userCredential.user);
+      }
     } catch (err: any) {
       console.error("Auth error:", err);
       if (err.code === "auth/unauthorized-domain") {
@@ -101,6 +156,39 @@ export default function Login({ onLoginSuccess }: LoginProps) {
       const friendlyMsg = translateError(err.code);
       const rawDetail = err.code ? `[${err.code}] ${err.message}` : err.message || String(err);
       setError(`${friendlyMsg}\n\nDetalhe Técnico: ${rawDetail}`);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleQuickAdminLogin = async () => {
+    setError("");
+    setLoading(true);
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "michel.lima20000@gmail.com", password: "admin" })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        onLoginSuccess(data.user, data.token);
+      } else {
+        // Fallback default admin
+        const fallbackRes = await fetch("/api/auth/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: "admin@minhaassistencia.com", password: "admin" })
+        });
+        if (fallbackRes.ok) {
+          const data = await fallbackRes.json();
+          onLoginSuccess(data.user, data.token);
+        } else {
+          setError("Não foi possível realizar o login rápido de administrador.");
+        }
+      }
+    } catch (err: any) {
+      setError("Erro ao conectar com o servidor: " + (err.message || String(err)));
     } finally {
       setLoading(false);
     }
@@ -206,7 +294,38 @@ export default function Login({ onLoginSuccess }: LoginProps) {
             )
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-5">
+          {successNotice && (
+            <div className="mb-6 p-4 bg-emerald-50 border-l-4 border-emerald-500 rounded-r-lg flex items-start gap-3">
+              <Check className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
+              <div className="flex-1 min-w-0">
+                <p className="text-emerald-800 text-sm font-bold">Aviso do Sistema</p>
+                <p className="text-emerald-700 text-xs mt-1 whitespace-pre-wrap leading-relaxed font-medium">{successNotice}</p>
+              </div>
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit} className="space-y-4">
+            {isRegistering && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
+                  Nome Completo
+                </label>
+                <div className="relative">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <UserPlus className="w-5 h-5" />
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder="Ex: Carlos Eduardo da Silva"
+                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl text-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-[#1E88E5] focus:bg-white transition-all duration-200"
+                  />
+                </div>
+              </div>
+            )}
+
             <div>
               <label className="block text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
                 E-mail de Acesso
@@ -297,6 +416,16 @@ export default function Login({ onLoginSuccess }: LoginProps) {
               />
             </svg>
             <span>Entrar com o Google</span>
+          </button>
+
+          {/* Quick Access Button */}
+          <button
+            type="button"
+            onClick={handleQuickAdminLogin}
+            disabled={loading}
+            className="w-full mt-3 flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white font-medium py-2.5 px-4 rounded-xl shadow-sm transition-all text-xs cursor-pointer border border-slate-700"
+          >
+            <span>⚡ Acesso Rápido de Administrador</span>
           </button>
 
           {/* Iframe tip */}

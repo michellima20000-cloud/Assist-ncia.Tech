@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from "react";
 import {
   Building2, Plus, Users, Shield, ArrowRight, RefreshCw, CheckCircle2,
-  Search, ExternalLink, Edit3, Trash2, X, Store, Check, AlertCircle, Eye
+  Search, ExternalLink, Edit3, Trash2, X, Store, Check, AlertCircle, Eye,
+  CreditCard
 } from "lucide-react";
 import { Company, User } from "../types";
+import SubscriptionManager from "./SubscriptionManager";
 
 interface CompanyManagerProps {
   currentUser: User;
@@ -22,7 +24,7 @@ export default function CompanyManager({
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [activeTab, setActiveTab] = useState<"companies" | "users">("companies");
+  const [activeTab, setActiveTab] = useState<"companies" | "users" | "subscriptions">("companies");
 
   // Create / Edit modal state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -33,6 +35,7 @@ export default function CompanyManager({
   const [formPhone, setFormPhone] = useState("");
   const [formCnpj, setFormCnpj] = useState("");
   const [formAddress, setFormAddress] = useState("");
+  const [formPlan, setFormPlan] = useState("trial");
   const [saving, setSaving] = useState(false);
   const [feedbackMsg, setFeedbackMsg] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -71,6 +74,7 @@ export default function CompanyManager({
     setFormPhone("");
     setFormCnpj("");
     setFormAddress("");
+    setFormPlan("trial");
     setIsModalOpen(true);
   };
 
@@ -82,6 +86,7 @@ export default function CompanyManager({
     setFormPhone(comp.phone || "");
     setFormCnpj(comp.cnpj || "");
     setFormAddress(comp.address || "");
+    setFormPlan((comp.plan as string) || "trial");
     setIsModalOpen(true);
   };
 
@@ -102,7 +107,8 @@ export default function CompanyManager({
         ownerName: formOwnerName.trim(),
         phone: formPhone.trim(),
         cnpj: formCnpj.trim(),
-        address: formAddress.trim()
+        address: formAddress.trim(),
+        plan: formPlan
       };
 
       let res: Response;
@@ -272,7 +278,18 @@ export default function CompanyManager({
             }`}
           >
             <Building2 className="w-4 h-4" />
-            <span>Lojas & Assistências ({companies.length})</span>
+            <span>Lojas ({companies.length})</span>
+          </button>
+          <button
+            onClick={() => setActiveTab("subscriptions")}
+            className={`px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2 transition ${
+              activeTab === "subscriptions"
+                ? "bg-amber-500 text-slate-950 shadow-sm font-black"
+                : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
+            }`}
+          >
+            <CreditCard className="w-4 h-4" />
+            <span>Assinaturas & Planos</span>
           </button>
           <button
             onClick={() => setActiveTab("users")}
@@ -283,7 +300,7 @@ export default function CompanyManager({
             }`}
           >
             <Users className="w-4 h-4" />
-            <span>Todos Usuários ({allUsers.length})</span>
+            <span>Usuários ({allUsers.length})</span>
           </button>
         </div>
 
@@ -501,6 +518,17 @@ export default function CompanyManager({
         </div>
       )}
 
+      {/* Tab Content: Subscriptions */}
+      {activeTab === "subscriptions" && (
+        <SubscriptionManager
+          currentUser={currentUser}
+          isSuperAdmin={true}
+          activeCompanyId={activeCompanyId}
+          onSwitchCompany={onSelectCompany}
+          onClose={onClose}
+        />
+      )}
+
       {/* Modal: Create or Edit Company */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 overflow-y-auto">
@@ -592,6 +620,23 @@ export default function CompanyManager({
                     className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase mb-1">
+                  Plano de Assinatura
+                </label>
+                <select
+                  value={formPlan}
+                  onChange={(e) => setFormPlan(e.target.value)}
+                  className="w-full px-3.5 py-2.5 text-sm border border-slate-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                >
+                  <option value="trial">Período de Teste Grátis (7 dias - 2 contas: 1 Admin + 1 Func)</option>
+                  <option value="mensal_1">Plano Mensal (1 Conta) - R$ 60,00/mês</option>
+                  <option value="mensal_2">Plano Mensal (2 Contas) - R$ 90,00/mês (1 Admin + 1 Func)</option>
+                  <option value="anual_1">Plano Anual (1 Conta) - R$ 588,00/ano (18% OFF - R$ 49/mês)</option>
+                  <option value="anual_2">Plano Anual (2 Contas) - R$ 888,00/ano (Super Desconto - R$ 74/mês)</option>
+                </select>
               </div>
 
               <div>

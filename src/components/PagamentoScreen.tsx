@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { ArrowLeft, CreditCard, DollarSign, RefreshCw, Printer, ShieldCheck, Sparkles, Layers, AlertTriangle, CheckCircle } from "lucide-react";
+import { ArrowLeft, CreditCard, DollarSign, RefreshCw, Printer, ShieldCheck, Sparkles, Layers, AlertTriangle, CheckCircle, Loader2 } from "lucide-react";
 import { Atendimento, Cliente } from "../types";
 
 interface PagamentoScreenProps {
@@ -16,6 +16,7 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
   const [receivedAmount, setReceivedAmount] = useState(atendimento.totalAmount.toString());
   const [method, setMethod] = useState<'cash' | 'pix' | 'debit' | 'credit' | 'split'>('cash');
   const [printReceipt, setPrintReceipt] = useState(true);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Split payment state
   const [splitCash, setSplitCash] = useState("");
@@ -124,6 +125,8 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
   const change = Math.max(0, receivedNum - totalAmount);
 
   const handleFinalize = async () => {
+    if (isSubmitting) return;
+
     if (method === "cash" && receivedNum < totalAmount) {
       alert("Valor recebido menor que o valor total do atendimento!");
       return;
@@ -170,6 +173,7 @@ export default function PagamentoScreen({ atendimento, notesFin, onBack, onPayme
       notesFin
     };
 
+    setIsSubmitting(true);
     try {
       const res = await fetch("/api/pagamentos", {
         method: "POST",
@@ -218,9 +222,11 @@ GARANTIA: ${atendimento.garantia || "Garantia de 90 dias (3 meses)"}`;
 
         onPaymentSuccess(printReceipt ? receiptStr : "", client ? client.phone : "", client ? client.name : "");
       } else {
+        setIsSubmitting(false);
         alert("Erro ao salvar pagamento.");
       }
     } catch (err) {
+      setIsSubmitting(false);
       console.error(err);
     }
   };
@@ -627,12 +633,19 @@ GARANTIA: ${atendimento.garantia || "Garantia de 90 dias (3 meses)"}`;
 
         <button
           onClick={handleFinalize}
-          className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-3.5 px-4 rounded-xl transition shadow-lg shadow-emerald-50 text-xs uppercase tracking-wider disabled:opacity-50"
-          disabled={method === "split" && (splitRemaining > 0 || splitOverpaid > 0)}
+          disabled={isSubmitting || (method === "split" && (splitRemaining > 0 || splitOverpaid > 0))}
+          className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-3.5 px-4 rounded-xl transition shadow-lg shadow-emerald-50 text-xs uppercase tracking-wider disabled:opacity-50 flex items-center justify-center gap-2"
         >
-          {method === "split" && splitRemaining > 0
-            ? `FALTA DISTRIBUIR R$ ${splitRemaining.toFixed(2)}`
-            : "Confirmar Recebimento & Entregar Aparelho"}
+          {isSubmitting ? (
+            <>
+              <Loader2 className="w-4 h-4 animate-spin" />
+              Processando Pagamento...
+            </>
+          ) : method === "split" && splitRemaining > 0 ? (
+            `FALTA DISTRIBUIR R$ ${splitRemaining.toFixed(2)}`
+          ) : (
+            "Confirmar Recebimento & Entregar Aparelho"
+          )}
         </button>
       </div>
     </div>

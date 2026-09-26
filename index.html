@@ -9,23 +9,41 @@
     <meta property="og:description" content="Sistema completo de gestão para assistência técnica de celulares e eletrônicos" />
     <script>
       (function() {
-        function isViteWSError(err) {
-          if (!err) return false;
-          var str = typeof err === 'string' ? err : (err && (err.message || err.stack || err.reason)) || String(err);
-          if (typeof str !== 'string') return false;
-          var lower = str.toLowerCase();
-          return (
-            lower.indexOf('websocket') !== -1 ||
-            lower.indexOf('vite') !== -1 ||
-            lower.indexOf('hmr') !== -1 ||
-            lower.indexOf('ws://') !== -1 ||
-            lower.indexOf('wss://') !== -1 ||
-            lower.indexOf('closed without') !== -1 ||
-            lower.indexOf('closed before') !== -1
-          );
+        var origError = console.error;
+        var origWarn = console.warn;
+        function isViteWSError(args) {
+          if (!args) return false;
+          for (var i = 0; i < args.length; i++) {
+            var a = args[i];
+            if (!a) continue;
+            var str = typeof a === 'string' ? a : (a && (a.message || a.stack || a.reason)) || String(a);
+            if (typeof str === 'string') {
+              var lower = str.toLowerCase();
+              if (
+                lower.indexOf('[vite]') !== -1 ||
+                lower.indexOf('websocket closed without opened') !== -1 ||
+                (lower.indexOf('websocket') !== -1 && lower.indexOf('failed to connect') !== -1) ||
+                lower.indexOf('closed without opened') !== -1
+              ) {
+                return true;
+              }
+            }
+          }
+          return false;
         }
+
+        console.error = function() {
+          if (isViteWSError(arguments)) return;
+          origError.apply(console, arguments);
+        };
+
+        console.warn = function() {
+          if (isViteWSError(arguments)) return;
+          origWarn.apply(console, arguments);
+        };
+
         window.addEventListener('unhandledrejection', function(event) {
-          if (isViteWSError(event.reason) || isViteWSError(event)) {
+          if (isViteWSError([event.reason, event])) {
             event.preventDefault();
             event.stopPropagation();
             if (typeof event.stopImmediatePropagation === 'function') {
@@ -33,8 +51,9 @@
             }
           }
         }, true);
+
         window.addEventListener('error', function(event) {
-          if (isViteWSError(event.message) || isViteWSError(event.error) || isViteWSError(event.filename)) {
+          if (isViteWSError([event.message, event.error, event.filename])) {
             event.preventDefault();
             event.stopPropagation();
             if (typeof event.stopImmediatePropagation === 'function') {

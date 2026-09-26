@@ -13,7 +13,6 @@ import {
   getDocs,
   getDoc,
   setDoc,
-  updateDoc,
   deleteDoc,
   runTransaction,
   query,
@@ -31,7 +30,6 @@ const DB_FILE = path.join(process.cwd(), "database.json");
 // Define interface for local database types
 import {
   User,
-  Company,
   Cliente,
   Atendimento,
   Servico,
@@ -45,30 +43,6 @@ import {
   Venda,
   VendaItem
 } from "./src/types.ts";
-
-export const DEFAULT_COMPANY_ID = "comp-principal";
-export const DEFAULT_COMPANY_NAME = "Minha Assistência Principal";
-export const SUPER_ADMIN_EMAILS = [
-  "michel.lima20000@gmail.com",
-  "michel.lima@gmail.com"
-];
-
-export function isUserSuperAdmin(email?: string, role?: string): boolean {
-  if (role === "superadmin") return true;
-  if (!email) return false;
-  const clean = email.toLowerCase().trim();
-  return SUPER_ADMIN_EMAILS.includes(clean);
-}
-
-export function getRequestCompanyId(req: express.Request): string {
-  const fromHeader = req.headers["x-company-id"] as string;
-  const fromQuery = req.query.companyId as string;
-  const raw = fromHeader || fromQuery;
-  if (raw && raw.trim() && raw.trim() !== "undefined" && raw.trim() !== "null") {
-    return raw.trim();
-  }
-  return DEFAULT_COMPANY_ID;
-}
 
 // Initialize Firebase Client SDK with configuration from firebase-applet-config.json
 const configPath = path.join(process.cwd(), "firebase-applet-config.json");
@@ -160,21 +134,13 @@ function convertFromFirestore(obj: any): any {
   return obj;
 }
 
-// Helper methods to operate Firestore collections with Multi-Tenant isolation
-async function getCollection<T>(collectionName: string, companyId?: string): Promise<T[]> {
+// Helper methods to operate Firestore collections
+async function getCollection<T>(collectionName: string): Promise<T[]> {
   const colRef = collection(db, collectionName);
   const snapshot = await getDocs(colRef);
   const list: any[] = [];
   snapshot.forEach(docSnap => {
-    const item = convertFromFirestore({ id: docSnap.id, ...docSnap.data() });
-    if (!companyId) {
-      list.push(item);
-    } else {
-      const docCompanyId = item.companyId || DEFAULT_COMPANY_ID;
-      if (docCompanyId === companyId) {
-        list.push(item);
-      }
-    }
+    list.push(convertFromFirestore({ id: docSnap.id, ...docSnap.data() }));
   });
   return list;
 }
@@ -213,118 +179,9 @@ async function deleteDocument(collectionName: string, docId: string): Promise<vo
   await deleteDoc(docRef);
 }
 
-// Seed isolated default catalog and settings for a new company
-async function seedCompanyDefaults(companyId: string, companyName?: string) {
-  try {
-    const defaultItens = [
-      { id: `item-${companyId}-1`, name: "Celular", companyId },
-      { id: `item-${companyId}-2`, name: "Notebook", companyId },
-      { id: `item-${companyId}-3`, name: "Tablet", companyId },
-      { id: `item-${companyId}-4`, name: "Televisor", companyId },
-      { id: `item-${companyId}-5`, name: "Console de Videogame", companyId },
-      { id: `item-${companyId}-6`, name: "Smartwatch", companyId },
-      { id: `item-${companyId}-7`, name: "Monitor", companyId },
-      { id: `item-${companyId}-8`, name: "Caixa de Som Bluetooth", companyId }
-    ];
-    for (const it of defaultItens) {
-      await setDocument("itens", it.id, it);
-    }
-
-    const defaultMarcas = [
-      { id: `marca-${companyId}-1`, name: "Samsung", companyId },
-      { id: `marca-${companyId}-2`, name: "Apple", companyId },
-      { id: `marca-${companyId}-3`, name: "Motorola", companyId },
-      { id: `marca-${companyId}-4`, name: "Xiaomi", companyId },
-      { id: `marca-${companyId}-5`, name: "LG", companyId },
-      { id: `marca-${companyId}-6`, name: "Dell", companyId },
-      { id: `marca-${companyId}-7`, name: "Lenovo", companyId },
-      { id: `marca-${companyId}-8`, name: "Asus", companyId }
-    ];
-    for (const m of defaultMarcas) {
-      await setDocument("marcas", m.id, m);
-    }
-
-    const defaultServicos = [
-      { id: `srv-${companyId}-1`, name: "Troca de Tela / Display", price: 250.00, companyId, position: 1, isPriceCustom: false, description: "Substituição completa do módulo frontal" },
-      { id: `srv-${companyId}-2`, name: "Troca de Bateria", price: 140.00, companyId, position: 2, isPriceCustom: false, description: "Bateria nova homologada" },
-      { id: `srv-${companyId}-3`, name: "Reparo de Conector de Carga", price: 120.00, companyId, position: 3, isPriceCustom: false, description: "Troca ou ressolda do dock de carga" },
-      { id: `srv-${companyId}-4`, name: "Desoxidação / Limpeza Química", price: 180.00, companyId, position: 4, isPriceCustom: false, description: "Banho ultrassônico pós-contato com água" },
-      { id: `srv-${companyId}-5`, name: "Formatação e Reinstalação de OS", price: 90.00, companyId, position: 5, isPriceCustom: false, description: "Instalação limpa com backup" }
-    ];
-    for (const s of defaultServicos) {
-      await setDocument("servicos", s.id, s);
-    }
-
-    const defaultConvenios = [
-      { id: `conv-${companyId}-1`, name: "Sem Convênio (Padrão)", discountPercent: 0, companyId },
-      { id: `conv-${companyId}-2`, name: "Cliente VIP (10% de Desconto)", discountPercent: 10, companyId }
-    ];
-    for (const c of defaultConvenios) {
-      await setDocument("convenios", c.id, c);
-    }
-
-    // Company OS control number doc
-    await setDocument("config", `os_${companyId}`, {
-      nextControlNumber: 1,
-      companyId,
-      createdAt: new Date().toISOString()
-    });
-
-    // Company Theme config doc
-    await setDocument("config", `theme_${companyId}`, {
-      mode: "light",
-      primaryColor: "#1E88E5",
-      headerColor: "#1E88E5",
-      headerStyle: "primary",
-      cardContrast: "normal",
-      companyName: companyName || "Minha Assistência.Tech",
-      logoUrl: "",
-      showLogoInHeader: true,
-      showLogoAsBackground: true,
-      backgroundLogoOpacity: 0.07,
-      companyId,
-      updatedAt: new Date().toISOString()
-    });
-  } catch (err) {
-    console.error(`Error seeding company defaults for ${companyId}:`, err);
-  }
-}
-
 // Seed local database.json data to Firestore if it's empty
 async function seedDatabase() {
   try {
-    // Ensure default primary company exists
-    const compRef = doc(db, "companies", DEFAULT_COMPANY_ID);
-    const compSnap = await getDoc(compRef);
-    if (!compSnap.exists()) {
-      console.log("Creating default primary company in Firestore...");
-      await setDoc(compRef, convertToFirestore({
-        id: DEFAULT_COMPANY_ID,
-        name: DEFAULT_COMPANY_NAME,
-        ownerEmail: "michel.lima20000@gmail.com",
-        ownerName: "Michel Lima (Admin Geral)",
-        phone: "",
-        cnpj: "",
-        address: "",
-        createdAt: new Date().toISOString()
-      }));
-    }
-
-    // Ensure superadmin accounts have role: "superadmin"
-    for (const superEmail of SUPER_ADMIN_EMAILS) {
-      const superQuery = query(collection(db, "users"), where("email", "==", superEmail));
-      const superSnap = await getDocs(superQuery);
-      if (!superSnap.empty) {
-        for (const uDoc of superSnap.docs) {
-          await setDoc(doc(db, "users", uDoc.id), {
-            role: "superadmin",
-            companyId: DEFAULT_COMPANY_ID,
-            companyName: DEFAULT_COMPANY_NAME
-          }, { merge: true });
-        }
-      }
-    }
-
     const configRef = doc(db, "config", "main");
     const configSnap = await getDoc(configRef);
     
@@ -344,69 +201,58 @@ async function seedDatabase() {
       }));
     }
 
-    // Ensure company OS config exists for default company
-    const osDefaultRef = doc(db, "config", `os_${DEFAULT_COMPANY_ID}`);
-    const osDefaultSnap = await getDoc(osDefaultRef);
-    if (!osDefaultSnap.exists()) {
-      await setDoc(osDefaultRef, convertToFirestore({
-        nextControlNumber: 1,
-        companyId: DEFAULT_COMPANY_ID,
-        createdAt: new Date().toISOString()
-      }));
-    }
-
     // Comprehensive default data for automatic seeding if collections are empty
     const defaultData: { [key: string]: any[] } = {
       itens: [
-        { id: "item-1", name: "Celular", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-2", name: "Notebook", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-3", name: "Tablet", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-4", name: "Televisor", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-5", name: "Console de Videogame", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-6", name: "Smartwatch", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-7", name: "Monitor", companyId: DEFAULT_COMPANY_ID },
-        { id: "item-8", name: "Caixa de Som Bluetooth", companyId: DEFAULT_COMPANY_ID }
+        { id: "item-1", name: "Celular" },
+        { id: "item-2", name: "Notebook" },
+        { id: "item-3", name: "Tablet" },
+        { id: "item-4", name: "Televisor" },
+        { id: "item-5", name: "Console de Videogame" },
+        { id: "item-6", name: "Smartwatch" },
+        { id: "item-7", name: "Monitor" },
+        { id: "item-8", name: "Caixa de Som Bluetooth" }
       ],
       marcas: [
-        { id: "marca-1", name: "Samsung", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-2", name: "Apple", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-3", name: "Motorola", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-4", name: "Xiaomi", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-5", name: "LG", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-6", name: "Dell", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-7", name: "Lenovo", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-8", name: "Asus", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-9", name: "Acer", companyId: DEFAULT_COMPANY_ID },
-        { id: "marca-10", name: "JBL", companyId: DEFAULT_COMPANY_ID }
+        { id: "marca-1", name: "Samsung" },
+        { id: "marca-2", name: "Apple" },
+        { id: "marca-3", name: "Motorola" },
+        { id: "marca-4", name: "Xiaomi" },
+        { id: "marca-5", name: "LG" },
+        { id: "marca-6", name: "Dell" },
+        { id: "marca-7", name: "Lenovo" },
+        { id: "marca-8", name: "Asus" },
+        { id: "marca-9", name: "Acer" },
+        { id: "marca-10", name: "JBL" }
       ],
       servicos: [
-        { id: "srv-1", name: "Troca de Tela / Display", price: 280.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-2", name: "Troca de Bateria", price: 140.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-3", name: "Desoxidação / Limpeza Química", price: 180.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-4", name: "Reparo de Conector de Carga", price: 120.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-5", name: "Formatação e Reinstalação de OS", price: 90.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-6", name: "Reparo de Placa-Mãe / Solda BGA", price: 450.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-7", name: "Limpeza Física + Pasta Térmica", price: 150.00, companyId: DEFAULT_COMPANY_ID },
-        { id: "srv-8", name: "Recuperação de Carcaça/Dobradiça", price: 200.00, companyId: DEFAULT_COMPANY_ID }
+        { id: "srv-1", name: "Troca de Tela / Display", price: 280.00 },
+        { id: "srv-2", name: "Troca de Bateria", price: 140.00 },
+        { id: "srv-3", name: "Desoxidação / Limpeza Química", price: 180.00 },
+        { id: "srv-4", name: "Reparo de Conector de Carga", price: 120.00 },
+        { id: "srv-5", name: "Formatação e Reinstalação de OS", price: 90.00 },
+        { id: "srv-6", name: "Reparo de Placa-Mãe / Solda BGA", price: 450.00 },
+        { id: "srv-7", name: "Limpeza Física + Pasta Térmica", price: 150.00 },
+        { id: "srv-8", name: "Recuperação de Carcaça/Dobradiça", price: 200.00 }
       ],
       produtos: [
-        { id: "prod-1", name: "Película de Vidro 3D", price: 30.00, cost: 8.00, stock: 85, category: "Películas", code: "PEL-3D", companyId: DEFAULT_COMPANY_ID },
-        { id: "prod-2", name: "Carregador Turbo 20W USB-C", price: 75.00, cost: 22.00, stock: 40, category: "Carregadores", code: "CAR-20W", companyId: DEFAULT_COMPANY_ID },
-        { id: "prod-3", name: "Cabo Reforçado USB-C 1.5m", price: 45.00, cost: 12.00, stock: 60, category: "Cabos", code: "CAB-USBC", companyId: DEFAULT_COMPANY_ID },
-        { id: "prod-4", name: "Bateria Compatível iPhone 11", price: 190.00, cost: 70.00, stock: 15, category: "Baterias", code: "BAT-IPH11", companyId: DEFAULT_COMPANY_ID },
-        { id: "prod-5", name: "SSD SATA III 480GB", price: 260.00, cost: 130.00, stock: 20, category: "Armazenamento", code: "SSD-480GB", companyId: DEFAULT_COMPANY_ID },
-        { id: "prod-6", name: "Fone de Ouvido com Fio Stereo", price: 35.00, cost: 10.00, stock: 35, category: "Acessórios", code: "FON-STEREO", companyId: DEFAULT_COMPANY_ID }
+        { id: "prod-1", name: "Película de Vidro 3D", price: 30.00, cost: 8.00, stock: 85, category: "Películas", code: "PEL-3D" },
+        { id: "prod-2", name: "Carregador Turbo 20W USB-C", price: 75.00, cost: 22.00, stock: 40, category: "Carregadores", code: "CAR-20W" },
+        { id: "prod-3", name: "Cabo Reforçado USB-C 1.5m", price: 45.00, cost: 12.00, stock: 60, category: "Cabos", code: "CAB-USBC" },
+        { id: "prod-4", name: "Bateria Compatível iPhone 11", price: 190.00, cost: 70.00, stock: 15, category: "Baterias", code: "BAT-IPH11" },
+        { id: "prod-5", name: "SSD SATA III 480GB", price: 260.00, cost: 130.00, stock: 20, category: "Armazenamento", code: "SSD-480GB" },
+        { id: "prod-6", name: "Fone de Ouvido com Fio Stereo", price: 35.00, cost: 10.00, stock: 35, category: "Acessórios", code: "FON-STEREO" }
       ],
       convenios: [
-        { id: "conv-1", name: "Sem Convênio (Padrão)", discountPercent: 0, companyId: DEFAULT_COMPANY_ID },
-        { id: "conv-2", name: "Parceria Empresa (10% de Desconto)", discountPercent: 10, companyId: DEFAULT_COMPANY_ID },
-        { id: "conv-3", name: "Cliente VIP / Frequente (15% de Desconto)", discountPercent: 15, companyId: DEFAULT_COMPANY_ID },
-        { id: "conv-4", name: "Desconto Amigo (20% de Desconto)", discountPercent: 20, companyId: DEFAULT_COMPANY_ID }
+        { id: "conv-1", name: "Sem Convênio (Padrão)", discountPercent: 0 },
+        { id: "conv-2", name: "Parceria Empresa (10% de Desconto)", discountPercent: 10 },
+        { id: "conv-3", name: "Cliente VIP / Frequente (15% de Desconto)", discountPercent: 15 },
+        { id: "conv-4", name: "Desconto Amigo (20% de Desconto)", discountPercent: 20 }
       ],
       clientes: [
-        { id: "cli-1", name: "José de Souza", phone: "(11) 99999-8888", cpf: "111.222.333-44", email: "jose.souza@gmail.com", address: "Av. Paulista, 1000", city: "São Paulo", notes: "Cliente antigo.", companyId: DEFAULT_COMPANY_ID },
-        { id: "cli-2", name: "Maria Helena Silva", phone: "(21) 98888-7777", cpf: "222.333.444-55", email: "maria.silva@hotmail.com", address: "Rua Copacabana, 500", city: "Rio de Janeiro", notes: "Contato por WhatsApp.", companyId: DEFAULT_COMPANY_ID },
-        { id: "cli-3", name: "Carlos Eduardo Santos", phone: "(31) 97777-6666", cpf: "333.444.555-66", email: "cadu.santos@yahoo.com.br", address: "Av. Afonso Pena, 1200", city: "Belo Horizonte", notes: "Sempre pede desconto.", companyId: DEFAULT_COMPANY_ID }
+        { id: "cli-1", name: "José de Souza", phone: "(11) 99999-8888", cpf: "111.222.333-44", email: "jose.souza@gmail.com", address: "Av. Paulista, 1000", city: "São Paulo", notes: "Cliente antigo." },
+        { id: "cli-2", name: "Maria Helena Silva", phone: "(21) 98888-7777", cpf: "222.333.444-55", email: "maria.silva@hotmail.com", address: "Rua Copacabana, 500", city: "Rio de Janeiro", notes: "Contato por WhatsApp." },
+        { id: "cli-3", name: "Carlos Eduardo Santos", phone: "(31) 97777-6666", cpf: "333.444.555-66", email: "cadu.santos@yahoo.com.br", address: "Av. Afonso Pena, 1200", city: "Belo Horizonte", notes: "Sempre pede desconto." }
       ]
     };
 
@@ -482,7 +328,7 @@ async function startServer() {
       res.setHeader("Access-Control-Allow-Origin", "*");
     }
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With, x-company-id, x-user-id, x-user-role");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Requested-With");
     res.setHeader("Access-Control-Allow-Credentials", "true");
 
     // Handle OPTIONS preflight requests
@@ -514,14 +360,12 @@ async function startServer() {
   // Handle Firebase authenticated session (Google Sign-In or Email Password sign-in)
   app.post("/api/auth/firebase-login", async (req, res) => {
     try {
-      const { email, name, uid, companyName: customCompanyName } = req.body;
+      const { email, name, uid } = req.body;
       if (!email) {
         return res.status(400).json({ message: "E-mail é obrigatório." });
       }
 
-      const emailLower = String(email).toLowerCase().trim();
-      const isSuperAdminEmail = SUPER_ADMIN_EMAILS.includes(emailLower);
-
+      const emailLower = String(email).toLowerCase();
       const colRef = collection(db, "users");
       const q = query(colRef, where("email", "==", emailLower), limit(1));
       const snapshot = await getDocs(q);
@@ -529,84 +373,32 @@ async function startServer() {
       let userToReturn: any = null;
 
       if (snapshot.empty) {
-        let role = "employee";
-        let companyId = DEFAULT_COMPANY_ID;
-        let companyName = DEFAULT_COMPANY_NAME;
-
-        if (isSuperAdminEmail) {
-          role = "superadmin";
-          companyId = DEFAULT_COMPANY_ID;
-          companyName = "Administração Central do Sistema";
-        } else {
-          // New self-registered user creates their own isolated company & store!
-          const newCompanyId = "comp-" + Date.now();
-          const cleanOwnerName = name || emailLower.split("@")[0];
-          companyName = customCompanyName?.trim() || `Assistência ${cleanOwnerName}`;
-          companyId = newCompanyId;
-          role = "admin";
-
-          // Create the isolated store record
-          await setDoc(doc(db, "companies", newCompanyId), convertToFirestore({
-            id: newCompanyId,
-            name: companyName,
-            ownerEmail: emailLower,
-            ownerName: cleanOwnerName,
-            createdAt: new Date().toISOString()
-          }));
-
-          // Seed default items, brands, services, and OS counters for this store
-          await seedCompanyDefaults(newCompanyId, companyName);
-        }
+        // Create user document if it doesn't exist
+        // Automatically make first user, michel.lima20000@gmail.com, or admin@minhaassistencia.com as admin
+        const allUsers = await getCollection<any>("users");
+        const isFirstUser = allUsers.length === 0;
+        const isAdminEmail = emailLower === "michel.lima20000@gmail.com" || emailLower === "admin@minhaassistencia.com";
+        const role = (isFirstUser || isAdminEmail) ? "admin" : "employee";
 
         userToReturn = {
           id: uid,
           name: name || emailLower.split("@")[0],
           email: emailLower,
-          role: role,
-          companyId: companyId,
-          companyName: companyName
+          role: role
         };
 
         // Write the document directly to the users collection with uid as document id
         await setDoc(doc(db, "users", uid), convertToFirestore(userToReturn));
-        console.log(`New user registered: ${emailLower} with role ${role} in store ${companyId}`);
+        console.log(`New Firebase user registered: ${emailLower} with role ${role}`);
       } else {
         const docSnap = snapshot.docs[0];
         const existingData = convertFromFirestore(docSnap.data());
-
-        let role = existingData.role || "employee";
-        if (isSuperAdminEmail) {
-          role = "superadmin";
-        }
-
-        let companyId = existingData.companyId || DEFAULT_COMPANY_ID;
-        let companyName = existingData.companyName || DEFAULT_COMPANY_NAME;
-
-        // Fetch company name if available
-        if (companyId) {
-          const compSnap = await getDoc(doc(db, "companies", companyId));
-          if (compSnap.exists()) {
-            companyName = compSnap.data()?.name || companyName;
-          }
-        }
-
         userToReturn = {
           id: docSnap.id,
           name: existingData.name || name || emailLower.split("@")[0],
           email: emailLower,
-          role: role,
-          companyId: companyId,
-          companyName: companyName
+          role: existingData.role || "employee"
         };
-
-        // Sync updates if needed
-        if (existingData.role !== role || !existingData.companyId) {
-          await setDoc(doc(db, "users", docSnap.id), convertToFirestore({
-            role,
-            companyId,
-            companyName
-          }), { merge: true });
-        }
       }
 
       res.json({
@@ -623,36 +415,26 @@ async function startServer() {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
-      const emailLower = String(email || "").toLowerCase().trim();
       const colRef = collection(db, "users");
       const q = query(
         colRef,
-        where("email", "==", emailLower),
+        where("email", "==", String(email).toLowerCase()),
         where("password", "==", password),
         limit(1)
       );
       const snapshot = await getDocs(q);
         
       if (snapshot.empty) {
-        return res.status(401).json({ message: "E-mail ou senha inválidos." });
+        return res.status(401).json({ message: "E-mail ou senha incorretos." });
       }
-
-      const docSnap = snapshot.docs[0];
-      const userData = convertFromFirestore({ id: docSnap.id, ...docSnap.data() });
+      
+      const doc = snapshot.docs[0];
+      const userData = convertFromFirestore(doc.data());
       const { password: _, ...userWithoutPassword } = userData;
-
-      if (isUserSuperAdmin(emailLower, userWithoutPassword.role)) {
-        userWithoutPassword.role = "superadmin";
-      }
-
-      if (!userWithoutPassword.companyId) {
-        userWithoutPassword.companyId = DEFAULT_COMPANY_ID;
-        userWithoutPassword.companyName = DEFAULT_COMPANY_NAME;
-      }
-
+      
       res.json({
-        user: userWithoutPassword,
-        token: "session-token-" + userWithoutPassword.id
+        user: { id: doc.id, ...userWithoutPassword },
+        token: "mock-session-token-" + doc.id
       });
     } catch (error: any) {
       console.error("Login error:", error);
@@ -663,10 +445,9 @@ async function startServer() {
   // Dashboard Stats
   app.get("/api/stats", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const atendimentos = await getCollection<Atendimento>("atendimentos", companyId);
-      const pagamentos = await getCollection<Pagamento>("pagamentos", companyId);
-      const despesas = await getCollection<Despesa>("despesas", companyId);
+      const atendimentos = await getCollection<Atendimento>("atendimentos");
+      const pagamentos = await getCollection<Pagamento>("pagamentos");
+      const despesas = await getCollection<Despesa>("despesas");
       
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
@@ -705,16 +486,39 @@ async function startServer() {
 
       const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
 
+      // Deduplicate today payments by atendimentoId to prevent double-counting accidental duplicates
+      const seenOrderIds = new Set<string>();
+      const uniqueTodayPayments: Pagamento[] = [];
       todayPagamentos.forEach(p => {
+        if (p.atendimentoId) {
+          if (seenOrderIds.has(p.atendimentoId)) {
+            return;
+          }
+          seenOrderIds.add(p.atendimentoId);
+        }
+        uniqueTodayPayments.push(p);
+      });
+
+      let directSalesTotal = 0;
+      let serviceOrdersTotal = 0;
+
+      uniqueTodayPayments.forEach(p => {
+        const amt = Number(p.totalAmount) || 0;
         if (p.splitPayments) {
           cash += Number(p.splitPayments.cash) || 0;
           card += (Number(p.splitPayments.pix) || 0) + (Number(p.splitPayments.debit) || 0) + (Number(p.splitPayments.credit) || 0);
         } else if (p.method === "cash") {
-          cash += Number(p.totalAmount) || 0;
+          cash += amt;
         } else {
-          card += Number(p.totalAmount) || 0; // Debit/Credit/Pix grouped into Card/Digital
+          card += amt; // Debit/Credit/Pix grouped into Card/Digital
         }
-        totalCollected += Number(p.totalAmount) || 0;
+        totalCollected += amt;
+
+        if (p.atendimentoId) {
+          serviceOrdersTotal += amt;
+        } else {
+          directSalesTotal += amt;
+        }
       });
 
       const pending = atendimentos
@@ -732,7 +536,9 @@ async function startServer() {
           card,
           pending,
           expenses,
-          totalCollected
+          totalCollected,
+          directSalesTotal,
+          serviceOrdersTotal
         }
       });
     } catch (error: any) {
@@ -744,8 +550,7 @@ async function startServer() {
   // Clientes REST
   app.get("/api/clientes", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Cliente>("clientes", companyId);
+      const list = await getCollection<Cliente>("clientes");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -754,11 +559,9 @@ async function startServer() {
 
   app.post("/api/clientes", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "c-" + Date.now();
       const newCliente = {
         id,
-        companyId,
         name: req.body.name || "",
         email: req.body.email || "",
         phone: req.body.phone || "",
@@ -809,8 +612,7 @@ async function startServer() {
   // Atendimentos REST
   app.get("/api/atendimentos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Atendimento>("atendimentos", companyId);
+      const list = await getCollection<Atendimento>("atendimentos");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -819,8 +621,7 @@ async function startServer() {
 
   app.post("/api/atendimentos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const configRef = doc(db, "config", `os_${companyId}`);
+      const configRef = doc(db, "config", "main");
       let nextNum = 1;
 
       await runTransaction(db, async (transaction) => {
@@ -828,7 +629,6 @@ async function startServer() {
         if (!sfDoc.exists()) {
           transaction.set(configRef, convertToFirestore({
             nextControlNumber: 2,
-            companyId,
             printerConfigured: false,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
@@ -849,7 +649,6 @@ async function startServer() {
       
       const newAtendimento: Atendimento = {
         id,
-        companyId,
         controlNumber,
         status: "na_assistencia",
         clienteId: req.body.clienteId,
@@ -910,8 +709,7 @@ async function startServer() {
   // Servicos REST
   app.get("/api/servicos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Servico>("servicos", companyId);
+      const list = await getCollection<Servico>("servicos");
       res.json(list.sort((a, b) => a.position - b.position));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -920,14 +718,13 @@ async function startServer() {
 
   app.post("/api/servicos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "s-" + Date.now();
-      const list = await getCollection<Servico>("servicos", companyId);
-      const servicesCount = list.length;
+      const colRef = collection(db, "servicos");
+      const snapshot = await getDocs(colRef);
+      const servicesCount = snapshot.size;
       
       const newService: Servico = {
         id,
-        companyId,
         name: req.body.name,
         description: req.body.description || "",
         price: Number(req.body.price) || 0,
@@ -974,8 +771,7 @@ async function startServer() {
   // Produtos REST
   app.get("/api/produtos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Produto>("produtos", companyId);
+      const list = await getCollection<Produto>("produtos");
       res.json(list.sort((a, b) => a.position - b.position));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -984,14 +780,13 @@ async function startServer() {
 
   app.post("/api/produtos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "p-" + Date.now();
-      const list = await getCollection<Produto>("produtos", companyId);
-      const count = list.length;
+      const colRef = collection(db, "produtos");
+      const snapshot = await getDocs(colRef);
+      const count = snapshot.size;
       
       const newProduct: Produto = {
         id,
-        companyId,
         name: req.body.name,
         description: req.body.description || "",
         price: Number(req.body.price) || 0,
@@ -1046,8 +841,7 @@ async function startServer() {
   // Despesas REST
   app.get("/api/despesas", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Despesa>("despesas", companyId);
+      const list = await getCollection<Despesa>("despesas");
       list.sort((a, b) => {
         const dateA = a.date ? new Date(a.date).getTime() : 0;
         const dateB = b.date ? new Date(b.date).getTime() : 0;
@@ -1061,11 +855,9 @@ async function startServer() {
 
   app.post("/api/despesas", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "des-" + Date.now();
       const newDespesa: Despesa = {
         id,
-        companyId,
         description: String(req.body.description || "Despesa").trim(),
         amount: Number(req.body.amount) || 0,
         date: req.body.date || new Date().toISOString().substring(0, 10)
@@ -1089,8 +881,7 @@ async function startServer() {
   // Convenios REST
   app.get("/api/convenios", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Convenio>("convenios", companyId);
+      const list = await getCollection<Convenio>("convenios");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1099,11 +890,9 @@ async function startServer() {
 
   app.post("/api/convenios", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "cov-" + Date.now();
       const newConvenio: Convenio = {
         id,
-        companyId,
         name: req.body.name,
         discountPercent: Number(req.body.discountPercent) || 0
       };
@@ -1126,8 +915,7 @@ async function startServer() {
   // Agendamentos REST
   app.get("/api/agendamentos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Agendamento>("agendamentos", companyId);
+      const list = await getCollection<Agendamento>("agendamentos");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1136,11 +924,9 @@ async function startServer() {
 
   app.post("/api/agendamentos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "ag-" + Date.now();
       const newAg: Agendamento = {
         id,
-        companyId,
         clienteId: req.body.clienteId,
         date: req.body.date,
         time: req.body.time,
@@ -1166,8 +952,7 @@ async function startServer() {
   // Marcas REST
   app.get("/api/marcas", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Marca>("marcas", companyId);
+      const list = await getCollection<Marca>("marcas");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1176,11 +961,9 @@ async function startServer() {
 
   app.post("/api/marcas", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "m-" + Date.now();
       const newMarca: Marca = {
         id,
-        companyId,
         name: req.body.name
       };
       await setDocument("marcas", id, newMarca);
@@ -1202,8 +985,7 @@ async function startServer() {
   // Itens REST
   app.get("/api/itens", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Item>("itens", companyId);
+      const list = await getCollection<Item>("itens");
       res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1212,11 +994,9 @@ async function startServer() {
 
   app.post("/api/itens", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "i-" + Date.now();
       const newItem: Item = {
         id,
-        companyId,
         name: req.body.name
       };
       await setDocument("itens", id, newItem);
@@ -1235,21 +1015,11 @@ async function startServer() {
     }
   });
 
-  // Funcionários (Users REST with Multi-Tenant & SuperAdmin awareness)
+  // Funcionários (Users REST for admin management)
   app.get("/api/users", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const userRole = (req.headers["x-user-role"] as string) || "";
-      const allUsers = await getCollection<User>("users");
-      
-      // If superadmin requests all users, return entire list
-      if (userRole === "superadmin" && req.query.all === "true") {
-        return res.json(allUsers.map(u => ({ ...u, password: "" })));
-      }
-
-      // Normal tenant: only users belonging to this companyId
-      const filtered = allUsers.filter(u => (u.companyId || DEFAULT_COMPANY_ID) === companyId);
-      res.json(filtered.map(u => ({ ...u, password: "" })));
+      const list = await getCollection<User>("users");
+      res.json(list);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1257,21 +1027,16 @@ async function startServer() {
 
   app.post("/api/users", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = "u-" + Date.now();
-      const emailLower = String(req.body.email || "").toLowerCase().trim();
-      const isSuper = isUserSuperAdmin(emailLower, req.body.role);
-
       const newUser: User = {
         id,
-        companyId: req.body.companyId || companyId,
         name: req.body.name,
-        email: emailLower,
+        email: req.body.email,
         password: req.body.password || "123456",
-        role: isSuper ? "superadmin" : (req.body.role || "employee")
+        role: req.body.role || "employee"
       };
       await setDocument("users", id, newUser);
-      res.status(201).json({ ...newUser, password: "" });
+      res.status(201).json(newUser);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1283,22 +1048,17 @@ async function startServer() {
       const existing = await getDocument<User>("users", id);
       if (!existing) return res.status(404).json({ error: "Not found" });
       
-      const emailLower = req.body.email ? String(req.body.email).toLowerCase().trim() : existing.email;
-      const role = req.body.role ?? existing.role;
-      const isSuper = isUserSuperAdmin(emailLower, role);
-
       const updated = {
         ...existing,
         name: req.body.name ?? existing.name,
-        email: emailLower,
-        role: isSuper ? "superadmin" : role,
-        companyId: req.body.companyId ?? existing.companyId
+        email: req.body.email ?? existing.email,
+        role: req.body.role ?? existing.role
       };
       if (req.body.password) {
         updated.password = req.body.password;
       }
       await setDocument("users", id, updated);
-      res.json({ ...updated, password: "" });
+      res.json(updated);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1306,15 +1066,16 @@ async function startServer() {
 
   app.delete("/api/users/:id", async (req, res) => {
     try {
-      const targetUser = await getDocument<User>("users", req.params.id);
-      if (targetUser && isUserSuperAdmin(targetUser.email, targetUser.role)) {
-        return res.status(400).json({ error: "O Administrador Master do sistema não pode ser excluído!" });
-      }
-      if (req.params.id === "u-1") {
+      const id = req.params.id;
+      if (id === "u-1") {
         return res.status(400).json({ error: "O Administrador padrão não pode ser excluído!" });
       }
-      await deleteDocument("users", req.params.id);
-      res.json({ success: true });
+      const existing = await getDocument<User>("users", id);
+      if (existing && existing.email?.toLowerCase() === "michel.lima20000@gmail.com") {
+        return res.status(400).json({ error: "A conta do Administrador principal não pode ser excluída!" });
+      }
+      await deleteDocument("users", id);
+      res.json({ success: true, id });
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1323,11 +1084,7 @@ async function startServer() {
   // Helper to schedule feedback for an atendimento
   async function scheduleFeedbackForAtendimento(at: Atendimento): Promise<any | null> {
     try {
-      const companyId = at.companyId || DEFAULT_COMPANY_ID;
-      let config = await getDocument<any>("config", `feedback_${companyId}`);
-      if (!config) {
-        config = await getDocument<any>("config", "feedback");
-      }
+      let config = await getDocument<any>("config", "feedback");
       if (!config) {
         config = {
           enabled: true,
@@ -1339,7 +1096,7 @@ async function startServer() {
       }
 
       // Check if feedback already exists for this atendimento
-      const allFeedbacks = await getCollection<any>("feedbacks", companyId);
+      const allFeedbacks = await getCollection<any>("feedbacks");
       const existing = allFeedbacks.find(fb => fb.atendimentoId === at.id);
       if (existing) {
         return existing;
@@ -1356,7 +1113,7 @@ async function startServer() {
         }
       }
       if (!clientPhone) {
-        const allClients = await getCollection<Cliente>("clientes", companyId);
+        const allClients = await getCollection<Cliente>("clientes");
         const cleanTarget = String(at.clienteId || "").trim().toLowerCase();
         const found = allClients.find(c => 
           (c.id && String(c.id).trim().toLowerCase() === cleanTarget) ||
@@ -1386,7 +1143,6 @@ async function startServer() {
       const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const newFeedback = {
         id: fbId,
-        companyId,
         clienteId: at.clienteId || "",
         clienteName: clientName,
         clientePhone: clientPhone,
@@ -1413,14 +1169,10 @@ async function startServer() {
   async function scheduleFeedbackForVenda(v: Venda): Promise<any | null> {
     try {
       if (!v.clienteName || v.clienteName === "Consumidor Final") return null;
-      const companyId = v.companyId || DEFAULT_COMPANY_ID;
-      let config = await getDocument<any>("config", `feedback_${companyId}`);
-      if (!config) {
-        config = await getDocument<any>("config", "feedback");
-      }
+      let config = await getDocument<any>("config", "feedback");
       if (!config || config.enabled === false) return null;
 
-      const allFeedbacks = await getCollection<any>("feedbacks", companyId);
+      const allFeedbacks = await getCollection<any>("feedbacks");
       const existing = allFeedbacks.find(fb => fb.vendaId === v.id);
       if (existing) return existing;
 
@@ -1430,7 +1182,7 @@ async function startServer() {
         if (client) clientPhone = client.phone || "";
       }
       if (!clientPhone && v.clienteName) {
-        const allClients = await getCollection<Cliente>("clientes", companyId);
+        const allClients = await getCollection<Cliente>("clientes");
         const found = allClients.find(c => c.name?.toLowerCase() === v.clienteName?.toLowerCase());
         if (found) clientPhone = found.phone || "";
       }
@@ -1445,7 +1197,6 @@ async function startServer() {
       const fbId = "fb-venda-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const newFeedback = {
         id: fbId,
-        companyId,
         clienteId: v.clienteId || "",
         clienteName: v.clienteName,
         clientePhone: clientPhone,
@@ -1471,7 +1222,6 @@ async function startServer() {
   // Payments & Exit finalization
   app.post("/api/pagamentos", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const { atendimentoId, totalAmount, receivedAmount, change, method, splitPayments, notesFin } = req.body;
 
       const at = await getDocument<Atendimento>("atendimentos", atendimentoId);
@@ -1479,10 +1229,25 @@ async function startServer() {
         return res.status(404).json({ message: "Atendimento não encontrado." });
       }
 
+      // Check if a payment for this atendimento already exists
+      const allPagamentos = await getCollection<Pagamento>("pagamentos");
+      const existingPay = allPagamentos.find(p => p.atendimentoId === atendimentoId);
+      if (existingPay) {
+        console.warn(`Payment already exists for atendimento ${atendimentoId}: ${existingPay.id}`);
+        // Ensure atendimento is finalized
+        if (at.status !== "finalizado" || !at.paymentId) {
+          at.status = "finalizado";
+          at.exitDate = at.exitDate || existingPay.date || new Date().toISOString();
+          at.paymentId = existingPay.id;
+          if (notesFin) at.notesFin = notesFin;
+          await setDocument("atendimentos", at.id, at);
+        }
+        return res.status(200).json({ payment: existingPay, atendimento: at });
+      }
+
       const payId = "pay-" + Date.now();
       const newPayment: Pagamento = {
         id: payId,
-        companyId: at.companyId || companyId,
         atendimentoId,
         totalAmount,
         receivedAmount,
@@ -1522,14 +1287,19 @@ async function startServer() {
     }
   });
 
-  // Get Feedback config (scoped to company)
+  app.delete("/api/pagamentos/:id", async (req, res) => {
+    try {
+      await deleteDocument("pagamentos", req.params.id);
+      res.json({ success: true, id: req.params.id });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Get Feedback config
   app.get("/api/config/feedback", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      let config = await getDocument<any>("config", `feedback_${companyId}`);
-      if (!config) {
-        config = await getDocument<any>("config", "feedback");
-      }
+      let config = await getDocument<any>("config", "feedback");
       if (!config) {
         config = {
           enabled: true,
@@ -1556,9 +1326,7 @@ async function startServer() {
   // Save Feedback config
   app.post("/api/config/feedback", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const config = {
-        companyId,
         enabled: req.body.enabled !== undefined ? !!req.body.enabled : true,
         delayHours: Number(req.body.delayHours) >= 0 ? Number(req.body.delayHours) : 3,
         messageTemplate: req.body.messageTemplate || "",
@@ -1566,21 +1334,17 @@ async function startServer() {
         entryMessageTemplate: req.body.entryMessageTemplate || "Olá, {cliente}! Recebemos o seu aparelho ({aparelho} {marca} {modelo}) em nossa assistência técnica sob a OS número {numero_os}.\n\nVocê pode acompanhar o andamento do serviço diretamente conosco. Obrigado pela preferência!",
         googleReviewUrl: req.body.googleReviewUrl || ""
       };
-      await setDocument("config", `feedback_${companyId}`, config);
+      await setDocument("config", "feedback", config);
       res.json(config);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Get Theme config (scoped to company)
+  // Get Theme config
   app.get("/api/config/theme", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      let config = await getDocument<any>("config", `theme_${companyId}`);
-      if (!config) {
-        config = await getDocument<any>("config", "theme");
-      }
+      let config = await getDocument<any>("config", "theme");
       if (!config) {
         config = {
           mode: "light",
@@ -1604,9 +1368,7 @@ async function startServer() {
   // Save Theme config
   app.post("/api/config/theme", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const config = {
-        companyId,
         mode: req.body.mode || "light",
         primaryColor: req.body.primaryColor || "#1E88E5",
         headerColor: req.body.headerColor || req.body.primaryColor || "#1E88E5",
@@ -1619,21 +1381,18 @@ async function startServer() {
         backgroundLogoOpacity: typeof req.body.backgroundLogoOpacity === "number" ? req.body.backgroundLogoOpacity : 0.07,
         updatedAt: new Date().toISOString()
       };
-      await setDocument("config", `theme_${companyId}`, config);
+      await setDocument("config", "theme", config);
       res.json(config);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
   });
 
-  // Get Custom Statuses (scoped to company)
+
+  // Get Custom Statuses
   app.get("/api/config/status", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      let docData = await getDocument<any>("config", `status_${companyId}`);
-      if (!docData || !docData.list) {
-        docData = await getDocument<any>("config", "status");
-      }
+      let docData = await getDocument<any>("config", "status");
       const defaultStatuses = [
         "Aguardando técnico",
         "Em avaliação",
@@ -1650,7 +1409,7 @@ async function startServer() {
       ];
       if (!docData || !docData.list) {
         docData = { list: defaultStatuses };
-        await setDocument("config", `status_${companyId}`, docData);
+        await setDocument("config", "status", docData);
       }
       res.json(docData.list);
     } catch (error: any) {
@@ -1661,16 +1420,12 @@ async function startServer() {
   // Add Custom Status
   app.post("/api/config/status", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const newStatus = req.body.status;
       if (!newStatus || typeof newStatus !== "string" || !newStatus.trim()) {
         return res.status(400).json({ error: "Status inválido" });
       }
       
-      let docData = await getDocument<any>("config", `status_${companyId}`);
-      if (!docData || !docData.list) {
-        docData = await getDocument<any>("config", "status");
-      }
+      let docData = await getDocument<any>("config", "status");
       const defaultStatuses = [
         "Aguardando técnico",
         "Em avaliação",
@@ -1690,7 +1445,7 @@ async function startServer() {
       const trimmed = newStatus.trim();
       if (!list.includes(trimmed)) {
         list.push(trimmed);
-        await setDocument("config", `status_${companyId}`, { list, companyId });
+        await setDocument("config", "status", { list });
       }
       res.json(list);
     } catch (error: any) {
@@ -1701,20 +1456,16 @@ async function startServer() {
   // Delete Custom Status
   app.delete("/api/config/status", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const statusToDelete = req.body.status;
       if (!statusToDelete || typeof statusToDelete !== "string") {
         return res.status(400).json({ error: "Status inválido" });
       }
-      let docData = await getDocument<any>("config", `status_${companyId}`);
-      if (!docData || !docData.list) {
-        docData = await getDocument<any>("config", "status");
-      }
+      let docData = await getDocument<any>("config", "status");
       if (!docData || !docData.list) {
         return res.status(404).json({ error: "Configuração não encontrada" });
       }
       const updatedList = docData.list.filter((s: string) => s !== statusToDelete);
-      await setDocument("config", `status_${companyId}`, { list: updatedList, companyId });
+      await setDocument("config", "status", { list: updatedList });
       res.json(updatedList);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1724,8 +1475,7 @@ async function startServer() {
   // Get Scheduled feedbacks
   app.get("/api/feedbacks", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<any>("feedbacks", companyId);
+      const list = await getCollection<any>("feedbacks");
       res.json(list.sort((a, b) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()));
     } catch (error: any) {
       res.status(500).json({ error: error.message });
@@ -1735,12 +1485,10 @@ async function startServer() {
   // Create manual or custom feedback
   app.post("/api/feedbacks", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const { clienteName, clientePhone, clienteId, atendimentoId, vendaId, item, brand, model, controlNumber, messageText, scheduledTime } = req.body;
       const fbId = "fb-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6);
       const newFeedback = {
         id: fbId,
-        companyId,
         clienteId: clienteId || "",
         clienteName: clienteName || "Cliente",
         clientePhone: clientePhone || "",
@@ -1765,11 +1513,10 @@ async function startServer() {
   // Sync / Backfill post-sale feedback for all finalized atendimentos and sales
   app.post("/api/feedbacks/sync", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const [atendimentos, existingFeedbacks, vendas] = await Promise.all([
-        getCollection<Atendimento>("atendimentos", companyId),
-        getCollection<any>("feedbacks", companyId),
-        getCollection<Venda>("vendas", companyId)
+        getCollection<Atendimento>("atendimentos"),
+        getCollection<any>("feedbacks"),
+        getCollection<Venda>("vendas")
       ]);
 
       const existingAtendimentoIds = new Set(existingFeedbacks.map(f => f.atendimentoId).filter(Boolean));
@@ -1810,7 +1557,7 @@ async function startServer() {
         }
       }
 
-      const updatedFeedbacks = await getCollection<any>("feedbacks", companyId);
+      const updatedFeedbacks = await getCollection<any>("feedbacks");
       res.json({
         success: true,
         syncedCount: createdCount,
@@ -1855,16 +1602,15 @@ async function startServer() {
   // History / Reports
   app.get("/api/reports", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const { type, date, startDate, endDate, offset } = req.query;
       const offsetQuery = offset ? Number(offset) : null;
 
       const [pagamentos, despesas, atendimentos, vendas, produtos] = await Promise.all([
-        getCollection<Pagamento>("pagamentos", companyId),
-        getCollection<Despesa>("despesas", companyId),
-        getCollection<Atendimento>("atendimentos", companyId),
-        getCollection<Venda>("vendas", companyId),
-        getCollection<Produto>("produtos", companyId)
+        getCollection<Pagamento>("pagamentos"),
+        getCollection<Despesa>("despesas"),
+        getCollection<Atendimento>("atendimentos"),
+        getCollection<Venda>("vendas"),
+        getCollection<Produto>("produtos")
       ]);
 
       const productCostMap = new Map<string, number>();
@@ -1907,8 +1653,19 @@ async function startServer() {
                (rawDate >= startLimitStr && rawDate <= endLimitStr);
       };
 
-      // Filter payments in the range
-      filteredPayments = pagamentos.filter(p => matchDateRange(p.date));
+      // Filter payments in the range and deduplicate by atendimentoId
+      const rawFilteredPayments = pagamentos.filter(p => matchDateRange(p.date));
+      const seenOrderPayIds = new Set<string>();
+      filteredPayments = [];
+      rawFilteredPayments.forEach(p => {
+        if (p.atendimentoId) {
+          if (seenOrderPayIds.has(p.atendimentoId)) {
+            return;
+          }
+          seenOrderPayIds.add(p.atendimentoId);
+        }
+        filteredPayments.push(p);
+      });
 
       // Filter expenses in the range
       const filteredExpenses = despesas.filter(d => matchDateRange(d.date));
@@ -2092,8 +1849,7 @@ async function startServer() {
   // Vendas Directas REST
   app.get("/api/vendas", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
-      const list = await getCollection<Venda>("vendas", companyId);
+      const list = await getCollection<Venda>("vendas");
       // Sort sales by date descending
       list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       res.json(list);
@@ -2105,7 +1861,6 @@ async function startServer() {
 
   app.post("/api/vendas", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const { clienteId, clienteName, items, totalAmount, receivedAmount, change, method, splitPayments, sellerId, sellerName, observations, garantia } = req.body;
 
       if (!items || items.length === 0) {
@@ -2135,7 +1890,6 @@ async function startServer() {
       const vendaId = "vend-" + Date.now();
       const newVenda: Venda = {
         id: vendaId,
-        companyId,
         clienteId: clienteId || null,
         clienteName: clienteName || "Consumidor Final",
         items,
@@ -2159,7 +1913,6 @@ async function startServer() {
       const payId = "pay-venda-" + Date.now();
       const newPayment: Pagamento = {
         id: payId,
-        companyId,
         vendaId,
         isVendaDirecta: true,
         totalAmount,
@@ -2201,7 +1954,6 @@ async function startServer() {
   // Estorno / Devolução de Venda
   app.post("/api/vendas/:id/estorno", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const id = req.params.id;
       const { reason = "Devolução de Mercadoria", returnStock = true, createSangria = true } = req.body;
       const venda = await getDocument<Venda>("vendas", id);
@@ -2236,7 +1988,6 @@ async function startServer() {
         const despId = "d-estorno-" + Date.now();
         createdDespesa = {
           id: despId,
-          companyId: venda.companyId || companyId,
           description: `Estorno/Devolução: ${reason} (Venda #${id})`,
           amount: Number(venda.totalAmount) || 0,
           date: new Date().toISOString()
@@ -2282,395 +2033,9 @@ async function startServer() {
     }
   });
 
-  // ==========================================
-  // MULTI-TENANT COMPANIES MANAGEMENT (SUPERADMIN)
-  // ==========================================
-
-  // List companies
-  app.get("/api/companies", async (req, res) => {
-    try {
-      const callerRole = (req.headers["x-user-role"] as string) || "";
-      const currentCompanyId = getRequestCompanyId(req);
-      const allCompanies = await getCollection<Company>("companies");
-
-      // SuperAdmin sees all companies
-      if (callerRole === "superadmin") {
-        return res.json(allCompanies);
-      }
-
-      // Regular admin or employee sees only their company
-      const single = allCompanies.filter(c => c.id === currentCompanyId);
-      if (single.length === 0) {
-        // Fallback default
-        return res.json([{
-          id: currentCompanyId,
-          name: "Assistência Técnica",
-          active: true,
-          createdAt: new Date().toISOString()
-        }]);
-      }
-      res.json(single);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Create new company (SuperAdmin creates a separate organization / client tenant)
-  app.post("/api/companies", async (req, res) => {
-    try {
-      const { name, slug, email, phone, document: docNumber, plan = "pro", adminName, adminEmail, adminPassword } = req.body;
-      if (!name || !name.trim()) {
-        return res.status(400).json({ error: "O nome da empresa/assistência é obrigatório." });
-      }
-
-      const generatedId = "comp-" + (slug ? slug.toLowerCase().replace(/[^a-z0-9-]/g, "") : Date.now().toString());
-      const existing = await getDocument<Company>("companies", generatedId);
-      if (existing) {
-        return res.status(400).json({ error: "Já existe uma assistência com este identificador." });
-      }
-
-      const newCompany: Company = {
-        id: generatedId,
-        name: name.trim(),
-        slug: slug || generatedId,
-        email: email || "",
-        ownerEmail: email || "",
-        phone: phone || "",
-        document: docNumber || "",
-        plan,
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      await setDocument("companies", generatedId, newCompany);
-
-      // Initialize counter for this company
-      const counterRef = doc(db, "config", `os_${generatedId}`);
-      await setDoc(counterRef, convertToFirestore({
-        nextControlNumber: 1,
-        companyId: generatedId,
-        createdAt: new Date().toISOString()
-      }));
-
-      // Initialize theme config for this company
-      await setDocument("config", `theme_${generatedId}`, {
-        companyId: generatedId,
-        companyName: name.trim(),
-        mode: "light",
-        primaryColor: "#1E88E5",
-        headerColor: "#1E88E5",
-        headerStyle: "primary",
-        cardContrast: "normal"
-      });
-
-      // If an initial admin user was provided, create their login right away!
-      let createdAdminUser: User | null = null;
-      if (adminEmail && adminEmail.trim()) {
-        const uId = "u-" + Date.now();
-        createdAdminUser = {
-          id: uId,
-          companyId: generatedId,
-          name: adminName || `Admin ${name}`,
-          email: adminEmail.toLowerCase().trim(),
-          password: adminPassword || "123456",
-          role: "admin"
-        };
-        await setDocument("users", uId, createdAdminUser);
-      }
-
-      res.status(201).json({
-        success: true,
-        company: newCompany,
-        adminUser: createdAdminUser ? { ...createdAdminUser, password: "" } : null
-      });
-    } catch (error: any) {
-      console.error("Error creating company:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Update company
-  app.put("/api/companies/:id", async (req, res) => {
-    try {
-      const id = req.params.id;
-      const existing = await getDocument<Company>("companies", id);
-      if (!existing) return res.status(404).json({ error: "Empresa não encontrada" });
-
-      const updated: Company = {
-        ...existing,
-        name: req.body.name ?? existing.name,
-        email: req.body.email ?? existing.email,
-        phone: req.body.phone ?? existing.phone,
-        document: req.body.document ?? existing.document,
-        plan: req.body.plan ?? existing.plan,
-        active: req.body.active !== undefined ? !!req.body.active : existing.active,
-        address: req.body.address ?? existing.address,
-        updatedAt: new Date().toISOString()
-      };
-      await setDocument("companies", id, updated);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Delete company (SuperAdmin only)
-  app.delete("/api/companies/:id", async (req, res) => {
-    try {
-      const id = req.params.id;
-      if (id === DEFAULT_COMPANY_ID) {
-        return res.status(400).json({ error: "A organização principal do sistema não pode ser removida!" });
-      }
-      await deleteDocument("companies", id);
-      res.json({ success: true, message: "Empresa removida com sucesso!" });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // System statistics overview across all companies (SuperAdmin only)
-  app.get("/api/system/stats", async (req, res) => {
-    try {
-      const [companies, users, atendimentos, vendas] = await Promise.all([
-        getCollection<Company>("companies"),
-        getCollection<User>("users"),
-        getCollection<Atendimento>("atendimentos"),
-        getCollection<Venda>("vendas")
-      ]);
-
-      const companyStats = companies.map(c => {
-        const cUsers = users.filter(u => (u.companyId || DEFAULT_COMPANY_ID) === c.id);
-        const cAtendimentos = atendimentos.filter(a => (a.companyId || DEFAULT_COMPANY_ID) === c.id);
-        const cVendas = vendas.filter(v => (v.companyId || DEFAULT_COMPANY_ID) === c.id && v.status !== "estornada");
-        const totalRevenue = cVendas.reduce((acc, v) => acc + (Number(v.totalAmount) || 0), 0) +
-          cAtendimentos.filter(a => a.status === "finalizado").reduce((acc, a) => acc + (Number(a.totalAmount) || 0), 0);
-
-        return {
-          id: c.id,
-          name: c.name,
-          plan: c.plan || "pro",
-          active: c.active,
-          usersCount: cUsers.length,
-          atendimentosCount: cAtendimentos.length,
-          vendasCount: cVendas.length,
-          totalRevenue
-        };
-      });
-
-      res.json({
-        totalCompanies: companies.length,
-        totalUsers: users.length,
-        totalAtendimentos: atendimentos.length,
-        totalVendas: vendas.length,
-        companies: companyStats
-      });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // System Companies API (SuperAdmin management for CompanyManager)
-  app.get("/api/system/companies", async (req, res) => {
-    try {
-      const companies = await getCollection<Company>("companies");
-      res.json(companies);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.post("/api/system/companies", async (req, res) => {
-    try {
-      const { name, ownerEmail, ownerName, phone, cnpj, address } = req.body;
-      if (!name || !name.trim()) {
-        return res.status(400).json({ error: "O nome da loja é obrigatório." });
-      }
-
-      const cleanSlug = name.toLowerCase().replace(/[^a-z0-9]/g, "-").replace(/-+/g, "-").substring(0, 20);
-      const generatedId = "comp-" + cleanSlug + "-" + Math.random().toString(36).substring(2, 6);
-
-      const newCompany: Company = {
-        id: generatedId,
-        name: name.trim(),
-        ownerEmail: (ownerEmail || "").toLowerCase().trim(),
-        ownerName: ownerName || "",
-        phone: phone || "",
-        cnpj: cnpj || "",
-        address: address || "",
-        active: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-
-      await setDocument("companies", generatedId, newCompany);
-
-      // Initialize default OS counter starting at 1 for this store
-      await setDoc(doc(db, "config", `os_${generatedId}`), convertToFirestore({
-        nextControlNumber: 1,
-        companyId: generatedId,
-        createdAt: new Date().toISOString()
-      }));
-
-      // Initialize theme config for this company
-      await setDocument("config", `theme_${generatedId}`, {
-        companyId: generatedId,
-        companyName: name.trim(),
-        mode: "light",
-        primaryColor: "#1E88E5",
-        headerColor: "#1E88E5",
-        headerStyle: "primary",
-        cardContrast: "normal"
-      });
-
-      // If an ownerEmail is provided, check if user exists or create a store admin for them!
-      if (ownerEmail && ownerEmail.trim()) {
-        const emailLower = ownerEmail.toLowerCase().trim();
-        const usersCol = collection(db, "users");
-        const userQ = query(usersCol, where("email", "==", emailLower), limit(1));
-        const userSnap = await getDocs(userQ);
-
-        if (userSnap.empty) {
-          const uId = "u-" + Date.now();
-          const newUser: User = {
-            id: uId,
-            companyId: generatedId,
-            companyName: name.trim(),
-            name: ownerName || `Admin ${name}`,
-            email: emailLower,
-            password: "admin" + Math.floor(1000 + Math.random() * 9000),
-            role: "admin"
-          };
-          await setDocument("users", uId, newUser);
-        } else {
-          const existingUserDoc = userSnap.docs[0];
-          await updateDoc(doc(db, "users", existingUserDoc.id), {
-            companyId: generatedId,
-            companyName: name.trim(),
-            role: "admin"
-          });
-        }
-      }
-
-      res.status(201).json(newCompany);
-    } catch (error: any) {
-      console.error("Error creating system company:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.put("/api/system/companies/:id", async (req, res) => {
-    try {
-      const id = req.params.id;
-      const existing = await getDocument<Company>("companies", id);
-      if (!existing) return res.status(404).json({ error: "Loja não encontrada" });
-
-      const updated: Company = {
-        ...existing,
-        name: req.body.name ?? existing.name,
-        ownerEmail: req.body.ownerEmail !== undefined ? (req.body.ownerEmail || "").toLowerCase().trim() : existing.ownerEmail,
-        ownerName: req.body.ownerName ?? existing.ownerName,
-        phone: req.body.phone ?? existing.phone,
-        cnpj: req.body.cnpj ?? existing.cnpj,
-        address: req.body.address ?? existing.address,
-        updatedAt: new Date().toISOString()
-      };
-      await setDocument("companies", id, updated);
-      res.json(updated);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  app.delete("/api/system/companies/:id", async (req, res) => {
-    try {
-      const id = req.params.id;
-      if (id === DEFAULT_COMPANY_ID) {
-        return res.status(400).json({ error: "A empresa principal do sistema não pode ser removida!" });
-      }
-      await deleteDocument("companies", id);
-      res.json({ success: true, message: "Loja removida com sucesso!" });
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // System Users across all companies (SuperAdmin view)
-  app.get("/api/system/users", async (req, res) => {
-    try {
-      const [allUsers, allCompanies] = await Promise.all([
-        getCollection<User>("users"),
-        getCollection<Company>("companies")
-      ]);
-
-      const companyMap = new Map<string, string>();
-      allCompanies.forEach(c => companyMap.set(c.id, c.name));
-
-      const sanitizedUsers = allUsers.map(u => {
-        const { password, ...safeUser } = u;
-        const compId = safeUser.companyId || DEFAULT_COMPANY_ID;
-        return {
-          ...safeUser,
-          companyId: compId,
-          companyName: safeUser.companyName || companyMap.get(compId) || DEFAULT_COMPANY_NAME
-        };
-      });
-
-      res.json(sanitizedUsers);
-    } catch (error: any) {
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Multi-tenant migration tool: Backfill companyId to legacy documents without companyId
-  app.post("/api/admin/migrate-multitenant", async (req, res) => {
-    try {
-      const collections = [
-        "clientes",
-        "atendimentos",
-        "servicos",
-        "produtos",
-        "despesas",
-        "convenios",
-        "marcas",
-        "itens",
-        "pagamentos",
-        "vendas",
-        "feedbacks",
-        "agendamentos"
-      ];
-      
-      let updatedCount = 0;
-
-      for (const col of collections) {
-        const colRef = collection(db, col);
-        const snapshot = await getDocs(colRef);
-        for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-          if (!data.companyId) {
-            await updateDoc(doc(db, col, docSnap.id), {
-              companyId: DEFAULT_COMPANY_ID
-            });
-            updatedCount++;
-          }
-        }
-      }
-
-      res.json({
-        success: true,
-        message: `Migração concluída com sucesso! ${updatedCount} documentos legados associados à empresa principal (${DEFAULT_COMPANY_ID}).`,
-        migratedCount: updatedCount
-      });
-    } catch (error: any) {
-      console.error("Migration error:", error);
-      res.status(500).json({ error: error.message });
-    }
-  });
-
-  // Admin clear test data endpoint (Scoped per company)
+  // Admin clear test data endpoint
   app.post("/api/admin/clear-test-data", async (req, res) => {
     try {
-      const companyId = getRequestCompanyId(req);
       const collections = [
         "clientes",
         "atendimentos",
@@ -2681,29 +2046,21 @@ async function startServer() {
         "marcas",
         "itens",
         "pagamentos",
-        "vendas",
-        "feedbacks",
-        "agendamentos"
+        "vendas"
       ];
       
       for (const col of collections) {
         const colRef = collection(db, col);
         const snapshot = await getDocs(colRef);
         for (const docSnap of snapshot.docs) {
-          const data = docSnap.data();
-          // ONLY delete documents that belong to this company!
-          if ((data.companyId || DEFAULT_COMPANY_ID) === companyId) {
-            await deleteDoc(doc(db, col, docSnap.id));
-          }
+          await deleteDoc(doc(db, col, docSnap.id));
         }
       }
       
-      // Reset OS counter for this specific company
-      const counterDocName = `os_${companyId}`;
-      const configRef = doc(db, "config", counterDocName);
+      // Reset config
+      const configRef = doc(db, "config", "main");
       await setDoc(configRef, convertToFirestore({
         nextControlNumber: 1,
-        companyId,
         printerConfigured: false,
         hasBeenCleared: true,
         createdAt: new Date().toISOString(),
@@ -2711,7 +2068,7 @@ async function startServer() {
         createdBy: "system"
       }));
       
-      res.json({ success: true, message: `Todos os dados de teste da sua empresa foram removidos! O contador de OS foi resetado para 0001.` });
+      res.json({ success: true, message: "Todos os dados de teste foram removidos! O sistema agora está limpo e o contador de OS foi resetado para 0001." });
     } catch (error: any) {
       console.error("Error clearing database:", error);
       res.status(500).json({ error: error.message });

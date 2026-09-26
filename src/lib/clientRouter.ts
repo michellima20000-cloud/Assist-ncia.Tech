@@ -509,7 +509,23 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
       const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
 
-      todayPagamentos.forEach(p => {
+      // Deduplicate today payments by atendimentoId to prevent double-counting accidental duplicates
+      const seenOrderIds = new Set<string>();
+      const uniqueTodayPayments: any[] = [];
+      todayPagamentos.forEach((p: any) => {
+        if (p.atendimentoId) {
+          if (seenOrderIds.has(p.atendimentoId)) {
+            return;
+          }
+          seenOrderIds.add(p.atendimentoId);
+        }
+        uniqueTodayPayments.push(p);
+      });
+
+      let directSalesTotal = 0;
+      let serviceOrdersTotal = 0;
+
+      uniqueTodayPayments.forEach((p: any) => {
         const amount = Number(p.totalAmount || 0);
         if (p.splitPayments) {
           cash += Number(p.splitPayments.cash || 0);
@@ -520,6 +536,12 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
           card += amount;
         }
         totalCollected += amount;
+
+        if (p.atendimentoId) {
+          serviceOrdersTotal += amount;
+        } else {
+          directSalesTotal += amount;
+        }
       });
 
       const pending = atendimentos
@@ -537,7 +559,9 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
           card,
           pending,
           expenses,
-          totalCollected
+          totalCollected,
+          directSalesTotal,
+          serviceOrdersTotal
         }
       }), {
         status: 200,
@@ -600,10 +624,22 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         endLimitStr = endDateParam || new Date().toISOString().substring(0, 10);
       }
 
-      filteredPayments = pagamentos.filter(p => {
+      const rawFilteredPayments = pagamentos.filter(p => {
         if (!p.date) return false;
         const localDate = getLocalDateStr(p.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
+      });
+
+      const seenOrderPayIds = new Set<string>();
+      filteredPayments = [];
+      rawFilteredPayments.forEach((p: any) => {
+        if (p.atendimentoId) {
+          if (seenOrderPayIds.has(p.atendimentoId)) {
+            return;
+          }
+          seenOrderPayIds.add(p.atendimentoId);
+        }
+        filteredPayments.push(p);
       });
 
       const filteredExpenses = despesas.filter(d => {
@@ -865,6 +901,26 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       }
 
       const at = getDocData(atSnap);
+
+      // Check if a payment for this atendimento already exists
+      const paysSnap = await getDocs(collection(db, "pagamentos"));
+      const allPays = getDocsData(paysSnap);
+      const existingPay = allPays.find((p: any) => p.atendimentoId === atendimentoId);
+      if (existingPay) {
+        console.warn(`Payment already exists for atendimento ${atendimentoId}: ${existingPay.id}`);
+        if (at.status !== "finalizado" || !at.paymentId) {
+          at.status = "finalizado";
+          at.exitDate = at.exitDate || existingPay.date || new Date().toISOString();
+          at.paymentId = existingPay.id;
+          if (notesFin) at.notesFin = notesFin;
+          await setDoc(atRef, at);
+        }
+        return new Response(JSON.stringify({ payment: existingPay, atendimento: at }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
       const payId = "pay-" + Date.now();
       const newPayment = {
         id: payId,
@@ -1038,7 +1094,29 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       });
     }
 
-    // 6. Generic Collections Handler
+    if (path.startsWith("/api/users/") && method === "DELETE") {
+      const id = path.replace("/api/users/", "");
+      if (id === "u-1") {
+        return new Response(JSON.stringify({ error: "O Administrador padrão não pode ser excluído!" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      const userRef = doc(db, "users", id);
+      const userSnap = await getDoc(userRef);
+      if (userSnap.exists() && userSnap.data()?.email?.toLowerCase() === "michel.lima20000@gmail.com") {
+        return new Response(JSON.stringify({ error: "A conta do Administrador principal não pode ser excluída!" }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+      await deleteDoc(userRef);
+      return new Response(JSON.stringify({ success: true, id }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
     const match = path.match(/^\/api\/([a-zA-Z0-9_-]+)(?:\/([a-zA-Z0-9_.-]+))?$/);
     if (match) {
       const collectionName = match[1];
