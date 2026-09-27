@@ -24,6 +24,7 @@ import FeedbackAutomation from "./components/FeedbackAutomation";
 import ListaReposicao from "./components/ListaReposicao";
 import Personalizacao from "./components/Personalizacao";
 import { ExpensesModal } from "./components/ExpensesModal";
+import FaturamentoDetalhadoModal from "./components/FaturamentoDetalhadoModal";
 
 type ActiveTab =
   | "dashboard"
@@ -66,6 +67,7 @@ export default function App() {
     return localStorage.getItem("hideValues") === "true";
   });
   const [isExpensesModalOpen, setIsExpensesModalOpen] = useState(false);
+  const [isFaturamentoModalOpen, setIsFaturamentoModalOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("hideValues", String(hideValues));
@@ -496,12 +498,25 @@ ________________________`;
               {/* Financial counters ONLY visible to admin */}
               {isAdmin ? (
                 <>
-                  <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <div
+                    onClick={() => setIsFaturamentoModalOpen(true)}
+                    className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 cursor-pointer hover:border-blue-300 hover:shadow-md transition group"
+                    title="Clique para ver o detalhamento do que foi vendido e faturado hoje"
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition flex items-center justify-center shrink-0">
                       <FileText className="w-5 h-5" />
                     </div>
-                    <div className="min-w-0">
-                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Faturamento Diário</p>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center justify-between">
+                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-blue-600 transition">
+                          Faturamento Diário
+                        </p>
+                        <span className="text-[10px] text-blue-500 font-semibold group-hover:underline">
+                          Ver detalhes →
+                        </span>
+                      </div>
                       <p className="text-lg font-black text-emerald-600 font-mono">
                         {hideValues ? "R$ ••••" : `R$ ${(stats?.financials?.totalCollected ?? 0).toFixed(2)}`}
                       </p>
@@ -947,6 +962,17 @@ TERMO: Autorizo o diagnóstico.`;
         content={receiptContent}
         phone={receiptPhone}
         clientName={receiptClientName}
+      />
+
+      {/* DETAILED DAILY REVENUE MODAL */}
+      <FaturamentoDetalhadoModal
+        isOpen={isFaturamentoModalOpen}
+        onClose={() => setIsFaturamentoModalOpen(false)}
+        onPrintReceipt={(title, content) => triggerReceiptPreview(title, content)}
+        onNavigateToAdminReports={() => {
+          setIsFaturamentoModalOpen(false);
+          setActiveTab("admin");
+        }}
       />
 
       {/* EXPENSES & CASH OUTFLOW MODAL */}
