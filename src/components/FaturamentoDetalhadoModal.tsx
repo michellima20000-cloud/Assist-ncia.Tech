@@ -19,10 +19,14 @@ import {
   Tag,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   CheckCircle2,
   Package,
   Layers,
-  ExternalLink
+  ExternalLink,
+  Sparkles,
+  Info
 } from 'lucide-react';
 import { Venda, Atendimento, Cliente, Pagamento } from '../types';
 
@@ -59,6 +63,11 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
   onPrintReceipt,
   onNavigateToAdminReports
 }) => {
+  const todayStr = useMemo(() => new Date().toLocaleDateString('sv-SE'), []);
+  const [selectedDate, setSelectedDate] = useState<string>(() => new Date().toLocaleDateString('sv-SE'));
+  const [latestActiveDate, setLatestActiveDate] = useState<string | null>(null);
+  const [latestActiveAmount, setLatestActiveAmount] = useState<number>(0);
+
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'vendas' | 'os'>('all');
@@ -70,28 +79,69 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [summaryData, setSummaryData] = useState<any>(null);
 
-  const fetchDailyData = async () => {
+  // Fetch data for a specific date
+  const fetchDateData = async (targetDate: string, checkFallback: boolean = false) => {
     setLoading(true);
     try {
-      const todayStr = new Date().toLocaleDateString('sv-SE');
       const offset = new Date().getTimezoneOffset();
 
       const [resReport, resClientes] = await Promise.all([
-        fetch(`/api/reports?type=daily&date=${todayStr}&offset=${offset}`),
+        fetch(`/api/reports?type=daily&date=${targetDate}&offset=${offset}`),
         fetch('/api/clientes')
       ]);
 
+      let currentVendas: Venda[] = [];
+      let currentClosedOrders: Atendimento[] = [];
+      let currentPayments: Pagamento[] = [];
+
       if (resReport.ok) {
         const data = await resReport.json();
-        setVendas(Array.isArray(data.vendas) ? data.vendas : []);
-        setClosedOrders(Array.isArray(data.closedOrders) ? data.closedOrders : []);
-        setPayments(Array.isArray(data.payments) ? data.payments : []);
+        currentVendas = Array.isArray(data.vendas) ? data.vendas : [];
+        currentClosedOrders = Array.isArray(data.closedOrders) ? data.closedOrders : [];
+        currentPayments = Array.isArray(data.payments) ? data.payments : [];
+        setVendas(currentVendas);
+        setClosedOrders(currentClosedOrders);
+        setPayments(currentPayments);
         setSummaryData(data.summary || null);
       }
 
       if (resClientes.ok) {
         const cliData = await resClientes.json();
         setClientes(Array.isArray(cliData) ? cliData : []);
+      }
+
+      // If checking fallback and current date has 0 records, find latest date with sales
+      if (checkFallback && currentVendas.length === 0 && currentClosedOrders.length === 0) {
+        try {
+          const allRes = await fetch('/api/reports?type=all');
+          if (allRes.ok) {
+            const allData = await allRes.json();
+            const dateRevenueMap = new Map<string, number>();
+
+            (allData.vendas || []).forEach((v: any) => {
+              const d = v.date?.substring(0, 10);
+              if (d) dateRevenueMap.set(d, (dateRevenueMap.get(d) || 0) + (Number(v.totalAmount) || 0));
+            });
+            (allData.closedOrders || []).forEach((o: any) => {
+              const d = (o.exitDate || o.entryDate)?.substring(0, 10);
+              if (d) dateRevenueMap.set(d, (dateRevenueMap.get(d) || 0) + (Number(o.totalAmount) || 0));
+            });
+
+            const sortedDates = Array.from(dateRevenueMap.keys()).sort().reverse();
+            const foundLatest = sortedDates.find(d => d !== targetDate && (dateRevenueMap.get(d) || 0) > 0);
+
+            if (foundLatest) {
+              setLatestActiveDate(foundLatest);
+              setLatestActiveAmount(dateRevenueMap.get(foundLatest) || 0);
+              // Auto-switch to latest active date so user immediately sees real data!
+              setSelectedDate(foundLatest);
+              fetchDateData(foundLatest, false);
+              return;
+            }
+          }
+        } catch (fallbackErr) {
+          console.error('Erro ao buscar última data ativa:', fallbackErr);
+        }
       }
     } catch (err) {
       console.error('Erro ao buscar detalhamento de faturamento:', err);
@@ -102,12 +152,32 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
 
   useEffect(() => {
     if (isOpen) {
-      fetchDailyData();
+      const today = new Date().toLocaleDateString('sv-SE');
+      setSelectedDate(today);
       setSearchTerm('');
       setFilterType('all');
       setExpandedItems({});
+      fetchDateData(today, true);
     }
   }, [isOpen]);
+
+  // Navigate dates
+  const handleDateChange = (newDateStr: string) => {
+    setSelectedDate(newDateStr);
+    fetchDateData(newDateStr, false);
+  };
+
+  const handleStepDay = (deltaDays: number) => {
+    try {
+      const parts = selectedDate.split('-');
+      const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+      d.setDate(d.getDate() + deltaDays);
+      const nextDateStr = d.toLocaleDateString('sv-SE');
+      handleDateChange(nextDateStr);
+    } catch {
+      handleDateChange(todayStr);
+    }
+  };
 
   const clientMap = useMemo(() => {
     const map = new Map<string, Cliente>();
@@ -158,6 +228,9 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
         price: Number(item.price) || 0
       }));
 
+      const safeId = v.id || '0000';
+      const shortId = safeId.length > 4 ? safeId.slice(-4) : safeId;
+
       list.push({
         id: `venda-${v.id}`,
         type: 'venda',
@@ -168,7 +241,7 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
         paymentMethod: v.method,
         paymentLabel: formatPaymentLabel(v.method),
         clientName: v.clienteName || 'Consumidor Final',
-        title: `Venda de Balcão #${v.id.substring(v.id.length - 4)}`,
+        title: `Venda de Balcão #${shortId}`,
         subtitle: `${itemsList.length} ${itemsList.length === 1 ? 'item' : 'itens'} • Vendedor: ${v.sellerName || 'Balcão'}`,
         itemsList,
         notes: v.observations,
@@ -220,7 +293,7 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
         clientPhone,
         controlNumber: os.controlNumber,
         title: `Ordem de Serviço ${os.controlNumber || ''}`,
-        subtitle: `${os.item} ${os.brand} ${os.model}`.trim() || 'Aparelho',
+        subtitle: `${os.item || ''} ${os.brand || ''} ${os.model || ''}`.trim() || 'Aparelho em Manutenção',
         itemsList,
         notes: os.notesFin,
         rawAtendimento: os
@@ -313,7 +386,7 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
     if (t.type === 'venda' && t.rawVenda) {
       const v = t.rawVenda;
       const receiptStr = `CUPOM DE VENDA
-VENDA: #${v.id.substring(v.id.length - 6)}
+VENDA: #${v.id ? v.id.slice(-6) : '0000'}
 DATA/HORA: ${new Date(v.date).toLocaleString('pt-BR')}
 CLIENTE: ${v.clienteName || 'Consumidor Final'}
 VENDEDOR: ${v.sellerName || 'Balcão'}
@@ -326,7 +399,7 @@ TOTAL PAGO: R$ ${Number(v.totalAmount).toFixed(2)}
 --------------------------------
 ${v.observations ? `OBS: ${v.observations}\n--------------------------------\n` : ''}Obrigado pela preferência!`;
 
-      onPrintReceipt(`Cupom da Venda #${v.id.substring(v.id.length - 4)}`, receiptStr);
+      onPrintReceipt(`Cupom da Venda #${v.id ? v.id.slice(-4) : ''}`, receiptStr);
     } else if (t.type === 'os' && t.rawAtendimento) {
       const os = t.rawAtendimento;
       const receiptStr = `CUPOM DE SAIDA - ORDEM DE SERVICO
@@ -352,11 +425,14 @@ GARANTIA: ${os.garantia || 'Garantia de 90 dias (3 meses)'}`;
   const handlePrintDailySummary = () => {
     if (!onPrintReceipt) return;
 
-    const todayBR = new Date().toLocaleDateString('pt-BR');
-    const nowTimeBR = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+    let parts = selectedDate.split('-');
+    let dateBR = selectedDate;
+    if (parts.length === 3) {
+      dateBR = `${parts[2]}/${parts[1]}/${parts[0]}`;
+    }
 
     let summaryStr = `RELATORIO DE FECHAMENTO DIARIO
-DATA: ${todayBR} as ${nowTimeBR}
+DATA DO FECHAMENTO: ${dateBR}
 ================================
 FATURAMENTO TOTAL: R$ ${totalFaturado.toFixed(2)}
 --------------------------------
@@ -370,10 +446,10 @@ POR FORMA DE PAGAMENTO:
 - Cartão Débito: R$ ${paymentTotals.debit.toFixed(2)}
 - Cartão Crédito: R$ ${paymentTotals.credit.toFixed(2)}
 ================================
-DETALHAMENTO DOS LANCAMENTOS:
+LANCAMENTOS DO DIA (${transactions.length}):
 `;
 
-    transactions.forEach((t, idx) => {
+    transactions.forEach(t => {
       summaryStr += `\n[${t.timeFormatted}] ${t.type === 'venda' ? 'VENDA' : t.controlNumber || 'OS'} - R$ ${t.totalAmount.toFixed(2)} (${t.paymentLabel})
   Cliente: ${t.clientName}
   ${t.subtitle}
@@ -384,55 +460,71 @@ DETALHAMENTO DOS LANCAMENTOS:
     summaryStr += `\n================================
 Emitido via Minha Assistência.Tech`;
 
-    onPrintReceipt(`Fechamento do Dia ${todayBR}`, summaryStr);
+    onPrintReceipt(`Fechamento ${dateBR}`, summaryStr);
   };
 
   if (!isOpen) return null;
 
-  const todayFormatted = new Date().toLocaleDateString('pt-BR', {
-    weekday: 'long',
-    year: 'numeric',
-    month: 'long',
-    day: 'numeric'
-  });
+  // Format selected date for display
+  let selectedDateFormatted = selectedDate;
+  try {
+    const parts = selectedDate.split('-');
+    const d = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+    selectedDateFormatted = d.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric'
+    });
+  } catch {
+    selectedDateFormatted = selectedDate;
+  }
+
+  const isSelectedToday = selectedDate === todayStr;
 
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-fade-in">
       <div className="bg-slate-50 w-full max-w-4xl max-h-[92vh] rounded-3xl shadow-2xl flex flex-col overflow-hidden border border-slate-200">
         
         {/* HEADER */}
-        <div className="bg-white border-b border-slate-200/80 px-6 py-4 flex items-center justify-between shrink-0">
+        <div className="bg-white border-b border-slate-200/80 px-6 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shrink-0">
           <div className="flex items-center gap-3 min-w-0">
             <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-600 border border-emerald-100 flex items-center justify-center shrink-0">
               <TrendingUp className="w-6 h-6" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-lg font-black text-slate-900 tracking-tight">
                   Detalhamento do Faturamento Diário
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/80 text-emerald-800 uppercase tracking-wide">
-                  Hoje
-                </span>
+                {isSelectedToday ? (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100/80 text-emerald-800 uppercase tracking-wide">
+                    Hoje
+                  </span>
+                ) : (
+                  <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-blue-100 text-blue-800 uppercase tracking-wide">
+                    Data Filtrada
+                  </span>
+                )}
               </div>
-              <p className="text-xs text-slate-500 capitalize truncate">
-                {todayFormatted}
+              <p className="text-xs text-slate-500 capitalize truncate mt-0.5">
+                {selectedDateFormatted}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
             <button
               onClick={handlePrintDailySummary}
               title="Imprimir extrato do dia"
-              className="hidden sm:flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
+              className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs rounded-xl transition cursor-pointer"
             >
               <Printer className="w-4 h-4 text-slate-600" />
-              Imprimir Fechamento
+              <span className="hidden sm:inline">Imprimir</span> Fechamento
             </button>
 
             <button
-              onClick={fetchDailyData}
+              onClick={() => fetchDateData(selectedDate, false)}
               disabled={loading}
               title="Atualizar lançamentos"
               className="p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition cursor-pointer"
@@ -450,6 +542,78 @@ Emitido via Minha Assistência.Tech`;
           </div>
         </div>
 
+        {/* DATE SELECTION BAR */}
+        <div className="bg-white border-b border-slate-200/80 px-6 py-2.5 flex items-center justify-between gap-2 overflow-x-auto shrink-0 text-xs">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wide mr-1">
+              Data:
+            </span>
+            <button
+              onClick={() => handleStepDay(-1)}
+              title="Dia anterior"
+              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition cursor-pointer"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={e => handleDateChange(e.target.value)}
+              className="bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg font-bold text-slate-700 border border-slate-200 focus:outline-none focus:ring-1 focus:ring-blue-500 cursor-pointer"
+            />
+            <button
+              onClick={() => handleStepDay(1)}
+              title="Próximo dia"
+              className="p-1.5 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-lg transition cursor-pointer"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center gap-1.5">
+            {!isSelectedToday && (
+              <button
+                onClick={() => handleDateChange(todayStr)}
+                className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded-lg transition cursor-pointer flex items-center gap-1"
+              >
+                <Calendar className="w-3.5 h-3.5" />
+                Ir para Hoje
+              </button>
+            )}
+
+            {latestActiveDate && latestActiveDate !== selectedDate && (
+              <button
+                onClick={() => handleDateChange(latestActiveDate)}
+                className="px-2.5 py-1.5 bg-blue-50 hover:bg-blue-100 text-blue-700 font-bold rounded-lg transition cursor-pointer flex items-center gap-1"
+                title={`Ver faturamento de ${latestActiveDate}`}
+              >
+                <Sparkles className="w-3.5 h-3.5 text-blue-500" />
+                Último Caixa Ativo ({latestActiveDate.split('-').reverse().slice(0, 2).join('/')})
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* NOTICE IF EMPTY TODAY BUT RECENT DATA EXISTS */}
+        {transactions.length === 0 && latestActiveDate && latestActiveDate !== selectedDate && (
+          <div className="bg-amber-50/80 border-b border-amber-200/80 px-6 py-2.5 flex items-center justify-between gap-3 text-xs shrink-0 animate-fade-in">
+            <div className="flex items-center gap-2 text-amber-900">
+              <Info className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                Nenhum lançamento registrado nesta data. O último faturamento registrado foi em{' '}
+                <strong>{latestActiveDate.split('-').reverse().join('/')}</strong> (R${' '}
+                {latestActiveAmount.toFixed(2)}).
+              </span>
+            </div>
+            <button
+              onClick={() => handleDateChange(latestActiveDate)}
+              className="px-3 py-1 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-lg whitespace-nowrap cursor-pointer transition shadow-2xs text-[11px]"
+            >
+              Carregar {latestActiveDate.split('-').reverse().slice(0, 2).join('/')} →
+            </button>
+          </div>
+        )}
+
         {/* SUMMARY METRICS BAR */}
         <div className="bg-slate-100/70 border-b border-slate-200/80 p-4 sm:p-5 shrink-0">
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -458,7 +622,7 @@ Emitido via Minha Assistência.Tech`;
             <div className="bg-white p-3.5 rounded-2xl border border-emerald-100 shadow-sm flex items-center justify-between">
               <div>
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                  Total Faturado Hoje
+                  Total Faturado no Dia
                 </span>
                 <span className="text-xl sm:text-2xl font-black text-emerald-600 font-mono">
                   R$ {totalFaturado.toFixed(2)}
@@ -544,7 +708,7 @@ Emitido via Minha Assistência.Tech`;
           <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
             <button
               onClick={() => setFilterType('all')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 filterType === 'all'
                   ? 'bg-white text-slate-800 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -554,7 +718,7 @@ Emitido via Minha Assistência.Tech`;
             </button>
             <button
               onClick={() => setFilterType('vendas')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 filterType === 'vendas'
                   ? 'bg-blue-600 text-white shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -565,7 +729,7 @@ Emitido via Minha Assistência.Tech`;
             </button>
             <button
               onClick={() => setFilterType('os')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1.5 cursor-pointer ${
                 filterType === 'os'
                   ? 'bg-purple-600 text-white shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -589,7 +753,7 @@ Emitido via Minha Assistência.Tech`;
             {searchTerm && (
               <button
                 onClick={() => setSearchTerm('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 cursor-pointer"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -605,14 +769,26 @@ Emitido via Minha Assistência.Tech`;
               <p className="text-xs font-medium">Carregando detalhes do faturamento...</p>
             </div>
           ) : filteredTransactions.length === 0 ? (
-            <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-2">
-              <Package className="w-10 h-10 text-slate-300" />
-              <p className="text-sm font-bold text-slate-600">Nenhum lançamento encontrado</p>
-              <p className="text-xs text-slate-400 max-w-sm">
-                {searchTerm
-                  ? 'Nenhum resultado corresponde à sua pesquisa. Tente buscar por outro termo.'
-                  : 'Nenhuma venda ou ordem de serviço foi finalizada hoje ainda.'}
-              </p>
+            <div className="py-16 text-center text-slate-400 flex flex-col items-center gap-3">
+              <Package className="w-12 h-12 text-slate-300" />
+              <div>
+                <p className="text-sm font-bold text-slate-700">Nenhum lançamento encontrado nesta data</p>
+                <p className="text-xs text-slate-400 max-w-sm mt-1">
+                  {searchTerm
+                    ? 'Nenhum resultado corresponde à sua pesquisa. Tente buscar por outro termo.'
+                    : `Nenhuma venda ou ordem de serviço foi registrada para o dia ${selectedDate.split('-').reverse().join('/')}.`}
+                </p>
+              </div>
+
+              {latestActiveDate && latestActiveDate !== selectedDate && (
+                <button
+                  onClick={() => handleDateChange(latestActiveDate)}
+                  className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl transition cursor-pointer flex items-center gap-2 shadow-sm"
+                >
+                  <Sparkles className="w-4 h-4" />
+                  Ver faturamento do dia {latestActiveDate.split('-').reverse().join('/')} (R$ {latestActiveAmount.toFixed(2)})
+                </button>
+              )}
             </div>
           ) : (
             filteredTransactions.map(t => {
@@ -764,7 +940,7 @@ Emitido via Minha Assistência.Tech`;
         {/* MODAL FOOTER */}
         <div className="bg-white border-t border-slate-200 px-6 py-3.5 flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0 text-xs">
           <div className="text-slate-500 text-center sm:text-left">
-            Exibindo <strong>{filteredTransactions.length}</strong> de <strong>{transactions.length}</strong> transações do dia de hoje.
+            Exibindo <strong>{filteredTransactions.length}</strong> de <strong>{transactions.length}</strong> transações de <strong>{selectedDate.split('-').reverse().join('/')}</strong>.
           </div>
 
           <div className="flex items-center gap-3">

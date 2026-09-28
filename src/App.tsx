@@ -25,6 +25,7 @@ import ListaReposicao from "./components/ListaReposicao";
 import Personalizacao from "./components/Personalizacao";
 import { ExpensesModal } from "./components/ExpensesModal";
 import FaturamentoDetalhadoModal from "./components/FaturamentoDetalhadoModal";
+import AparelhosStatusModal from "./components/AparelhosStatusModal";
 
 type ActiveTab =
   | "dashboard"
@@ -68,6 +69,8 @@ export default function App() {
   });
   const [isExpensesModalOpen, setIsExpensesModalOpen] = useState(false);
   const [isFaturamentoModalOpen, setIsFaturamentoModalOpen] = useState(false);
+  const [isAparelhosModalOpen, setIsAparelhosModalOpen] = useState(false);
+  const [aparelhosModalInitialTab, setAparelhosModalInitialTab] = useState<"na_assistencia" | "entrega">("na_assistencia");
 
   useEffect(() => {
     localStorage.setItem("hideValues", String(hideValues));
@@ -475,22 +478,44 @@ ________________________`;
           <div className="space-y-6">
             {/* Realtime Stats Grid */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
+              <div
+                onClick={() => {
+                  setAparelhosModalInitialTab("na_assistencia");
+                  setIsAparelhosModalOpen(true);
+                }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 cursor-pointer hover:border-amber-300 hover:shadow-md transition group"
+                title="Clique para ver os aparelhos em manutenção na assistência"
+                role="button"
+                tabIndex={0}
+              >
+                <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 group-hover:bg-amber-500 group-hover:text-white transition flex items-center justify-center shrink-0">
                   <Clock className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Na Assistência</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-amber-600 transition">
+                    Na Assistência
+                  </p>
                   <p className="text-xl font-black text-slate-800">{stats?.naAssistenciaCount ?? 0}</p>
                 </div>
               </div>
 
-              <div className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <div
+                onClick={() => {
+                  setAparelhosModalInitialTab("entrega");
+                  setIsAparelhosModalOpen(true);
+                }}
+                className="bg-white p-4 rounded-2xl border border-slate-100 shadow-sm flex items-center gap-3 cursor-pointer hover:border-emerald-300 hover:shadow-md transition group"
+                title="Clique para ver os aparelhos prontos para entrega"
+                role="button"
+                tabIndex={0}
+              >
+                <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 group-hover:bg-emerald-500 group-hover:text-white transition flex items-center justify-center shrink-0">
                   <CheckCircle className="w-5 h-5" />
                 </div>
-                <div>
-                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide">Prontos / Entregas</p>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-emerald-600 transition">
+                    Prontos / Entregas
+                  </p>
                   <p className="text-xl font-black text-slate-800">{stats?.entregaCount ?? 0}</p>
                 </div>
               </div>
@@ -509,14 +534,9 @@ ________________________`;
                       <FileText className="w-5 h-5" />
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between">
-                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-blue-600 transition">
-                          Faturamento Diário
-                        </p>
-                        <span className="text-[10px] text-blue-500 font-semibold group-hover:underline">
-                          Ver detalhes →
-                        </span>
-                      </div>
+                      <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wide group-hover:text-blue-600 transition">
+                        Faturamento Diário
+                      </p>
                       <p className="text-lg font-black text-emerald-600 font-mono">
                         {hideValues ? "R$ ••••" : `R$ ${(stats?.financials?.totalCollected ?? 0).toFixed(2)}`}
                       </p>
@@ -981,6 +1001,28 @@ TERMO: Autorizo o diagnóstico.`;
         onClose={() => setIsExpensesModalOpen(false)}
         onExpenseSaved={fetchStats}
         initialTodayTotal={stats?.financials?.expenses ?? 0}
+      />
+
+      {/* MODAL DE APARELHOS NA ASSISTÊNCIA OU PRONTOS PARA ENTREGA */}
+      <AparelhosStatusModal
+        isOpen={isAparelhosModalOpen}
+        onClose={() => setIsAparelhosModalOpen(false)}
+        initialTab={aparelhosModalInitialTab}
+        onSelectAtendimento={(a, mode) => {
+          setIsAparelhosModalOpen(false);
+          setSelectedAtendimento(a);
+          setAtendimentoFlowMode(mode);
+          setActiveTab("saida");
+        }}
+        onNewEntrada={() => {
+          setIsAparelhosModalOpen(false);
+          setActiveTab("entrada");
+        }}
+        onOpenFullAtendimentoScreen={(mode) => {
+          setIsAparelhosModalOpen(false);
+          setAtendimentoFlowMode(mode);
+          setActiveTab("atendimento");
+        }}
       />
 
       {/* GLOBAL PRODUCT SCANNER OVERLAY */}
