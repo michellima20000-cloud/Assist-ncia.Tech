@@ -385,15 +385,19 @@ ________________________`;
             <div className="flex items-center gap-1">
               <button
                 onClick={() => setHideValues(prev => !prev)}
-                className={`p-2 rounded-xl text-white transition flex items-center justify-center gap-1.5 ${
-                  hideValues ? "bg-amber-400/25 text-amber-200 border border-amber-300/40" : "hover:bg-white/10 active:bg-white/15"
+                className={`p-2 rounded-xl text-white transition flex items-center justify-center cursor-pointer ${
+                  hideValues
+                    ? "bg-amber-400/25 text-amber-200 border border-amber-300/40"
+                    : "hover:bg-white/10 active:bg-white/15"
                 }`}
-                title={hideValues ? "Exibir valores no balcão" : "Ocultar valores do balcão (Modo Privacidade)"}
+                title={hideValues ? "Exibir valores (Valores estão ocultos)" : "Ocultar valores do balcão (Modo Privacidade)"}
+                aria-label={hideValues ? "Exibir valores" : "Ocultar valores"}
               >
-                {hideValues ? <EyeOff className="w-5 h-5 text-amber-300" /> : <Eye className="w-5 h-5 text-slate-100" />}
-                <span className="text-xs font-extrabold hidden lg:inline">
-                  {hideValues ? "VALORES OCULTOS" : "OCULTAR VALORES"}
-                </span>
+                {hideValues ? (
+                  <EyeOff className="w-5 h-5 text-amber-300" />
+                ) : (
+                  <Eye className="w-5 h-5 text-slate-100" />
+                )}
               </button>
               <button
                 onClick={handleToggleThemeMode}
@@ -429,11 +433,11 @@ ________________________`;
               </button>
               <button
                 onClick={() => setGlobalScannerOpen(true)}
-                className="p-2 hover:bg-white/10 active:bg-white/15 rounded-xl text-white transition flex items-center justify-center gap-1.5"
-                title="Leitor de QR & Código de Barras"
+                className="p-2 hover:bg-white/10 active:bg-white/15 rounded-xl text-white transition flex items-center justify-center cursor-pointer"
+                title="Leitor de Peças (QR & Código de Barras)"
+                aria-label="Leitor de Peças"
               >
                 <QrCode className="w-5 h-5 text-amber-300" />
-                <span className="text-xs font-extrabold hidden md:inline text-amber-300">LEITOR DE PEÇAS</span>
               </button>
               <button
                 onClick={handlePrintDailySummary}
