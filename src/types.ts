@@ -130,6 +130,10 @@ export interface SubscriptionInfo {
   isExpired?: boolean;
   daysRemaining?: number;
   ownerName?: string;
+  ownerEmail?: string;
+  period?: string;
+  currentUsersCount?: number;
+  createdAt?: string;
   lastPaymentDate?: string;
 }
 

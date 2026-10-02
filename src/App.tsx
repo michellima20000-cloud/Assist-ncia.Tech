@@ -32,6 +32,7 @@ type ActiveTab =
   | "entrada"
   | "atendimento"
   | "saida"
+  | "pagamento"
   | "agendar"
   | "orcamento"
   | "clientes"

@@ -58,7 +58,8 @@ function getDocsData(snap: any): any[] {
 
 export async function handleClientRoute(url: string, init?: RequestInit): Promise<Response> {
   try {
-    const urlObj = new URL(url, window.location.origin);
+    const origin = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "http://localhost";
+    const urlObj = new URL(url, origin);
     const path = urlObj.pathname;
     const method = init?.method?.toUpperCase() || "GET";
     
@@ -457,6 +458,103 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
       return new Response(JSON.stringify({ user: userToReturn, token: "client-side-session-token" }), {
         status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Quick Admin Login
+    if (path === "/api/auth/quick-admin" && method === "POST") {
+      const usersSnap = await getDocs(collection(db, "users"));
+      const allUsers = getDocsData(usersSnap);
+      
+      const adminUser = allUsers.find(u => u.email?.toLowerCase() === "michel.lima20000@gmail.com") ||
+                        allUsers.find(u => u.role === "admin");
+
+      if (adminUser) {
+        const { password: _, ...userWithoutPassword } = adminUser;
+        return new Response(JSON.stringify({
+          user: { ...userWithoutPassword, role: "admin", status: "active" },
+          token: "client-admin-token-" + adminUser.id
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify({
+        user: {
+          id: "u-admin-master",
+          name: "Michel (Administrador)",
+          email: "michel.lima20000@gmail.com",
+          role: "admin",
+          status: "active"
+        },
+        token: "client-admin-master-token"
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Email/Password login
+    if (path === "/api/auth/login" && method === "POST") {
+      const { email, password } = body;
+      const emailLower = String(email || "").trim().toLowerCase();
+      const usersSnap = await getDocs(collection(db, "users"));
+      const allUsers = getDocsData(usersSnap);
+
+      const foundUser = allUsers.find(u => u.email?.toLowerCase() === emailLower);
+
+      if (foundUser) {
+        const isUserAdmin = foundUser.role === "admin" || emailLower === "michel.lima20000@gmail.com";
+        const passwordMatches = foundUser.password === password ||
+          (isUserAdmin && (password === "admin" || password === "88122526Mi@#$"));
+
+        if (passwordMatches) {
+          if (foundUser.status === "inactive" || foundUser.status === "bloqueado") {
+            return new Response(JSON.stringify({ message: "Sua conta está desativada ou bloqueada pelo Administrador Geral." }), {
+              status: 403,
+              headers: { "Content-Type": "application/json" }
+            });
+          }
+          if (foundUser.status === "pendente") {
+            return new Response(JSON.stringify({ 
+              pendingApproval: true,
+              message: "Conta registrada! Aguardando ativação pelo Administrador Geral." 
+            }), {
+              status: 403,
+              headers: { "Content-Type": "application/json" }
+            });
+          }
+          const { password: _, ...userWithoutPassword } = foundUser;
+          return new Response(JSON.stringify({
+            user: { ...userWithoutPassword, role: isUserAdmin ? "admin" : (foundUser.role || "employee") },
+            token: "client-session-token-" + foundUser.id
+          }), {
+            status: 200,
+            headers: { "Content-Type": "application/json" }
+          });
+        }
+      }
+
+      if ((emailLower === "admin@minhaassistencia.com" || emailLower === "michel.lima20000@gmail.com") && (password === "admin" || password === "88122526Mi@#$")) {
+        return new Response(JSON.stringify({
+          user: {
+            id: "u-admin-master",
+            name: "Michel (Administrador)",
+            email: emailLower,
+            role: "admin",
+            status: "active"
+          },
+          token: "client-session-token-master"
+        }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      return new Response(JSON.stringify({ message: "E-mail ou senha incorretos." }), {
+        status: 401,
         headers: { "Content-Type": "application/json" }
       });
     }
@@ -1051,6 +1149,111 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
 
       return new Response(JSON.stringify({ success: true, venda: newVenda, payment: newPayment }), {
         status: 201,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Estorno / Devolução de Venda
+    const estornoMatch = path.match(/^\/api\/vendas\/([a-zA-Z0-9_.-]+)\/estorno$/);
+    if (estornoMatch && method === "POST") {
+      const vendaId = estornoMatch[1];
+      const { reason = "Devolução de Mercadoria", returnStock = true, createSangria = true } = body || {};
+      const vendaRef = doc(db, "vendas", vendaId);
+      const vendaSnap = await getDoc(vendaRef);
+      if (!vendaSnap.exists()) {
+        return new Response(JSON.stringify({ error: "Venda não encontrada" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      const venda = getDocData(vendaSnap);
+      if (venda.status === "estornada") {
+        return new Response(JSON.stringify({ error: "Esta venda já foi estornada anteriormente." }), {
+          status: 400,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      // 1. Return stock if requested
+      if (returnStock && venda.items && venda.items.length > 0) {
+        for (const item of venda.items) {
+          if (item.productId) {
+            const prodRef = doc(db, "produtos", item.productId);
+            const prodSnap = await getDoc(prodRef);
+            if (prodSnap.exists()) {
+              const p = getDocData(prodSnap);
+              const currentStock = Number(p.stock) || 0;
+              const returnQty = Number(item.quantity) || 1;
+              await setDoc(prodRef, { stock: currentStock + returnQty }, { merge: true });
+            }
+          }
+        }
+      }
+
+      // 2. Mark venda as estornada
+      const nowIso = new Date().toISOString();
+      const updatedVenda = {
+        ...venda,
+        status: "estornada",
+        estornoReason: reason,
+        estornoDate: nowIso
+      };
+      await setDoc(vendaRef, updatedVenda, { merge: true });
+
+      // 3. Create cash outflow / despesa / sangria if requested
+      let createdDespesa: any = null;
+      if (createSangria) {
+        const despId = "d-estorno-" + Date.now();
+        createdDespesa = {
+          id: despId,
+          description: `Estorno/Devolução: ${reason} (Venda #${vendaId})`,
+          amount: Number(venda.totalAmount) || 0,
+          date: nowIso
+        };
+        await setDoc(doc(db, "despesas", despId), createdDespesa);
+      }
+
+      return new Response(JSON.stringify({
+        success: true,
+        message: "Venda estornada com sucesso!",
+        venda: updatedVenda,
+        despesa: createdDespesa
+      }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }
+
+    // Delete Venda with optional stock restoration
+    const vendaDeleteMatch = path.match(/^\/api\/vendas\/([a-zA-Z0-9_.-]+)$/);
+    if (vendaDeleteMatch && method === "DELETE") {
+      const vendaId = vendaDeleteMatch[1];
+      const { returnStock = true } = body || {};
+      const vendaRef = doc(db, "vendas", vendaId);
+      const vendaSnap = await getDoc(vendaRef);
+
+      if (vendaSnap.exists()) {
+        const venda = getDocData(vendaSnap);
+        if (returnStock && venda.status !== "estornada" && venda.items) {
+          for (const item of venda.items) {
+            if (item.productId) {
+              const prodRef = doc(db, "produtos", item.productId);
+              const prodSnap = await getDoc(prodRef);
+              if (prodSnap.exists()) {
+                const p = getDocData(prodSnap);
+                const currentStock = Number(p.stock) || 0;
+                const returnQty = Number(item.quantity) || 1;
+                await setDoc(prodRef, { stock: currentStock + returnQty }, { merge: true });
+              }
+            }
+          }
+        }
+        await deleteDoc(vendaRef);
+      }
+
+      return new Response(JSON.stringify({ success: true, message: "Venda removida com sucesso!" }), {
+        status: 200,
         headers: { "Content-Type": "application/json" }
       });
     }

@@ -1471,7 +1471,7 @@ function EditBarberModal({
               <label className="block text-slate-400 mb-1 font-bold">Cargo</label>
               <select
                 value={role}
-                onChange={(e) => setRole(e.target.value)}
+                onChange={(e) => setRole(e.target.value as any)}
                 className="w-full p-2.5 bg-[#171b24] border border-slate-800 rounded-xl text-white outline-none focus:border-indigo-500"
               >
                 <option value="tecnico">TÉCNICO</option>

@@ -415,29 +415,93 @@ async function startServer() {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
+      const emailLower = String(email || "").trim().toLowerCase();
       const colRef = collection(db, "users");
-      const q = query(
-        colRef,
-        where("email", "==", String(email).toLowerCase()),
-        where("password", "==", password),
-        limit(1)
-      );
+
+      const q = query(colRef, where("email", "==", emailLower), limit(1));
       const snapshot = await getDocs(q);
-        
-      if (snapshot.empty) {
-        return res.status(401).json({ message: "E-mail ou senha incorretos." });
+
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const userData = convertFromFirestore(docSnap.data());
+
+        const isUserAdmin = userData.role === "admin" || emailLower === "michel.lima20000@gmail.com";
+        const passwordMatches = userData.password === password ||
+          (isUserAdmin && (password === "admin" || password === "88122526Mi@#$"));
+
+        if (passwordMatches) {
+          if (userData.status === "inactive" || userData.status === "bloqueado") {
+            return res.status(403).json({ message: "Sua conta está desativada ou bloqueada pelo Administrador Geral." });
+          }
+          if (userData.status === "pendente") {
+            return res.status(403).json({ 
+              pendingApproval: true,
+              message: "Conta registrada! Aguardando ativação pelo Administrador Geral." 
+            });
+          }
+          const { password: _, ...userWithoutPassword } = userData;
+          return res.json({
+            user: { id: docSnap.id, ...userWithoutPassword, role: isUserAdmin ? "admin" : (userData.role || "employee") },
+            token: "session-token-" + docSnap.id
+          });
+        }
       }
-      
-      const doc = snapshot.docs[0];
-      const userData = convertFromFirestore(doc.data());
-      const { password: _, ...userWithoutPassword } = userData;
-      
-      res.json({
-        user: { id: doc.id, ...userWithoutPassword },
-        token: "mock-session-token-" + doc.id
-      });
+
+      // Check fallback default admin
+      if ((emailLower === "admin@minhaassistencia.com" || emailLower === "michel.lima20000@gmail.com") && (password === "admin" || password === "88122526Mi@#$")) {
+        return res.json({
+          user: {
+            id: "u-admin-master",
+            name: "Michel (Administrador)",
+            email: emailLower,
+            role: "admin",
+            status: "active"
+          },
+          token: "session-token-admin-master"
+        });
+      }
+
+      return res.status(401).json({ message: "E-mail ou senha incorretos." });
     } catch (error: any) {
       console.error("Login error:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Dedicated Quick Admin Login
+  app.post("/api/auth/quick-admin", async (req, res) => {
+    try {
+      const colRef = collection(db, "users");
+      const qMichel = query(colRef, where("email", "==", "michel.lima20000@gmail.com"), limit(1));
+      let snapshot = await getDocs(qMichel);
+      if (snapshot.empty) {
+        const qAdmin = query(colRef, where("role", "==", "admin"), limit(1));
+        snapshot = await getDocs(qAdmin);
+      }
+
+      if (!snapshot.empty) {
+        const docSnap = snapshot.docs[0];
+        const userData = convertFromFirestore(docSnap.data());
+        const { password: _, ...userWithoutPassword } = userData;
+        return res.json({
+          user: { id: docSnap.id, ...userWithoutPassword, role: "admin", status: "active" },
+          token: "session-token-" + docSnap.id
+        });
+      }
+
+      // Fallback: master admin
+      res.json({
+        user: {
+          id: "u-admin-master",
+          name: "Michel (Administrador)",
+          email: "michel.lima20000@gmail.com",
+          role: "admin",
+          status: "active"
+        },
+        token: "session-token-admin-master"
+      });
+    } catch (error: any) {
+      console.error("Quick admin error:", error);
       res.status(500).json({ error: error.message });
     }
   });
@@ -577,6 +641,16 @@ async function startServer() {
     }
   });
 
+  app.get("/api/clientes/:id", async (req, res) => {
+    try {
+      const item = await getDocument<Cliente>("clientes", req.params.id);
+      if (!item) return res.status(404).json({ error: "Cliente não encontrado" });
+      res.json(item);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.put("/api/clientes/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -614,6 +688,16 @@ async function startServer() {
     try {
       const list = await getCollection<Atendimento>("atendimentos");
       res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/atendimentos/:id", async (req, res) => {
+    try {
+      const item = await getDocument<Atendimento>("atendimentos", req.params.id);
+      if (!item) return res.status(404).json({ error: "Atendimento não encontrado" });
+      res.json(item);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -738,6 +822,16 @@ async function startServer() {
     }
   });
 
+  app.get("/api/servicos/:id", async (req, res) => {
+    try {
+      const item = await getDocument<Servico>("servicos", req.params.id);
+      if (!item) return res.status(404).json({ error: "Serviço não encontrado" });
+      res.json(item);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.put("/api/servicos/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -773,6 +867,16 @@ async function startServer() {
     try {
       const list = await getCollection<Produto>("produtos");
       res.json(list.sort((a, b) => a.position - b.position));
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/produtos/:id", async (req, res) => {
+    try {
+      const item = await getDocument<Produto>("produtos", req.params.id);
+      if (!item) return res.status(404).json({ error: "Produto não encontrado" });
+      res.json(item);
     } catch (error: any) {
       res.status(500).json({ error: error.message });
     }
@@ -1934,6 +2038,16 @@ async function startServer() {
     }
   });
 
+  app.get("/api/vendas/:id", async (req, res) => {
+    try {
+      const item = await getDocument<Venda>("vendas", req.params.id);
+      if (!item) return res.status(404).json({ error: "Venda não encontrada" });
+      res.json(item);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
   app.put("/api/vendas/:id", async (req, res) => {
     try {
       const id = req.params.id;
@@ -2080,6 +2194,11 @@ async function startServer() {
   if (!fs.existsSync(uploadDir)) {
     fs.mkdirSync(uploadDir, { recursive: true });
   }
+
+  // 404 JSON fallback for unhandled /api/* routes (prevents Vite HTML from crashing API calls)
+  app.all("/api/*", (req, res) => {
+    res.status(404).json({ error: `Rota de API não encontrada: ${req.method} ${req.path}` });
+  });
 
   // --- Vite Dev Middleware / Static Assets ---
   if (process.env.NODE_ENV !== "production") {

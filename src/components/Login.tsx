@@ -128,25 +128,43 @@ export default function Login({ onLoginSuccess }: LoginProps) {
         }
       } else {
         // 1. Try local/backend authentication first
+        let backendData: any = null;
+        let backendStatus = 0;
         try {
           const backendRes = await fetch("/api/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ email, password })
           });
-          const data = await backendRes.json();
+          backendStatus = backendRes.status;
+          backendData = await backendRes.json();
           if (backendRes.ok) {
-            onLoginSuccess(data.user, data.token);
+            onLoginSuccess(backendData.user, backendData.token);
             return;
           } else if (backendRes.status === 403) {
-            setError(data.message || "Acesso negado: Conta inativa ou pendente de ativação pelo Administrador Geral.");
+            setError(backendData.message || "Acesso negado: Conta inativa ou pendente de ativação pelo Administrador Geral.");
             return;
           }
         } catch (_) {}
 
         // 2. Try Firebase Auth
-        const userCredential = await signInWithEmailAndPassword(auth, email, password);
-        await handleBackendSession(userCredential.user);
+        try {
+          const userCredential = await signInWithEmailAndPassword(auth, email, password);
+          await handleBackendSession(userCredential.user);
+          return;
+        } catch (fbErr: any) {
+          if (backendStatus === 401) {
+            setError("E-mail ou senha incorretos.");
+            return;
+          }
+          if (fbErr.code === "auth/unauthorized-domain") {
+            setIsDomainError(true);
+          }
+          const friendlyMsg = translateError(fbErr.code);
+          const rawDetail = fbErr.code ? `[${fbErr.code}] ${fbErr.message}` : fbErr.message || String(fbErr);
+          setError(`${friendlyMsg}\n\nDetalhe Técnico: ${rawDetail}`);
+          return;
+        }
       }
     } catch (err: any) {
       console.error("Auth error:", err);
@@ -165,28 +183,27 @@ export default function Login({ onLoginSuccess }: LoginProps) {
     setError("");
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/login", {
+      const res = await fetch("/api/auth/quick-admin", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: "michel.lima20000@gmail.com", password: "admin" })
+        headers: { "Content-Type": "application/json" }
       });
       if (res.ok) {
         const data = await res.json();
         onLoginSuccess(data.user, data.token);
-      } else {
-        // Fallback default admin
-        const fallbackRes = await fetch("/api/auth/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ email: "admin@minhaassistencia.com", password: "admin" })
-        });
-        if (fallbackRes.ok) {
-          const data = await fallbackRes.json();
-          onLoginSuccess(data.user, data.token);
-        } else {
-          setError("Não foi possível realizar o login rápido de administrador.");
-        }
+        return;
       }
+      // Fallback
+      const resFallback = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: "michel.lima20000@gmail.com", password: "admin" })
+      });
+      if (resFallback.ok) {
+        const data = await resFallback.json();
+        onLoginSuccess(data.user, data.token);
+        return;
+      }
+      setError("Não foi possível realizar o login rápido de administrador.");
     } catch (err: any) {
       setError("Erro ao conectar com o servidor: " + (err.message || String(err)));
     } finally {
