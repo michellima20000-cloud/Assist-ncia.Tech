@@ -570,14 +570,19 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const despesasSnap = await getDocs(collection(db, "despesas"));
       const despesas = getDocsData(despesasSnap);
 
+      const vendasSnap = await getDocs(collection(db, "vendas"));
+      const vendas = getDocsData(vendasSnap);
+
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
 
-      // Get target date (default to server's/client's local YYYY-MM-DD)
-      const todayQuery = urlObj.searchParams.get("today");
-      const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
+      // Get target date with local offset (defaults to 180 min / UTC-3 for Brazil if not specified)
       const offsetParam = urlObj.searchParams.get("offset");
-      const offsetQuery = offsetParam ? Number(offsetParam) : null;
+      const offsetQuery = offsetParam !== null && offsetParam !== "" ? Number(offsetParam) : 180;
+      const effectiveOffset = !isNaN(offsetQuery) ? offsetQuery : 180;
+
+      const todayQuery = urlObj.searchParams.get("today");
+      const todayStr = todayQuery || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
@@ -585,27 +590,33 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
           return str;
         }
-        if (offsetQuery === null) return str.substring(0, 10);
         const date = new Date(str);
         if (isNaN(date.getTime())) return str.substring(0, 10);
-        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        const localTime = new Date(date.getTime() - (effectiveOffset * 60000));
         return localTime.toISOString().substring(0, 10);
       };
 
       const isDateMatchToday = (dateVal: any) => {
         if (!dateVal) return false;
-        const str = String(dateVal).trim();
-        if (str === todayStr || str.substring(0, 10) === todayStr) return true;
-        if (/^\d{4}-\d{2}-\d{2}$/.test(str)) return str === todayStr;
-        if (getLocalDateStr(str) === todayStr) return true;
-        return false;
+        const local = getLocalDateStr(dateVal);
+        return local === todayStr;
       };
+
+      // Set of estornada sales to exclude
+      const estornadaVendaIds = new Set(
+        vendas.filter((v: any) => v.status === "estornada").map((v: any) => v.id)
+      );
 
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
+      const todayPagamentos = pagamentos.filter((p: any) => {
+        if (!p.date || !isDateMatchToday(p.date)) return false;
+        if (p.status === "estornada") return false;
+        if (p.vendaId && estornadaVendaIds.has(p.vendaId)) return false;
+        return true;
+      });
 
       // Deduplicate today payments by atendimentoId to prevent double-counting accidental duplicates
       const seenOrderIds = new Set<string>();
@@ -696,16 +707,16 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         productCostMap.set(p.id, Number(p.cost) || 0);
       });
 
+      const effectiveOffset = offsetQuery !== null && !isNaN(offsetQuery) ? offsetQuery : 180;
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
         const str = String(isoString).trim();
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
           return str;
         }
-        if (offsetQuery === null) return str.substring(0, 10);
         const date = new Date(str);
         if (isNaN(date.getTime())) return str.substring(0, 10);
-        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        const localTime = new Date(date.getTime() - (effectiveOffset * 60000));
         return localTime.toISOString().substring(0, 10);
       };
 
@@ -714,16 +725,23 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       let endLimitStr: string;
 
       if (type === "daily") {
-        const targetDateStr = dateParam || new Date().toISOString().substring(0, 10);
+        const targetDateStr = dateParam || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
         startLimitStr = targetDateStr;
         endLimitStr = targetDateStr;
       } else {
-        startLimitStr = startDateParam || new Date().toISOString().substring(0, 10);
-        endLimitStr = endDateParam || new Date().toISOString().substring(0, 10);
+        startLimitStr = startDateParam || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
+        endLimitStr = endDateParam || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
       }
 
-      const rawFilteredPayments = pagamentos.filter(p => {
+      // Set of estornada sales to exclude
+      const estornadaVendaIds = new Set(
+        vendas.filter((v: any) => v.status === "estornada").map((v: any) => v.id)
+      );
+
+      const rawFilteredPayments = pagamentos.filter((p: any) => {
         if (!p.date) return false;
+        if (p.status === "estornada") return false;
+        if (p.vendaId && estornadaVendaIds.has(p.vendaId)) return false;
         const localDate = getLocalDateStr(p.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
@@ -740,20 +758,20 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         filteredPayments.push(p);
       });
 
-      const filteredExpenses = despesas.filter(d => {
+      const filteredExpenses = despesas.filter((d: any) => {
         if (!d.date) return false;
         const localDate = getLocalDateStr(d.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
-      const closedOrders = atendimentos.filter(a => {
+      const closedOrders = atendimentos.filter((a: any) => {
         if (a.status !== "finalizado" || !a.exitDate) return false;
         const localDate = getLocalDateStr(a.exitDate);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });
 
       const filteredVendas = vendas.filter((v: any) => {
-        if (!v.date) return false;
+        if (!v.date || v.status === "estornada") return false;
         const localDate = getLocalDateStr(v.date);
         return localDate >= startLimitStr && localDate <= endLimitStr;
       });

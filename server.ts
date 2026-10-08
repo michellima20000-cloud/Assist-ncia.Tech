@@ -512,14 +512,19 @@ async function startServer() {
       const atendimentos = await getCollection<Atendimento>("atendimentos");
       const pagamentos = await getCollection<Pagamento>("pagamentos");
       const despesas = await getCollection<Despesa>("despesas");
+      const vendas = await getCollection<Venda>("vendas");
       
       const naAssistenciaCount = atendimentos.filter(a => a.status === "na_assistencia").length;
       const entregaCount = atendimentos.filter(a => a.status === "entrega").length;
 
-      // Get target date (default to server's local YYYY-MM-DD)
+      // Get target date with local offset (defaults to 180 min / UTC-3 for Brazil if not specified)
+      const offsetQuery = req.query.offset !== undefined && req.query.offset !== null && req.query.offset !== ""
+        ? Number(req.query.offset)
+        : 180;
+      const effectiveOffset = !isNaN(offsetQuery) ? offsetQuery : 180;
+
       const todayQuery = req.query.today as string;
-      const todayStr = todayQuery || new Date().toISOString().substring(0, 10);
-      const offsetQuery = req.query.offset ? Number(req.query.offset) : null;
+      const todayStr = todayQuery || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
 
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
@@ -528,27 +533,34 @@ async function startServer() {
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
           return str;
         }
-        if (offsetQuery === null) return str.substring(0, 10);
         const date = new Date(str);
         if (isNaN(date.getTime())) return str.substring(0, 10);
-        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        const localTime = new Date(date.getTime() - (effectiveOffset * 60000));
         return localTime.toISOString().substring(0, 10);
       };
 
       const isDateMatchToday = (dateVal: any) => {
         if (!dateVal) return false;
-        const str = String(dateVal).trim();
-        if (str === todayStr || str.substring(0, 10) === todayStr) return true;
-        if (getLocalDateStr(str) === todayStr) return true;
-        return false;
+        const local = getLocalDateStr(dateVal);
+        return local === todayStr;
       };
+
+      // Set of estornada sales to exclude from financial collection
+      const estornadaVendaIds = new Set(
+        vendas.filter(v => v.status === "estornada").map(v => v.id)
+      );
 
       // Financial calculations
       let cash = 0;
       let card = 0;
       let totalCollected = 0;
 
-      const todayPagamentos = pagamentos.filter(p => p.date && isDateMatchToday(p.date));
+      const todayPagamentos = pagamentos.filter(p => {
+        if (!p.date || !isDateMatchToday(p.date)) return false;
+        if (p.status === "estornada") return false;
+        if (p.vendaId && estornadaVendaIds.has(p.vendaId)) return false;
+        return true;
+      });
 
       // Deduplicate today payments by atendimentoId to prevent double-counting accidental duplicates
       const seenOrderIds = new Set<string>();
@@ -1722,16 +1734,16 @@ async function startServer() {
         productCostMap.set(p.id, p.cost || 0);
       });
 
+      const effectiveOffset = offsetQuery !== null && !isNaN(offsetQuery) ? offsetQuery : 180;
       const getLocalDateStr = (isoString: string) => {
         if (!isoString) return "";
         const str = String(isoString).trim();
         if (/^\d{4}-\d{2}-\d{2}$/.test(str)) {
           return str;
         }
-        if (offsetQuery === null) return str.substring(0, 10);
         const date = new Date(str);
         if (isNaN(date.getTime())) return str.substring(0, 10);
-        const localTime = new Date(date.getTime() - (offsetQuery * 60000));
+        const localTime = new Date(date.getTime() - (effectiveOffset * 60000));
         return localTime.toISOString().substring(0, 10);
       };
 
@@ -1740,25 +1752,33 @@ async function startServer() {
       let endLimitStr: string;
 
       if (type === "daily") {
-        const targetDateStr = (date as string) || new Date().toISOString().substring(0, 10);
+        const targetDateStr = (date as string) || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
         startLimitStr = targetDateStr;
         endLimitStr = targetDateStr;
       } else {
-        startLimitStr = (startDate as string) || new Date().toISOString().substring(0, 10);
-        endLimitStr = (endDate as string) || new Date().toISOString().substring(0, 10);
+        startLimitStr = (startDate as string) || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
+        endLimitStr = (endDate as string) || new Date(Date.now() - (effectiveOffset * 60000)).toISOString().substring(0, 10);
       }
 
       const matchDateRange = (isoString: string) => {
         if (!isoString) return false;
         if (type === "all") return true;
         const localDate = getLocalDateStr(isoString);
-        const rawDate = typeof isoString === "string" ? isoString.substring(0, 10) : "";
-        return (localDate >= startLimitStr && localDate <= endLimitStr) ||
-               (rawDate >= startLimitStr && rawDate <= endLimitStr);
+        return localDate >= startLimitStr && localDate <= endLimitStr;
       };
 
+      // Set of estornada sales to exclude
+      const estornadaVendaIds = new Set(
+        vendas.filter(v => v.status === "estornada").map(v => v.id)
+      );
+
       // Filter payments in the range and deduplicate by atendimentoId
-      const rawFilteredPayments = pagamentos.filter(p => matchDateRange(p.date));
+      const rawFilteredPayments = pagamentos.filter(p => {
+        if (!p.date || !matchDateRange(p.date)) return false;
+        if (p.status === "estornada") return false;
+        if (p.vendaId && estornadaVendaIds.has(p.vendaId)) return false;
+        return true;
+      });
       const seenOrderPayIds = new Set<string>();
       filteredPayments = [];
       rawFilteredPayments.forEach(p => {
@@ -1780,8 +1800,8 @@ async function startServer() {
         return matchDateRange(a.exitDate);
       });
 
-      // Filter direct sales in the range
-      const filteredVendas = vendas.filter(v => matchDateRange(v.date));
+      // Filter direct sales in the range (exclude estornadas)
+      const filteredVendas = vendas.filter(v => matchDateRange(v.date) && v.status !== "estornada");
 
       // Direct sales product financials
       let directSalesRevenue = 0;

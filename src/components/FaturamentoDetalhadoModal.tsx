@@ -116,18 +116,28 @@ export const FaturamentoDetalhadoModal: React.FC<FaturamentoDetalhadoModalProps>
           const allRes = await fetch('/api/reports?type=all');
           if (allRes.ok) {
             const allData = await allRes.json();
+            const getLocalDay = (iso?: string) => {
+              if (!iso) return "";
+              if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) return iso;
+              const date = new Date(iso);
+              if (isNaN(date.getTime())) return iso.substring(0, 10);
+              const localTime = new Date(date.getTime() - (offset * 60000));
+              return localTime.toISOString().substring(0, 10);
+            };
+
             const dateRevenueMap = new Map<string, number>();
 
             (allData.vendas || []).forEach((v: any) => {
-              const d = v.date?.substring(0, 10);
+              if (v.status === "estornada") return;
+              const d = getLocalDay(v.date);
               if (d) dateRevenueMap.set(d, (dateRevenueMap.get(d) || 0) + (Number(v.totalAmount) || 0));
             });
             (allData.closedOrders || []).forEach((o: any) => {
-              const d = (o.exitDate || o.entryDate)?.substring(0, 10);
+              const d = getLocalDay(o.exitDate || o.entryDate);
               if (d) dateRevenueMap.set(d, (dateRevenueMap.get(d) || 0) + (Number(o.totalAmount) || 0));
             });
 
-            const sortedDates = Array.from(dateRevenueMap.keys()).sort().reverse();
+            const sortedDates: string[] = Array.from(dateRevenueMap.keys()).sort().reverse();
             const foundLatest = sortedDates.find(d => d !== targetDate && (dateRevenueMap.get(d) || 0) > 0);
 
             if (foundLatest) {

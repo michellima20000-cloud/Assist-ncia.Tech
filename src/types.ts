@@ -272,6 +272,7 @@ export interface Pagamento {
   splitPayments?: SplitPaymentDetail;
   notesFin?: string;
   date: string;
+  status?: string;
 }
 
 export interface VendaItem {
