@@ -976,10 +976,15 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       const controlNumber = `OS-${String(nextNum).padStart(4, "0")}`;
       const id = "ate-" + Date.now();
       
+      const ficarNaAssistencia = body.ficarNaAssistencia !== undefined ? body.ficarNaAssistencia : true;
+      const tipoDocumento = body.tipoDocumento || (ficarNaAssistencia ? "os" : "orcamento");
+
       const newAtendimento = {
         id,
         controlNumber,
         status: "na_assistencia",
+        detailedStatus: ficarNaAssistencia ? "Aguardando Análise" : "Orçamento (Aparelho com o cliente)",
+        exitDate: undefined,
         clienteId: body.clienteId || "",
         item: body.item || "Celular",
         brand: body.brand || "",
@@ -992,7 +997,17 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         services: body.services || [],
         products: body.products || [],
         entryDate: new Date().toISOString(),
-        totalAmount: body.totalAmount || 0
+        totalAmount: body.totalAmount || 0,
+        tipoDocumento,
+        ficarNaAssistencia,
+        storageGb: body.storageGb || "",
+        senhaDesbloqueio: body.senhaDesbloqueio || "",
+        padraoDesbloqueio: body.padraoDesbloqueio || "",
+        checklist: body.checklist || {},
+        avarias: body.avarias || {},
+        assinaturaCliente: body.assinaturaCliente || "",
+        termoAceito: body.termoAceito !== undefined ? body.termoAceito : true,
+        garantia: body.garantia || "Garantia de 90 dias (3 meses)"
       };
 
       await setDoc(doc(db, "atendimentos", id), newAtendimento);

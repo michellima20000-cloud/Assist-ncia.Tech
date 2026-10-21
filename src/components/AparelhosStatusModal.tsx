@@ -16,10 +16,11 @@ import {
   Calendar,
   Hammer,
   DollarSign,
-  Layers,
-  History
+  History,
+  FileText
 } from 'lucide-react';
 import { Atendimento, Cliente } from '../types';
+import ChecklistPrintModal from './ChecklistPrintModal';
 
 interface AparelhosStatusModalProps {
   isOpen: boolean;
@@ -38,7 +39,8 @@ export const AparelhosStatusModal: React.FC<AparelhosStatusModalProps> = ({
   onNewEntrada,
   onOpenFullAtendimentoScreen
 }) => {
-  const [activeTab, setActiveTab] = useState<'na_assistencia' | 'entrega' | 'recent'>(initialTab);
+  const [activeTab, setActiveTab] = useState<'na_assistencia' | 'entrega' | 'orcamento' | 'recent'>(initialTab);
+  const [modalPrintAtendimento, setModalPrintAtendimento] = useState<Atendimento | null>(null);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [atendimentos, setAtendimentos] = useState<Atendimento[]>([]);
@@ -83,11 +85,15 @@ export const AparelhosStatusModal: React.FC<AparelhosStatusModalProps> = ({
 
   // Filter lists by status
   const naAssistenciaList = useMemo(() => {
-    return atendimentos.filter(a => a.status === 'na_assistencia');
+    return atendimentos.filter(a => a.status === 'na_assistencia' && a.ficarNaAssistencia !== false);
   }, [atendimentos]);
 
   const entregaList = useMemo(() => {
     return atendimentos.filter(a => a.status === 'entrega');
+  }, [atendimentos]);
+
+  const orcamentoList = useMemo(() => {
+    return atendimentos.filter(a => a.tipoDocumento === 'orcamento' || a.ficarNaAssistencia === false);
   }, [atendimentos]);
 
   const recentList = useMemo(() => {
@@ -100,8 +106,9 @@ export const AparelhosStatusModal: React.FC<AparelhosStatusModalProps> = ({
   const currentList = useMemo(() => {
     if (activeTab === 'na_assistencia') return naAssistenciaList;
     if (activeTab === 'entrega') return entregaList;
+    if (activeTab === 'orcamento') return orcamentoList;
     return recentList;
-  }, [activeTab, naAssistenciaList, entregaList, recentList]);
+  }, [activeTab, naAssistenciaList, entregaList, orcamentoList, recentList]);
 
   const filteredList = useMemo(() => {
     if (!search.trim()) return currentList;
@@ -252,6 +259,18 @@ export const AparelhosStatusModal: React.FC<AparelhosStatusModalProps> = ({
             >
               <CheckCircle className="w-3.5 h-3.5" />
               Prontos / Entregas ({entregaList.length})
+            </button>
+
+            <button
+              onClick={() => setActiveTab('orcamento')}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition flex items-center gap-2 cursor-pointer ${
+                activeTab === 'orcamento'
+                  ? 'bg-indigo-600 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              Orçamentos ({orcamentoList.length})
             </button>
 
             <button
@@ -478,6 +497,16 @@ export const AparelhosStatusModal: React.FC<AparelhosStatusModalProps> = ({
 
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
+                        onClick={() => setModalPrintAtendimento(a)}
+                        className="p-2 bg-slate-100 hover:bg-blue-50 text-slate-600 hover:text-blue-700 rounded-xl text-xs font-bold transition flex items-center gap-1 border border-slate-200 cursor-pointer"
+                        title="Ver e Imprimir Ficha A4 do Aparelho"
+                      >
+                        <FileText className="w-4 h-4" />
+                        <span className="hidden sm:inline">Ficha A4</span>
+                      </button>
+
+                      <button
                         onClick={() => {
                           const mode = isReady ? 'saida' : 'atendimento';
                           onSelectAtendimento(a, mode);
@@ -526,6 +555,16 @@ export const AparelhosStatusModal: React.FC<AparelhosStatusModalProps> = ({
         </div>
 
       </div>
+
+      {modalPrintAtendimento && (
+        <ChecklistPrintModal
+          isOpen={!!modalPrintAtendimento}
+          onClose={() => setModalPrintAtendimento(null)}
+          atendimento={modalPrintAtendimento}
+          cliente={modalPrintAtendimento.clienteId ? clientMap.get(modalPrintAtendimento.clienteId) : null}
+          onPrintThermal={() => {}}
+        />
+      )}
     </div>
   );
 };

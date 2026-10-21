@@ -193,6 +193,39 @@ export interface Atendimento {
   numeroSerie?: string;
   detailedStatus?: string;
   garantia?: string;
+  tipoDocumento?: 'os' | 'orcamento';
+  ficarNaAssistencia?: boolean;
+  storageGb?: string;
+  checklist?: ChecklistData;
+  avarias?: AvariasDiagram;
+  assinaturaCliente?: string;
+  termoAceito?: boolean;
+}
+
+export interface ChecklistData {
+  telaDisplay?: 'sim' | 'nao' | 'nao_testado';
+  touchScreen?: 'sim' | 'nao' | 'nao_testado';
+  teclas?: 'sim' | 'nao' | 'nao_testado';
+  sensores?: 'sim' | 'nao' | 'nao_testado';
+  bluetooth?: 'sim' | 'nao' | 'nao_testado';
+  wifi?: 'sim' | 'nao' | 'nao_testado';
+  ligacoes?: 'sim' | 'nao' | 'nao_testado';
+  cameras?: 'sim' | 'nao' | 'nao_testado';
+  carregamento?: 'sim' | 'nao' | 'nao_testado';
+  biometriaFaceId?: 'sim' | 'nao' | 'nao_testado';
+  tampaTraseira?: 'sim' | 'nao' | 'nao_testado';
+  [key: string]: 'sim' | 'nao' | 'nao_testado' | undefined;
+}
+
+export interface AvariasDiagram {
+  lado1?: boolean; // Lateral esquerda
+  lado2?: boolean; // Lateral direita
+  frente?: boolean; // Tela frontal
+  traseira?: boolean; // Traseira
+  superior?: boolean; // Topo
+  inferior?: boolean; // Base / Conector
+  observacoes?: string;
+  [key: string]: boolean | string | undefined;
 }
 
 export interface Servico {

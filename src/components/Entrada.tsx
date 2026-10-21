@@ -4,11 +4,13 @@ import {
   Trash2, ShieldCheck, Printer, Eye, QrCode, Image, Plus, X, CheckCircle2,
   RefreshCw, Check
 } from "lucide-react";
-import { Cliente, Servico, Produto, AtendimentoServico, AtendimentoProduto, Marca, Item } from "../types";
+import { Cliente, Servico, Produto, AtendimentoServico, AtendimentoProduto, Marca, Item, ChecklistData, AvariasDiagram, Atendimento } from "../types";
 import Clientes from "./Clientes";
 import ProductScanner from "./ProductScanner";
 import { compressImage } from "../lib/imageCompressor";
 import CameraCaptureModal from "./CameraCaptureModal";
+import ChecklistInspection from "./ChecklistInspection";
+import ChecklistPrintModal from "./ChecklistPrintModal";
 
 interface EntradaProps {
   onBack: () => void;
@@ -57,6 +59,24 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
   const [photoUrl, setPhotoUrl] = useState(initialDraft?.photoUrl || "");
   const [photoUrls, setPhotoUrls] = useState<string[]>(initialDraft?.photoUrls || []);
   const [printTicket, setPrintTicket] = useState(true);
+
+  // Checklist, Vistoria e Tipo de Registro
+  const [tipoDocumento, setTipoDocumento] = useState<"os" | "orcamento">(initialDraft?.tipoDocumento || "os");
+  const [ficarNaAssistencia, setFicarNaAssistencia] = useState<boolean>(
+    initialDraft?.ficarNaAssistencia !== undefined ? initialDraft.ficarNaAssistencia : true
+  );
+  const [storageGb, setStorageGb] = useState<string>(initialDraft?.storageGb || "");
+  const [senhaDesbloqueio, setSenhaDesbloqueio] = useState<string>(initialDraft?.senhaDesbloqueio || "");
+  const [padraoDesbloqueio, setPadraoDesbloqueio] = useState<string>(initialDraft?.padraoDesbloqueio || "");
+  const [checklist, setChecklist] = useState<ChecklistData>(initialDraft?.checklist || {});
+  const [avarias, setAvarias] = useState<AvariasDiagram>(initialDraft?.avarias || {});
+  const [assinaturaCliente, setAssinaturaCliente] = useState<string>(initialDraft?.assinaturaCliente || "");
+  const [termoAceito, setTermoAceito] = useState<boolean>(
+    initialDraft?.termoAceito !== undefined ? initialDraft.termoAceito : true
+  );
+
+  // Modal para visualização e impressão da Folha A4 de Checklist
+  const [checklistModalOpen, setChecklistModalOpen] = useState(false);
 
   // Photo modal and upload states
   const [cameraModalOpen, setCameraModalOpen] = useState(false);
@@ -117,7 +137,10 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
       observations ||
       photoUrls.length > 0 ||
       selectedServices.length > 0 ||
-      selectedProducts.length > 0
+      selectedProducts.length > 0 ||
+      senhaDesbloqueio ||
+      padraoDesbloqueio ||
+      Object.keys(checklist).length > 0
     ) {
       try {
         const draft = {
@@ -133,6 +156,15 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
           photoUrls,
           selectedServices,
           selectedProducts,
+          tipoDocumento,
+          ficarNaAssistencia,
+          storageGb,
+          senhaDesbloqueio,
+          padraoDesbloqueio,
+          checklist,
+          avarias,
+          assinaturaCliente,
+          termoAceito,
           savedAt: Date.now()
         };
         localStorage.setItem("os_entrada_draft", JSON.stringify(draft));
@@ -151,11 +183,20 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
     garantia,
     photoUrls,
     selectedServices,
-    selectedProducts
+    selectedProducts,
+    tipoDocumento,
+    ficarNaAssistencia,
+    storageGb,
+    senhaDesbloqueio,
+    padraoDesbloqueio,
+    checklist,
+    avarias,
+    assinaturaCliente,
+    termoAceito
   ]);
 
   const handleClearDraft = () => {
-    if (window.confirm("Deseja limpar todos os dados preenchidos desta Ordem de Serviço?")) {
+    if (window.confirm("Deseja limpar todos os dados preenchidos deste checklist/Ordem de Serviço?")) {
       try {
         localStorage.removeItem("os_entrada_draft");
       } catch (_) {}
@@ -169,6 +210,15 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
       setPhotoUrl("");
       setSelectedServices([]);
       setSelectedProducts([]);
+      setTipoDocumento("os");
+      setFicarNaAssistencia(true);
+      setStorageGb("");
+      setSenhaDesbloqueio("");
+      setPadraoDesbloqueio("");
+      setChecklist({});
+      setAvarias({});
+      setAssinaturaCliente("");
+      setTermoAceito(true);
       setDraftRestored(false);
     }
   };
@@ -412,7 +462,16 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
       photoUrls,
       services: servicesToSend,
       products: selectedProducts,
-      totalAmount: finalTotalAmount
+      totalAmount: finalTotalAmount,
+      tipoDocumento,
+      ficarNaAssistencia,
+      storageGb,
+      senhaDesbloqueio,
+      padraoDesbloqueio,
+      checklist,
+      avarias,
+      assinaturaCliente,
+      termoAceito
     };
 
     try {
@@ -426,30 +485,60 @@ export default function Entrada({ onBack, onSaveSuccess }: EntradaProps) {
         const result = await res.json();
         
         // Build receipt content
-        const entryStr = `CONTROLE: ${result.controlNumber}
+        const checkSummaryStr = Object.entries(checklist)
+          .map(([k, v]) => `${k}: ${v === "sim" ? "SIM" : v === "nao" ? "NAO" : "NT"}`)
+          .join("\n");
+
+        const avariasList = [
+          avarias.lado1 && "Lateral Esq",
+          avarias.lado2 && "Lateral Dir",
+          avarias.frente && "Tela/Frente",
+          avarias.traseira && "Tampa/Traseira",
+          avarias.superior && "Superior",
+          avarias.inferior && "Inferior"
+        ].filter(Boolean);
+
+        const entryStr = `================================
+${tipoDocumento === "orcamento" ? "  FICHA DE ORCAMENTO & VISTORIA  " : "  COMPROVANTE DE ENTRADA (OS)  "}
+================================
+CONTROLE: ${result.controlNumber}
 DATA: ${new Date(result.entryDate).toLocaleString("pt-BR")}
 CLIENTE: ${selectedCliente.name}
 FONE: ${selectedCliente.phone}
 ${selectedCliente.cnpj ? `CNPJ: ${selectedCliente.cnpj}` : (selectedCliente.cpf ? `CPF: ${selectedCliente.cpf}` : "")}
-------------------------
+--------------------------------
 EQUIPAMENTO:
 ${result.item} ${result.brand} ${result.model}
 ${result.imei ? `IMEI: ${result.imei}` : ""}
-------------------------
-DEFEITO: ${result.defeito || "Não informado"}
+${storageGb ? `CAPACIDADE: ${storageGb}` : ""}
+${senhaDesbloqueio ? `SENHA/PIN: ${senhaDesbloqueio}` : ""}
+${padraoDesbloqueio ? `PADRAO 3X3: ${padraoDesbloqueio}` : ""}
+CUSTODIA: ${ficarNaAssistencia ? "FICOU NA ASSISTENCIA" : "NAO FICOU (SOMENTE ORCAMENTO)"}
+--------------------------------
+DEFEITO: ${result.defeito || "Nao informado"}
 ESTADO / OBS: ${result.observations || "Nenhuma"}
 GARANTIA: ${garantia || "Garantia de 90 dias (3 meses)"}
-------------------------
+--------------------------------
+CHECKLIST INICIAL:
+${checkSummaryStr || "Nenhum item marcado"}
+AVARIAS IDENTIFICADAS:
+${avariasList.length > 0 ? avariasList.join(", ") : "Nenhuma avaria estetica"}
+${avarias.observacoes ? `Obs Avarias: ${avarias.observacoes}\n` : ""}--------------------------------
 SERVICOS ADICIONADOS:
 ${servicesToSend.map(s => `- ${s.name}: R$ ${s.price.toFixed(2)}`).join("\n")}
 ${selectedProducts.length > 0 ? `PRODUTOS/PECAS:\n${selectedProducts.map(p => `- ${p.name} (x${p.quantity}): R$ ${(p.price * p.quantity).toFixed(2)}`).join("\n")}` : ""}
-------------------------
+--------------------------------
 TOTAL ESTIMADO: R$ ${finalTotalAmount.toFixed(2)}
-------------------------
-ASSINATURA DO CLIENTE:
+--------------------------------
+TERMO:
+Garantia nao cobre mau uso, quedas,
+trincos ou umidade. Aparelhos nao
+retirados em 90 dias serao
+considerados abandonados.
 
-________________________
-TERMO: Autorizo o diagnóstico.`;
+ASSINATURA DO CLIENTE:
+${assinaturaCliente ? "[ASSINATURA DIGITAL REGISTRADA]" : "________________________________"}
+Cliente de acordo com os termos.`;
 
         try {
           localStorage.removeItem("os_entrada_draft");
@@ -548,13 +637,36 @@ TERMO: Autorizo o diagnóstico.`;
             ) : (
               <div className="text-center py-6 border border-dashed border-slate-200 rounded-2xl bg-slate-50/30">
                 <p className="text-xs text-slate-500 mb-3">Selecione ou cadastre o dono do aparelho para continuar</p>
-                <button
-                  type="button"
-                  onClick={() => setShowClientModal(true)}
-                  className="px-4 py-2 bg-[#1E88E5] hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition"
-                >
-                  Associar Cliente
-                </button>
+                <div className="flex items-center justify-center gap-2 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => setShowClientModal(true)}
+                    className="px-4 py-2 bg-[#1E88E5] hover:bg-blue-600 text-white text-xs font-bold rounded-xl transition"
+                  >
+                    Associar Cliente
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const name = window.prompt("Nome do Cliente (Balcão / Orçamento):");
+                      if (name && name.trim()) {
+                        const phone = window.prompt("WhatsApp / Telefone:") || "";
+                        const quickClient: Cliente = {
+                          id: "cli-" + Date.now(),
+                          name: name.trim(),
+                          phone: phone.trim(),
+                          email: "",
+                          cpf: "",
+                          address: ""
+                        };
+                        setSelectedCliente(quickClient);
+                      }
+                    }}
+                    className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition"
+                  >
+                    + Rápido (Balcão)
+                  </button>
+                </div>
               </div>
             )}
           </div>
@@ -831,13 +943,38 @@ TERMO: Autorizo o diagnóstico.`;
               </div>
             </div>
           </div>
+
+          {/* Step 3: Checklist, Vistoria Técnica & Assinatura */}
+          <ChecklistInspection
+            tipoDocumento={tipoDocumento}
+            onChangeTipoDocumento={setTipoDocumento}
+            ficarNaAssistencia={ficarNaAssistencia}
+            onChangeFicarNaAssistencia={setFicarNaAssistencia}
+            storageGb={storageGb}
+            onChangeStorageGb={setStorageGb}
+            senhaDesbloqueio={senhaDesbloqueio}
+            onChangeSenhaDesbloqueio={setSenhaDesbloqueio}
+            padraoDesbloqueio={padraoDesbloqueio}
+            onChangePadraoDesbloqueio={setPadraoDesbloqueio}
+            checklist={checklist}
+            onChangeChecklist={setChecklist}
+            avarias={avarias}
+            onChangeAvarias={setAvarias}
+            assinaturaCliente={assinaturaCliente}
+            onChangeAssinaturaCliente={setAssinaturaCliente}
+            termoAceito={termoAceito}
+            onChangeTermoAceito={setTermoAceito}
+            garantiaDias={garantia}
+            onChangeGarantiaDias={setGarantia}
+            onOpenPreview={() => setChecklistModalOpen(true)}
+          />
         </div>
 
-        {/* Step 3: Selection Services & Products (Sidebar/Third Column) */}
+        {/* Step 4: Selection Services & Products (Sidebar/Third Column) */}
         <div className="space-y-4">
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-              <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-xs flex items-center justify-center font-bold">3</span>
+              <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-xs flex items-center justify-center font-bold">4</span>
               <span>Serviços & Peças</span>
             </h3>
 
@@ -1058,12 +1195,30 @@ TERMO: Autorizo o diagnóstico.`;
               </label>
             </div>
 
+            {/* Action Buttons */}
+            <button
+              type="button"
+              onClick={() => {
+                setChecklistModalOpen(true);
+              }}
+              className="w-full bg-slate-900 hover:bg-slate-800 text-white font-bold py-2.5 px-3 rounded-xl transition flex items-center justify-center gap-2 text-xs border border-slate-700 shadow-sm"
+            >
+              <FileText className="w-4 h-4 text-blue-400" />
+              <span>Ver Ficha A4 / Imprimir Laudo</span>
+            </button>
+
             <button
               onClick={handleSave}
-              className="w-full bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 text-white font-bold py-3 px-4 rounded-xl transition shadow-lg shadow-emerald-100 flex items-center justify-center gap-2 text-xs"
+              className={`w-full ${
+                ficarNaAssistencia
+                  ? "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800 shadow-emerald-100"
+                  : "bg-indigo-600 hover:bg-indigo-700 active:bg-indigo-800 shadow-indigo-100"
+              } text-white font-bold py-3 px-4 rounded-xl transition shadow-lg flex items-center justify-center gap-2 text-xs`}
             >
               <Save className="w-4 h-4" />
-              Finalizar Entrada & Registrar OS
+              {ficarNaAssistencia
+                ? (tipoDocumento === "orcamento" ? "Salvar Orçamento (Aparelho na Loja)" : "Finalizar Entrada & Registrar OS")
+                : "Salvar Orçamento (Cliente Leva o Aparelho)"}
             </button>
           </div>
         </div>
@@ -1166,6 +1321,40 @@ TERMO: Autorizo o diagnóstico.`;
           </div>
         </div>
       )}
+
+      {/* Modal de Impressão da Ficha A4 e Checklist Oficial da Foto */}
+      <ChecklistPrintModal
+        isOpen={checklistModalOpen}
+        onClose={() => setChecklistModalOpen(false)}
+        atendimento={{
+          controlNumber: "PREVIEW",
+          item: selectedItem,
+          brand: selectedBrand,
+          model,
+          imei,
+          defeito,
+          observations,
+          garantia,
+          tipoDocumento,
+          ficarNaAssistencia,
+          storageGb,
+          senhaDesbloqueio,
+          padraoDesbloqueio,
+          checklist,
+          avarias,
+          assinaturaCliente,
+          termoAceito,
+          services: selectedServices,
+          products: selectedProducts,
+          totalAmount: totalAmount,
+          entryDate: new Date().toISOString()
+        }}
+        cliente={selectedCliente || { id: "balcao", name: "Consumidor Final (Balcão)", phone: "", email: "", cpf: "", address: "" }}
+        onUpdateSignature={(sig) => setAssinaturaCliente(sig)}
+        onPrintThermal={(ticket) => {
+          onSaveSuccess(ticket, selectedCliente?.phone || "", selectedCliente?.name || "");
+        }}
+      />
     </div>
   );
 }

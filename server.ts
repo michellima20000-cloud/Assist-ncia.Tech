@@ -743,10 +743,15 @@ async function startServer() {
       const controlNumber = `OS-${String(nextNum).padStart(4, "0")}`;
       const id = "a-" + Date.now();
       
+      const ficarNaAssistencia = req.body.ficarNaAssistencia !== undefined ? req.body.ficarNaAssistencia : true;
+      const tipoDocumento = req.body.tipoDocumento || (ficarNaAssistencia ? "os" : "orcamento");
+
       const newAtendimento: Atendimento = {
         id,
         controlNumber,
         status: "na_assistencia",
+        detailedStatus: ficarNaAssistencia ? "Aguardando Análise" : "Orçamento (Aparelho com o cliente)",
+        exitDate: undefined,
         clienteId: req.body.clienteId,
         item: req.body.item || "Celular",
         brand: req.body.brand || "",
@@ -759,7 +764,17 @@ async function startServer() {
         services: req.body.services || [],
         products: req.body.products || [],
         entryDate: new Date().toISOString(),
-        totalAmount: req.body.totalAmount || 0
+        totalAmount: req.body.totalAmount || 0,
+        tipoDocumento,
+        ficarNaAssistencia,
+        storageGb: req.body.storageGb || "",
+        senhaDesbloqueio: req.body.senhaDesbloqueio || "",
+        padraoDesbloqueio: req.body.padraoDesbloqueio || "",
+        checklist: req.body.checklist || {},
+        avarias: req.body.avarias || {},
+        assinaturaCliente: req.body.assinaturaCliente || "",
+        termoAceito: req.body.termoAceito !== undefined ? req.body.termoAceito : true,
+        garantia: req.body.garantia || "Garantia de 90 dias (3 meses)"
       };
 
       await setDocument("atendimentos", id, newAtendimento);

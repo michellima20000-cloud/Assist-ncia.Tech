@@ -19,10 +19,12 @@ import {
   Clock, 
   Activity, 
   QrCode,
-  ShieldCheck 
+  ShieldCheck,
+  Smartphone
 } from "lucide-react";
 import { Atendimento, Cliente, Servico, Produto, AtendimentoServico, AtendimentoProduto } from "../types";
 import ProductScanner from "./ProductScanner";
+import ChecklistPrintModal from "./ChecklistPrintModal";
 
 interface SaidaProps {
   atendimento: Atendimento;
@@ -65,6 +67,7 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
   const [notesFin, setNotesFin] = useState(atendimento.notesFin || "");
   const [updatingStatus, setUpdatingStatus] = useState(false);
   const [feedbackConfig, setFeedbackConfig] = useState<any>(null);
+  const [showChecklistPrintModal, setShowChecklistPrintModal] = useState(false);
   
   // Feedback scheduling tracking
   const [relatedFeedback, setRelatedFeedback] = useState<any>(null);
@@ -1554,6 +1557,21 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
             </span>
             <FileText className="w-5 h-5 text-white bg-slate-600/50 p-1 rounded-lg" />
           </button>
+
+          {/* Button 5: FICHA A4 & CHECKLIST OFICIAL */}
+          <button
+            type="button"
+            onClick={() => setShowChecklistPrintModal(true)}
+            className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-black text-xs rounded-xl flex items-center justify-between px-6 transition uppercase tracking-wider shadow-md shadow-blue-500/10"
+          >
+            <span className="flex items-center gap-2">
+              <Smartphone className="w-4 h-4 text-blue-200" />
+              <span>Ficha A4 & Checklist do Aparelho (Modelo Assinado)</span>
+            </span>
+            <span className="flex items-center gap-1 text-[11px] bg-blue-700/60 px-2 py-0.5 rounded-lg font-bold">
+              {atendimento.assinaturaCliente ? "✍️ Assinado" : "Ver / Imprimir"}
+            </span>
+          </button>
         </div>
       </div>
 
@@ -1776,6 +1794,24 @@ export default function Saida({ atendimento, onBack, onGoToPayment, onPrintIntak
           onClose={() => setScannerOpen(false)} 
           onProductScanned={handleScanSelectProduct} 
           mode="select"
+        />
+      )}
+
+      {/* Checklist & Ficha A4 Print Modal */}
+      {showChecklistPrintModal && (
+        <ChecklistPrintModal
+          isOpen={showChecklistPrintModal}
+          onClose={() => setShowChecklistPrintModal(false)}
+          atendimento={atendimento}
+          cliente={client}
+          onPrintThermal={(content) => {
+            if (onPrintIntakeReceipt) {
+              onPrintIntakeReceipt(atendimento, false, client);
+            }
+          }}
+          onUpdateSignature={async (sig) => {
+            await saveField("assinaturaCliente", sig);
+          }}
         />
       )}
     </div>
