@@ -694,4 +694,88 @@ body.theme-pure-black {
   opacity: 1 !important;
 }
 
+/* ==========================================================================
+   REGRAS DE IMPRESSÃO OTIMIZADA E LIMPA (@media print)
+   Oculta barras laterais, cabeçalhos, botões e foca 100% no documento técnico
+   ========================================================================== */
+@media print {
+  /* Oculta navegações, cabeçalhos do app, menus laterais e botões */
+  header,
+  nav,
+  aside,
+  footer,
+  .no-print,
+  .print-hidden,
+  .screen-only,
+  button,
+  input[type="button"],
+  input[type="submit"],
+  [data-no-print="true"],
+  .theme-header-bg {
+    display: none !important;
+  }
+
+  /* Fundo 100% limpo, branco para papel ou PDF */
+  html,
+  body {
+    background: #ffffff !important;
+    background-color: #ffffff !important;
+    color: #000000 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    font-size: 11pt !important;
+    box-shadow: none !important;
+    min-height: auto !important;
+    height: auto !important;
+    width: 100% !important;
+  }
+
+  /* Oculta marcas d'água e elementos fixos da tela */
+  [aria-hidden="true"],
+  .fixed.pointer-events-none {
+    display: none !important;
+  }
+
+  /* Ocupa a área útil da folha sem bordas de desktop */
+  main {
+    max-width: 100% !important;
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Oculta o formulário de edição em tela durante a impressão se houver a folha embutida */
+  .screen-checklist-form {
+    display: none !important;
+  }
+
+  /* Folha técnica do Checklist: layout limpo de alta resolução */
+  .checklist-print-sheet {
+    display: flex !important;
+    visibility: visible !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 275mm !important;
+    margin: 0 auto !important;
+    padding: 4mm !important;
+    border: 1.5px solid #000000 !important;
+    box-shadow: none !important;
+    background: #ffffff !important;
+    color: #000000 !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .checklist-print-sheet * {
+    visibility: visible !important;
+    color: #000000 !important;
+  }
+
+  @page {
+    size: A4 portrait;
+    margin: 6mm 8mm;
+  }
+}
+
+
 

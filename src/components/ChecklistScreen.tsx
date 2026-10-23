@@ -23,6 +23,7 @@ import { Checklist, ChecklistItemStatus, DamageMark, Cliente, Marca } from "../t
 import PatternLock from "./PatternLock";
 import DeviceDiagram from "./DeviceDiagram";
 import ChecklistPrintModal from "./ChecklistPrintModal";
+import ChecklistPrintDocument from "./ChecklistPrintDocument";
 
 interface ChecklistScreenProps {
   onBack: () => void;
@@ -62,7 +63,7 @@ export default function ChecklistScreen({
   const [searchTerm, setSearchTerm] = useState("");
   const [filterType, setFilterType] = useState<"all" | "ordem_servico" | "orcamento">("all");
 
-  // Print Modal State
+  // Print State
   const [printModalOpen, setPrintModalOpen] = useState(false);
   const [printChecklist, setPrintChecklist] = useState<Checklist | null>(null);
   const [isBlankPrint, setIsBlankPrint] = useState(false);
@@ -246,6 +247,14 @@ export default function ChecklistScreen({
     };
   };
 
+  // Open print modal with preview and printing actions
+  const handleOpenPrintModal = (blank = false, specificChecklist?: Checklist) => {
+    const target = specificChecklist || buildCurrentChecklist();
+    setPrintChecklist(target);
+    setIsBlankPrint(blank);
+    setPrintModalOpen(true);
+  };
+
   // Save checklist
   const handleSave = async (andPrint = false) => {
     if (!clienteNome.trim()) {
@@ -374,16 +383,18 @@ export default function ChecklistScreen({
         </div>
 
         {/* Action Buttons Top Right */}
-        <div className="flex items-center gap-2 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap no-print">
+          {/* Main "Imprimir" Button */}
           <button
             type="button"
-            onClick={handlePrintBlank}
-            className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold rounded-xl flex items-center gap-2 transition cursor-pointer border border-slate-200"
-            title="Imprimir folha de checklist limpa para preenchimento à mão"
+            onClick={() => handleOpenPrintModal(false)}
+            className="px-4 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 shadow-sm transition cursor-pointer"
+            title="Visualizar e Imprimir Checklist"
           >
-            <Printer className="w-4 h-4 text-purple-600" />
-            Imprimir em Branco (Manual)
+            <Printer className="w-4 h-4" />
+            Imprimir
           </button>
+
 
           <button
             type="button"
@@ -533,12 +544,10 @@ export default function ChecklistScreen({
                       type="button"
                       onClick={e => {
                         e.stopPropagation();
-                        setPrintChecklist(chk);
-                        setIsBlankPrint(false);
-                        setPrintModalOpen(true);
+                        handleOpenPrintModal(false, chk);
                       }}
-                      className="px-2.5 py-1 text-xs font-bold text-slate-700 hover:text-purple-700 bg-white hover:bg-purple-50 rounded-lg border border-slate-200 transition flex items-center gap-1.5"
-                      title="Imprimir Checklist"
+                      className="px-3 py-1.5 text-xs font-bold text-slate-800 hover:text-purple-700 bg-white hover:bg-purple-50 rounded-lg border border-slate-200 transition flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                      title="Imprimir este Checklist"
                     >
                       <Printer className="w-3.5 h-3.5 text-purple-600" />
                       Imprimir
@@ -1047,15 +1056,12 @@ export default function ChecklistScreen({
             <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
               <button
                 type="button"
-                onClick={() => {
-                  setPrintChecklist(buildCurrentChecklist());
-                  setIsBlankPrint(false);
-                  setPrintModalOpen(true);
-                }}
-                className="px-4 py-2.5 bg-purple-50 hover:bg-purple-100 text-purple-800 text-xs font-bold rounded-xl border border-purple-200 flex items-center gap-2 transition cursor-pointer"
+                onClick={() => handleOpenPrintModal(false)}
+                className="px-5 py-2.5 bg-slate-900 hover:bg-black text-white text-xs font-bold rounded-xl shadow-sm flex items-center gap-2 transition cursor-pointer"
+                title="Abrir prévia e imprimir"
               >
-                <Printer className="w-4 h-4" />
-                Visualizar Impressão
+                <Printer className="w-4 h-4 text-purple-300" />
+                Imprimir
               </button>
 
               <button
@@ -1071,7 +1077,20 @@ export default function ChecklistScreen({
         </form>
       )}
 
-      {/* Print Modal Dialog */}
+      {/* ========================================================================= */}
+      {/* DOCUMENTO DE IMPRESSÃO (EXIBIDO APENAS NO WINDOW.PRINT COM @MEDIA PRINT)  */}
+      {/* ========================================================================= */}
+      <div className="hidden print:block print:w-full print:m-0 print:p-0">
+        <ChecklistPrintDocument
+          checklist={printChecklist || buildCurrentChecklist()}
+          isBlank={isBlankPrint}
+          companyName={companyName}
+          companyPhone={companyPhone}
+          companyCnpj={companyCnpj}
+        />
+      </div>
+
+      {/* Print Modal Dialog (Optional Screen Preview) */}
       <ChecklistPrintModal
         isOpen={printModalOpen}
         onClose={() => setPrintModalOpen(false)}

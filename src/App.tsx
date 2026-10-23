@@ -27,6 +27,7 @@ import Personalizacao from "./components/Personalizacao";
 import { ExpensesModal } from "./components/ExpensesModal";
 import FaturamentoDetalhadoModal from "./components/FaturamentoDetalhadoModal";
 import AparelhosStatusModal from "./components/AparelhosStatusModal";
+import StandalonePrintChecklist from "./components/StandalonePrintChecklist";
 
 type ActiveTab =
   | "dashboard"
@@ -303,6 +304,21 @@ ________________________`;
   };
 
   const params = new URLSearchParams(window.location.search);
+  const printChecklistParam = params.get("print_checklist");
+  if (printChecklistParam) {
+    return (
+      <StandalonePrintChecklist
+        checklistId={printChecklistParam}
+        onBack={() => {
+          window.location.href = window.location.pathname;
+        }}
+        companyName={theme.companyName || "ASSISTÊNCIA TÉCNICA ESPECIALIZADA"}
+        companyPhone=""
+        companyCnpj=""
+      />
+    );
+  }
+
   const hasOsParam = params.has("os") || params.has("control");
 
   if (!currentUser) {
@@ -354,7 +370,7 @@ ________________________`;
       {/* HEADER SECTION */}
       <header
         style={{ background: getHeaderBackground(theme) }}
-        className="text-white shadow-md select-none transition-colors duration-200"
+        className="text-white shadow-md select-none transition-colors duration-200 no-print print:hidden"
       >
         <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2.5">

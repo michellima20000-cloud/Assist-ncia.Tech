@@ -165,6 +165,21 @@ export interface AtendimentoProduto {
 
 export type AtendimentoStatus = 'na_assistencia' | 'entrega' | 'finalizado';
 
+export interface ChecklistData {
+  [key: string]: 'sim' | 'nao' | 'nao_testado';
+}
+
+export interface AvariasDiagram {
+  lado1?: boolean;
+  lado2?: boolean;
+  frente?: boolean;
+  traseira?: boolean;
+  superior?: boolean;
+  inferior?: boolean;
+  observacoes?: string;
+  [key: string]: any;
+}
+
 export interface Atendimento {
   id: string;
   companyId?: string;
@@ -193,6 +208,13 @@ export interface Atendimento {
   numeroSerie?: string;
   detailedStatus?: string;
   garantia?: string;
+  ficarNaAssistencia?: boolean;
+  tipoDocumento?: "os" | "orcamento";
+  storageGb?: string;
+  checklistData?: ChecklistData;
+  avariasDiagram?: AvariasDiagram;
+  assinaturaCliente?: string;
+  termoAceito?: boolean;
 }
 
 export interface Servico {
