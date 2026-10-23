@@ -56,6 +56,31 @@ function getDocsData(snap: any): any[] {
   }));
 }
 
+function cleanForFirestore(obj: any): any {
+  if (obj === null || obj === undefined) return null;
+  if (Array.isArray(obj)) {
+    return obj
+      .filter(item => item !== undefined)
+      .map(item => cleanForFirestore(item));
+  }
+  if (typeof obj === "object" && !(obj instanceof Date)) {
+    const result: any = {};
+    for (const key of Object.keys(obj)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        result[key] = cleanForFirestore(val);
+      }
+    }
+    return result;
+  }
+  return obj;
+}
+
+async function safeSetDoc(docRef: any, data: any, options?: any) {
+  const cleaned = cleanForFirestore(data);
+  return options ? setDoc(docRef, cleaned, options) : setDoc(docRef, cleaned);
+}
+
 export async function handleClientRoute(url: string, init?: RequestInit): Promise<Response> {
   try {
     const origin = typeof window !== "undefined" && window.location?.origin ? window.location.origin : "http://localhost";
@@ -952,7 +977,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       try {
         const configSnap = await getDoc(configRef);
         if (!configSnap.exists()) {
-          await setDoc(configRef, {
+          await safeSetDoc(configRef, {
             nextControlNumber: 2,
             printerConfigured: false,
             createdAt: new Date().toISOString(),
@@ -963,7 +988,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         } else {
           const configData = configSnap.data() || {};
           nextNum = configData.nextControlNumber || 1;
-          await setDoc(configRef, {
+          await safeSetDoc(configRef, {
             ...configData,
             nextControlNumber: nextNum + 1,
             updatedAt: new Date().toISOString()
@@ -984,7 +1009,6 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         controlNumber,
         status: "na_assistencia",
         detailedStatus: ficarNaAssistencia ? "Aguardando Análise" : "Orçamento (Aparelho com o cliente)",
-        exitDate: undefined,
         clienteId: body.clienteId || "",
         item: body.item || "Celular",
         brand: body.brand || "",
@@ -1010,7 +1034,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         garantia: body.garantia || "Garantia de 90 dias (3 meses)"
       };
 
-      await setDoc(doc(db, "atendimentos", id), newAtendimento);
+      await safeSetDoc(doc(db, "atendimentos", id), newAtendimento);
 
       return new Response(JSON.stringify(newAtendimento), {
         status: 201,
@@ -1044,7 +1068,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
           at.exitDate = at.exitDate || existingPay.date || new Date().toISOString();
           at.paymentId = existingPay.id;
           if (notesFin) at.notesFin = notesFin;
-          await setDoc(atRef, at);
+          await safeSetDoc(atRef, at);
         }
         return new Response(JSON.stringify({ payment: existingPay, atendimento: at }), {
           status: 200,
@@ -1064,14 +1088,14 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
         date: new Date().toISOString()
       };
 
-      await setDoc(doc(db, "pagamentos", payId), newPayment);
+      await safeSetDoc(doc(db, "pagamentos", payId), newPayment);
 
       // Update Atendimento
       at.status = "finalizado";
       at.exitDate = new Date().toISOString();
       at.paymentId = payId;
       at.notesFin = notesFin || "";
-      await setDoc(atRef, at);
+      await safeSetDoc(atRef, at);
 
       // Deduct inventory
       const products = at.products || [];
@@ -1386,7 +1410,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       if (method === "POST") {
         const newId = body.id || `${collectionName.slice(0, 3)}-${Date.now()}`;
         const finalData = { ...body, id: newId };
-        await setDoc(doc(db, collectionName, newId), finalData);
+        await safeSetDoc(doc(db, collectionName, newId), finalData);
         return new Response(JSON.stringify(finalData), {
           status: 201,
           headers: { "Content-Type": "application/json" }
@@ -1396,7 +1420,7 @@ export async function handleClientRoute(url: string, init?: RequestInit): Promis
       // PUT Update document
       if (method === "PUT" && docId) {
         const docRef = doc(db, collectionName, docId);
-        await setDoc(docRef, body, { merge: true });
+        await safeSetDoc(docRef, body, { merge: true });
         return new Response(JSON.stringify({ id: docId, ...body }), {
           status: 200,
           headers: { "Content-Type": "application/json" }
