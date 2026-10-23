@@ -9,7 +9,6 @@ import Clientes from "./Clientes";
 import ProductScanner from "./ProductScanner";
 import { compressImage } from "../lib/imageCompressor";
 import CameraCaptureModal from "./CameraCaptureModal";
-import ChecklistInspection from "./ChecklistInspection";
 import ChecklistPrintModal from "./ChecklistPrintModal";
 
 interface EntradaProps {
@@ -776,6 +775,16 @@ Cliente de acordo com os termos.`;
                   className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
                 />
               </div>
+              <div>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Senha / PIN (Opcional)</label>
+                <input
+                  type="text"
+                  value={senhaDesbloqueio}
+                  onChange={(e) => setSenhaDesbloqueio(e.target.value)}
+                  placeholder="Ex: 1234 ou Padrão..."
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              </div>
             </div>
 
             <div>
@@ -944,37 +953,13 @@ Cliente de acordo com os termos.`;
             </div>
           </div>
 
-          {/* Step 3: Checklist, Vistoria Técnica & Assinatura */}
-          <ChecklistInspection
-            tipoDocumento={tipoDocumento}
-            onChangeTipoDocumento={setTipoDocumento}
-            ficarNaAssistencia={ficarNaAssistencia}
-            onChangeFicarNaAssistencia={setFicarNaAssistencia}
-            storageGb={storageGb}
-            onChangeStorageGb={setStorageGb}
-            senhaDesbloqueio={senhaDesbloqueio}
-            onChangeSenhaDesbloqueio={setSenhaDesbloqueio}
-            padraoDesbloqueio={padraoDesbloqueio}
-            onChangePadraoDesbloqueio={setPadraoDesbloqueio}
-            checklist={checklist}
-            onChangeChecklist={setChecklist}
-            avarias={avarias}
-            onChangeAvarias={setAvarias}
-            assinaturaCliente={assinaturaCliente}
-            onChangeAssinaturaCliente={setAssinaturaCliente}
-            termoAceito={termoAceito}
-            onChangeTermoAceito={setTermoAceito}
-            garantiaDias={garantia}
-            onChangeGarantiaDias={setGarantia}
-            onOpenPreview={() => setChecklistModalOpen(true)}
-          />
         </div>
 
-        {/* Step 4: Selection Services & Products (Sidebar/Third Column) */}
+        {/* Step 3: Selection Services & Products (Sidebar/Third Column) */}
         <div className="space-y-4">
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm space-y-4">
             <h3 className="text-sm font-bold text-slate-800 flex items-center gap-2 border-b border-slate-100 pb-3">
-              <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-xs flex items-center justify-center font-bold">4</span>
+              <span className="w-6 h-6 rounded-full bg-emerald-100 text-emerald-800 text-xs flex items-center justify-center font-bold">3</span>
               <span>Serviços & Peças</span>
             </h3>
 

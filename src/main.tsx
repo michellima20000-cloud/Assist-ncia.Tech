@@ -4,9 +4,9 @@ import App from './App.tsx';
 import './index.css';
 import { handleClientRoute } from './lib/clientRouter.ts';
 
-// Silence benign dev-only Vite HMR WebSocket connection errors from triggering popups or noise
+// Silence benign dev-only Vite HMR WebSocket connection errors and third-party extension errors
 if (typeof window !== 'undefined') {
-  const isViteWSWarning = (err: unknown): boolean => {
+  const isIgnoredWarning = (err: unknown): boolean => {
     if (!err) return false;
     const str = typeof err === 'string' ? err : (err as any)?.message || (err as any)?.stack || String(err);
     if (typeof str !== 'string') return false;
@@ -18,12 +18,15 @@ if (typeof window !== 'undefined') {
       lower.includes("ws://") ||
       lower.includes("wss://") ||
       lower.includes("closed without") ||
-      lower.includes("closed before")
+      lower.includes("closed before") ||
+      lower.includes("chrome-extension://") ||
+      lower.includes("moz-extension://") ||
+      lower.includes("cannot set property fetch")
     );
   };
 
   window.addEventListener('unhandledrejection', (event) => {
-    if (isViteWSWarning(event.reason)) {
+    if (isIgnoredWarning(event.reason)) {
       event.preventDefault();
       event.stopPropagation();
       if (typeof (event as any).stopImmediatePropagation === 'function') {
@@ -33,7 +36,7 @@ if (typeof window !== 'undefined') {
   }, true);
 
   window.addEventListener('error', (event) => {
-    if (isViteWSWarning(event.message) || isViteWSWarning(event.error) || isViteWSWarning(event.filename)) {
+    if (isIgnoredWarning(event.message) || isIgnoredWarning(event.error) || isIgnoredWarning(event.filename)) {
       event.preventDefault();
       event.stopPropagation();
       if (typeof (event as any).stopImmediatePropagation === 'function') {
@@ -44,7 +47,7 @@ if (typeof window !== 'undefined') {
 }
 
 // Intercept fetch requests to handle /api routes cleanly with failover to client router
-const originalFetch = window.fetch;
+let activeFetch = typeof window !== "undefined" && window.fetch ? window.fetch.bind(window) : undefined;
 const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
   let urlStr = "";
   if (typeof input === "string") {
@@ -63,7 +66,8 @@ const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
   }
 
   if (pathname.startsWith("/api/")) {
-    return originalFetch(input, init)
+    const fetchFn = activeFetch || window.fetch;
+    return fetchFn(input, init)
       .then((res) => {
         // If the server responded with 404 or text/html on an API route, try client fallback
         const contentType = res.headers.get("content-type") || "";
@@ -78,22 +82,28 @@ const interceptFetch = function (input: RequestInfo | URL, init?: RequestInit) {
       });
   }
 
-  return originalFetch(input, init);
+  const fetchFn = activeFetch || window.fetch;
+  return fetchFn(input, init);
 };
 
+// Define getter AND setter on window.fetch so browser extensions and third-party scripts can safely set window.fetch
 try {
+  let currentFetch = interceptFetch;
   Object.defineProperty(window, "fetch", {
-    value: interceptFetch,
+    get: () => currentFetch,
+    set: (newFn) => {
+      if (typeof newFn === "function") {
+        activeFetch = newFn;
+        currentFetch = interceptFetch;
+      }
+    },
     configurable: true,
-    writable: true,
     enumerable: true,
   });
 } catch (e) {
   try {
     (window as any).fetch = interceptFetch;
-  } catch (err) {
-    console.error("Failed to proxy window.fetch:", err);
-  }
+  } catch (_) {}
 }
 
 // Global React Error Boundary for resilient user experience
