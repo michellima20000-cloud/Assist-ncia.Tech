@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import {
   Printer, LogOut, ShieldAlert, CheckCircle, Clock, PlusCircle, Hammer, ArrowRight,
   Calendar, FileText, UserCheck, ShieldCheck, RefreshCw, Barcode, HelpCircle, QrCode,
-  ShoppingBag, MessageSquare, Eye, EyeOff, Moon, Sun, Palette
+  ShoppingBag, MessageSquare, Eye, EyeOff, Moon, Sun, Palette, ClipboardCheck
 } from "lucide-react";
 import { User, Atendimento, DashboardStats, ThemeConfig } from "./types";
 import { getStoredTheme, applyThemeToDOM, persistTheme, getHeaderBackground } from "./lib/theme";
@@ -15,6 +15,7 @@ import Saida from "./components/Saida";
 import PagamentoScreen from "./components/PagamentoScreen";
 import AdminPanel from "./components/AdminPanel";
 import Agendamentos from "./components/Agendamentos";
+import ChecklistScreen from "./components/ChecklistScreen";
 import Clientes from "./components/Clientes";
 import PrinterConfig from "./components/PrinterConfig";
 import ReceiptModal from "./components/ReceiptModal";
@@ -33,6 +34,7 @@ type ActiveTab =
   | "atendimento"
   | "saida"
   | "pagamento"
+  | "checklist"
   | "agendar"
   | "orcamento"
   | "clientes"
@@ -653,17 +655,17 @@ ________________________`;
                   </div>
                 </button>
 
-                {/* AGENDAR (roxo) */}
+                {/* CHECKLIST (roxo) */}
                 <button
-                  onClick={() => setActiveTab("agendar")}
-                  className="p-5 bg-white border border-slate-100 hover:border-purple-200 hover:bg-purple-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
+                  onClick={() => setActiveTab("checklist")}
+                  className="p-5 bg-white border border-slate-100 hover:border-purple-200 hover:bg-purple-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group cursor-pointer"
                 >
                   <div className="w-12 h-12 bg-purple-100 text-purple-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
-                    <Calendar className="w-6 h-6" />
+                    <ClipboardCheck className="w-6 h-6" />
                   </div>
                   <div>
-                    <span className="font-extrabold text-sm text-purple-800">AGENDAR</span>
-                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Agendar serviços</p>
+                    <span className="font-extrabold text-sm text-purple-800">CHECKLIST</span>
+                    <p className="text-[10px] text-slate-500 font-semibold mt-0.5">Checklist de Entrada</p>
                   </div>
                 </button>
 
@@ -697,7 +699,7 @@ ________________________`;
 
                 {/* REVISÃO PROGRAMADA (laranja) */}
                 <button
-                  onClick={() => setActiveTab("agendar")}
+                  onClick={() => setActiveTab("revisao")}
                   className="p-5 bg-white border border-slate-100 hover:border-orange-200 hover:bg-orange-50/10 rounded-2xl shadow-sm text-center flex flex-col items-center gap-3 transition group"
                 >
                   <div className="w-12 h-12 bg-orange-100 text-orange-600 rounded-2xl flex items-center justify-center group-hover:scale-105 transition-transform duration-200">
@@ -902,8 +904,21 @@ TERMO: Autorizo o diagnóstico.`;
           />
         )}
 
-        {/* AGENDAR */}
-        {activeTab === "agendar" && (
+        {/* CHECKLIST DE ENTRADA & AVARIAS */}
+        {(activeTab === "checklist" || activeTab === "agendar") && (
+          <ChecklistScreen
+            onBack={() => setActiveTab("dashboard")}
+            onNavigateToEntrada={(draftData) => {
+              setActiveTab("entrada");
+            }}
+            companyName={theme.companyName || currentUser?.companyName || "ASSISTÊNCIA TÉCNICA ESPECIALIZADA"}
+            companyPhone={currentUser?.phone || ""}
+            companyCnpj=""
+          />
+        )}
+
+        {/* REVISÃO PROGRAMADA */}
+        {activeTab === "revisao" && (
           <Agendamentos onBack={() => setActiveTab("dashboard")} />
         )}
 

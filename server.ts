@@ -41,7 +41,8 @@ import {
   Marca,
   Item,
   Venda,
-  VendaItem
+  VendaItem,
+  Checklist
 } from "./src/types.ts";
 
 // Initialize Firebase Client SDK with configuration from firebase-applet-config.json
@@ -743,15 +744,10 @@ async function startServer() {
       const controlNumber = `OS-${String(nextNum).padStart(4, "0")}`;
       const id = "a-" + Date.now();
       
-      const ficarNaAssistencia = req.body.ficarNaAssistencia !== undefined ? req.body.ficarNaAssistencia : true;
-      const tipoDocumento = req.body.tipoDocumento || (ficarNaAssistencia ? "os" : "orcamento");
-
       const newAtendimento: Atendimento = {
         id,
         controlNumber,
         status: "na_assistencia",
-        detailedStatus: ficarNaAssistencia ? "Aguardando Análise" : "Orçamento (Aparelho com o cliente)",
-        exitDate: undefined,
         clienteId: req.body.clienteId,
         item: req.body.item || "Celular",
         brand: req.body.brand || "",
@@ -764,17 +760,7 @@ async function startServer() {
         services: req.body.services || [],
         products: req.body.products || [],
         entryDate: new Date().toISOString(),
-        totalAmount: req.body.totalAmount || 0,
-        tipoDocumento,
-        ficarNaAssistencia,
-        storageGb: req.body.storageGb || "",
-        senhaDesbloqueio: req.body.senhaDesbloqueio || "",
-        padraoDesbloqueio: req.body.padraoDesbloqueio || "",
-        checklist: req.body.checklist || {},
-        avarias: req.body.avarias || {},
-        assinaturaCliente: req.body.assinaturaCliente || "",
-        termoAceito: req.body.termoAceito !== undefined ? req.body.termoAceito : true,
-        garantia: req.body.garantia || "Garantia de 90 dias (3 meses)"
+        totalAmount: req.body.totalAmount || 0
       };
 
       await setDocument("atendimentos", id, newAtendimento);
@@ -1074,6 +1060,105 @@ async function startServer() {
   app.delete("/api/agendamentos/:id", async (req, res) => {
     try {
       await deleteDocument("agendamentos", req.params.id);
+      res.json({ success: true });
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  // Checklists REST
+  app.get("/api/checklists", async (req, res) => {
+    try {
+      const list = await getCollection<Checklist>("checklists");
+      list.sort((a, b) => {
+        const tA = new Date(a.createdAt || a.dataEntrada || 0).getTime();
+        const tB = new Date(b.createdAt || b.dataEntrada || 0).getTime();
+        return tB - tA;
+      });
+      res.json(list);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.get("/api/checklists/:id", async (req, res) => {
+    try {
+      const item = await getDocument<Checklist>("checklists", req.params.id);
+      if (!item) return res.status(404).json({ message: "Checklist não encontrado" });
+      res.json(item);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.post("/api/checklists", async (req, res) => {
+    try {
+      const existing = await getCollection<Checklist>("checklists");
+      const nextNum = existing.length + 1;
+      const numeroDoc = req.body.numeroDoc || `CK-${String(nextNum).padStart(4, "0")}`;
+      const id = req.body.id || ("chk-" + Date.now());
+
+      const newChecklist: Checklist = {
+        id,
+        companyId: req.body.companyId,
+        docType: req.body.docType || "ordem_servico",
+        numeroDoc,
+        clienteId: req.body.clienteId || "",
+        clienteNome: req.body.clienteNome || "Cliente Balcão",
+        rgCpf: req.body.rgCpf || "",
+        telefone: req.body.telefone || "",
+        dataEntrada: req.body.dataEntrada || new Date().toISOString().split("T")[0],
+        marcaModelo: req.body.marcaModelo || "",
+        senhaTexto: req.body.senhaTexto || "",
+        senhaPadrao: Array.isArray(req.body.senhaPadrao) ? req.body.senhaPadrao : [],
+        imei: req.body.imei || "",
+        gbMemoria: req.body.gbMemoria || "",
+        cor: req.body.cor || "",
+        items: Array.isArray(req.body.items) ? req.body.items : [],
+        damageMarks: Array.isArray(req.body.damageMarks) ? req.body.damageMarks : [],
+        avariasDescricao: req.body.avariasDescricao || "",
+        problemaRelatado: req.body.problemaRelatado || "",
+        servicoExecutado: req.body.servicoExecutado || "",
+        valor: typeof req.body.valor === "number" ? req.body.valor : parseFloat(req.body.valor) || 0,
+        diasGarantia: typeof req.body.diasGarantia === "number" ? req.body.diasGarantia : 90,
+        retiradoEm: req.body.retiradoEm || "",
+        assinaturaCliente: req.body.assinaturaCliente || "",
+        status: req.body.status || "aberto",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+
+      await setDocument("checklists", id, newChecklist);
+      res.status(201).json(newChecklist);
+    } catch (error: any) {
+      console.error("Error creating checklist:", error);
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.put("/api/checklists/:id", async (req, res) => {
+    try {
+      const id = req.params.id;
+      const current = await getDocument<Checklist>("checklists", id);
+      if (!current) return res.status(404).json({ message: "Checklist não encontrado" });
+
+      const updatedChecklist: Checklist = {
+        ...current,
+        ...req.body,
+        id,
+        updatedAt: new Date().toISOString()
+      };
+
+      await setDocument("checklists", id, updatedChecklist);
+      res.json(updatedChecklist);
+    } catch (error: any) {
+      res.status(500).json({ error: error.message });
+    }
+  });
+
+  app.delete("/api/checklists/:id", async (req, res) => {
+    try {
+      await deleteDocument("checklists", req.params.id);
       res.json({ success: true });
     } catch (error: any) {
       res.status(500).json({ error: error.message });

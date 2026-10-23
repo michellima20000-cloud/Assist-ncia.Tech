@@ -193,39 +193,6 @@ export interface Atendimento {
   numeroSerie?: string;
   detailedStatus?: string;
   garantia?: string;
-  tipoDocumento?: 'os' | 'orcamento';
-  ficarNaAssistencia?: boolean;
-  storageGb?: string;
-  checklist?: ChecklistData;
-  avarias?: AvariasDiagram;
-  assinaturaCliente?: string;
-  termoAceito?: boolean;
-}
-
-export interface ChecklistData {
-  telaDisplay?: 'sim' | 'nao' | 'nao_testado';
-  touchScreen?: 'sim' | 'nao' | 'nao_testado';
-  teclas?: 'sim' | 'nao' | 'nao_testado';
-  sensores?: 'sim' | 'nao' | 'nao_testado';
-  bluetooth?: 'sim' | 'nao' | 'nao_testado';
-  wifi?: 'sim' | 'nao' | 'nao_testado';
-  ligacoes?: 'sim' | 'nao' | 'nao_testado';
-  cameras?: 'sim' | 'nao' | 'nao_testado';
-  carregamento?: 'sim' | 'nao' | 'nao_testado';
-  biometriaFaceId?: 'sim' | 'nao' | 'nao_testado';
-  tampaTraseira?: 'sim' | 'nao' | 'nao_testado';
-  [key: string]: 'sim' | 'nao' | 'nao_testado' | undefined;
-}
-
-export interface AvariasDiagram {
-  lado1?: boolean; // Lateral esquerda
-  lado2?: boolean; // Lateral direita
-  frente?: boolean; // Tela frontal
-  traseira?: boolean; // Traseira
-  superior?: boolean; // Topo
-  inferior?: boolean; // Base / Conector
-  observacoes?: string;
-  [key: string]: boolean | string | undefined;
 }
 
 export interface Servico {
@@ -280,6 +247,63 @@ export interface Agendamento {
   time: string;
   service: string;
   notes: string;
+}
+
+export interface ChecklistItemStatus {
+  name: string;
+  status: 'sim' | 'nao' | 'nt'; // Sim (Ok), Não (Avaria/Defeito), NT (Não testado)
+  obs?: string;
+}
+
+export interface DamageMark {
+  id: string;
+  view: 'lado1' | 'lado2' | 'frente' | 'traseira' | 'superior' | 'inferior';
+  x: number; // percent 0-100
+  y: number; // percent 0-100
+  type?: 'risco' | 'trinca' | 'amassado' | 'quebrado' | 'outro';
+  label?: string;
+}
+
+export interface Checklist {
+  id: string;
+  companyId?: string;
+  docType: 'orcamento' | 'ordem_servico';
+  numeroDoc?: string;
+  
+  // Cliente
+  clienteId?: string;
+  clienteNome: string;
+  rgCpf?: string;
+  telefone?: string;
+  
+  // Aparelho
+  dataEntrada: string; // YYYY-MM-DD
+  marcaModelo: string;
+  senhaTexto?: string;
+  senhaPadrao?: number[]; // indices 0 to 8 of 3x3 pattern grid
+  imei?: string;
+  gbMemoria?: string;
+  cor?: string;
+  
+  // Lista de checagem
+  items: ChecklistItemStatus[];
+  
+  // Avarias
+  damageMarks: DamageMark[];
+  avariasDescricao?: string;
+  
+  // Problema & Serviço
+  problemaRelatado: string;
+  servicoExecutado?: string;
+  valor?: number;
+  diasGarantia?: number;
+  
+  // Retirada e assinatura
+  retiradoEm?: string;
+  assinaturaCliente?: string;
+  status: 'aberto' | 'em_andamento' | 'concluido' | 'cancelado';
+  createdAt: string;
+  updatedAt?: string;
 }
 
 export interface SplitPaymentDetail {
